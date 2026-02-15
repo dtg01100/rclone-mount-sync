@@ -27,7 +27,7 @@ rclone-mount-sync provides an intuitive TUI for configuring and managing rclone 
 
 ```bash
 # Clone the repository
-git clone https://github.com/dlafreniere/rclone-mount-sync.git
+git clone https://github.com/dtg01100/rclone-mount-sync.git
 cd rclone-mount-sync
 
 # Build and install
