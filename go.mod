@@ -1,4 +1,4 @@
-module github.com/dlafreniere/rclone-mount-sync
+module github.com/dtg01100/rclone-mount-sync
 
 go 1.23.0
 

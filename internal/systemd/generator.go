@@ -10,7 +10,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/dlafreniere/rclone-mount-sync/internal/models"
+	"github.com/dtg01100/rclone-mount-sync/internal/models"
 )
 
 // UserSystemdDir is the relative path to the user systemd directory.

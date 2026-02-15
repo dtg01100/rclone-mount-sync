@@ -7,7 +7,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/dlafreniere/rclone-mount-sync/internal/tui/components"
+	"github.com/dtg01100/rclone-mount-sync/internal/tui/components"
 )
 
 // SettingsScreen handles application settings.

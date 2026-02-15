@@ -10,8 +10,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
-	"github.com/dlafreniere/rclone-mount-sync/internal/models"
-	"github.com/dlafreniere/rclone-mount-sync/pkg/utils"
+	"github.com/dtg01100/rclone-mount-sync/internal/models"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 // Config represents the application configuration.

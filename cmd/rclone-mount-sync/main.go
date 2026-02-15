@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dlafreniere/rclone-mount-sync/internal/tui"
+	"github.com/dtg01100/rclone-mount-sync/internal/tui"
 )
 
 // version is set at build time via ldflags.

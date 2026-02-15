@@ -8,11 +8,11 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/dlafreniere/rclone-mount-sync/internal/config"
-	"github.com/dlafreniere/rclone-mount-sync/internal/models"
-	"github.com/dlafreniere/rclone-mount-sync/internal/rclone"
-	"github.com/dlafreniere/rclone-mount-sync/internal/systemd"
-	"github.com/dlafreniere/rclone-mount-sync/internal/tui/components"
+	"github.com/dtg01100/rclone-mount-sync/internal/config"
+	"github.com/dtg01100/rclone-mount-sync/internal/models"
+	"github.com/dtg01100/rclone-mount-sync/internal/rclone"
+	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
+	"github.com/dtg01100/rclone-mount-sync/internal/tui/components"
 )
 
 // MountsScreenMode represents the current mode of the mounts screen.

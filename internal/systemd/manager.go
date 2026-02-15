@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dlafreniere/rclone-mount-sync/internal/models"
+	"github.com/dtg01100/rclone-mount-sync/internal/models"
 )
 
 // Manager handles systemd user service operations.
