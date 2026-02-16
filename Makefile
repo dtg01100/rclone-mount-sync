@@ -7,6 +7,12 @@ BINARY_NAME=rclone-mount-sync
 # Version (can be overridden with VERSION=xxx)
 VERSION?=dev
 
+# Installation prefix (can be overridden with PREFIX=xxx)
+PREFIX?=/usr/local
+
+# Binary installation directory (can be overridden with BINDIR=xxx)
+BINDIR?=$(PREFIX)/bin
+
 # Build directory
 BUILD_DIR=bin
 
@@ -60,15 +66,16 @@ deps:
 # Install to system
 .PHONY: install
 install: build
-	@echo "Installing $(BINARY_NAME) to /usr/local/bin..."
-	install -m 755 $(BUILD_DIR)/$(BINARY_NAME) /usr/local/bin/$(BINARY_NAME)
+	@echo "Installing $(BINARY_NAME) to $(BINDIR)..."
+	@mkdir -p $(BINDIR)
+	install -m 755 $(BUILD_DIR)/$(BINARY_NAME) $(BINDIR)/$(BINARY_NAME)
 	@echo "Installation complete"
 
 # Uninstall from system
 .PHONY: uninstall
 uninstall:
 	@echo "Uninstalling $(BINARY_NAME)..."
-	rm -f /usr/local/bin/$(BINARY_NAME)
+	rm -f $(BINDIR)/$(BINARY_NAME)
 	@echo "Uninstallation complete"
 
 # Run tests
@@ -76,6 +83,12 @@ uninstall:
 test:
 	@echo "Running tests..."
 	$(GOTEST) -v ./...
+
+# Test install/uninstall targets
+.PHONY: test-install
+test-install:
+	@echo "Running install/uninstall tests..."
+	@./scripts/test-makefile.sh
 
 # Format code
 .PHONY: fmt
@@ -111,17 +124,28 @@ help:
 	@echo ""
 	@echo "Usage: make [target]"
 	@echo ""
+	@echo "Variables:"
+	@echo "  PREFIX     Installation prefix (default: /usr/local)"
+	@echo "  BINDIR     Binary installation directory (default: \$$PREFIX/bin)"
+	@echo "  VERSION    Version string to embed in binary (default: dev)"
+	@echo ""
 	@echo "Targets:"
 	@echo "  all        Clean, download deps, and build (default)"
 	@echo "  build      Build the binary"
 	@echo "  run        Build and run the application"
 	@echo "  clean      Remove build artifacts"
 	@echo "  deps       Download and tidy dependencies"
-	@echo "  install    Install binary to /usr/local/bin"
-	@echo "  uninstall  Remove binary from /usr/local/bin"
+	@echo "  install    Install binary to \$$BINDIR"
+	@echo "  uninstall  Remove binary from \$$BINDIR"
 	@echo "  test       Run tests"
+	@echo "  test-install  Test install/uninstall targets"
 	@echo "  fmt        Format code"
 	@echo "  lint       Run linter (requires golangci-lint)"
 	@echo "  build-all  Build for multiple platforms"
 	@echo "  dev        Start development server (requires air)"
 	@echo "  help       Show this help message"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make install                           # Install to /usr/local/bin"
+	@echo "  make install PREFIX=/opt/rclone-mount-sync  # Install to /opt/rclone-mount-sync/bin"
+	@echo "  make install BINDIR=/usr/bin           # Install to /usr/bin"
