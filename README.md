@@ -53,6 +53,12 @@ rclone-mount-sync
 
 # Or run directly from the build directory
 ./bin/rclone-mount-sync
+
+# Print version
+rclone-mount-sync --version
+
+# Specify custom config directory (overrides XDG_CONFIG_HOME)
+rclone-mount-sync --config /path/to/configdir
 ```
 
 ### Keyboard Navigation
