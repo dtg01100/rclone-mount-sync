@@ -13,7 +13,7 @@ type MountConfig struct {
 	Description string `json:"description,omitempty" yaml:"description,omitempty" mapstructure:"description,omitempty"`
 
 	// Rclone Configuration
-	Remote     string `json:"remote" yaml:"remote" mapstructure:"remote"`               // e.g., "gdrive:"
+	Remote     string `json:"remote" yaml:"remote" mapstructure:"remote"`                // e.g., "gdrive:"
 	RemotePath string `json:"remote_path" yaml:"remote_path" mapstructure:"remote_path"` // e.g., "/" or "/Music"
 	MountPoint string `json:"mount_point" yaml:"mount_point" mapstructure:"mount_point"` // Local mount path
 
@@ -39,10 +39,10 @@ type MountOptions struct {
 	GID        int    `json:"gid,omitempty" yaml:"gid,omitempty" mapstructure:"gid,omitempty"`
 
 	// Performance Options
-	BufferSize       string `json:"buffer_size,omitempty" yaml:"buffer_size,omitempty" mapstructure:"buffer_size,omitempty"`                     // e.g., "16M"
+	BufferSize       string `json:"buffer_size,omitempty" yaml:"buffer_size,omitempty" mapstructure:"buffer_size,omitempty"` // e.g., "16M"
 	DirCacheTime     string `json:"dir_cache_time,omitempty" yaml:"dir_cache_time,omitempty" mapstructure:"dir_cache_time,omitempty"`
 	VFSReadChunkSize string `json:"vfs_read_chunk_size,omitempty" yaml:"vfs_read_chunk_size,omitempty" mapstructure:"vfs_read_chunk_size,omitempty"`
-	VFSCacheMode     string `json:"vfs_cache_mode,omitempty" yaml:"vfs_cache_mode,omitempty" mapstructure:"vfs_cache_mode,omitempty"`           // off, full, writes
+	VFSCacheMode     string `json:"vfs_cache_mode,omitempty" yaml:"vfs_cache_mode,omitempty" mapstructure:"vfs_cache_mode,omitempty"`          // off, full, writes
 	VFSCacheMaxAge   string `json:"vfs_cache_max_age,omitempty" yaml:"vfs_cache_max_age,omitempty" mapstructure:"vfs_cache_max_age,omitempty"` // e.g., "24h"
 	VFSCacheMaxSize  string `json:"vfs_cache_max_size,omitempty" yaml:"vfs_cache_max_size,omitempty" mapstructure:"vfs_cache_max_size,omitempty"`
 	VFSWriteBack     string `json:"vfs_write_back,omitempty" yaml:"vfs_write_back,omitempty" mapstructure:"vfs_write_back,omitempty"` // e.g., "5s"
@@ -72,7 +72,7 @@ type SyncJobConfig struct {
 	Description string `json:"description,omitempty" yaml:"description,omitempty" mapstructure:"description,omitempty"`
 
 	// Rclone Configuration
-	Source      string `json:"source" yaml:"source" mapstructure:"source"`                   // e.g., "gdrive:/Photos"
+	Source      string `json:"source" yaml:"source" mapstructure:"source"`                // e.g., "gdrive:/Photos"
 	Destination string `json:"destination" yaml:"destination" mapstructure:"destination"` // e.g., "/home/user/Backup/Photos"
 
 	// Sync Options
@@ -111,7 +111,7 @@ type SyncOptions struct {
 	MinAge         string `json:"min_age,omitempty" yaml:"min_age,omitempty" mapstructure:"min_age,omitempty"`
 
 	// Performance
-	Transfers      int    `json:"transfers,omitempty" yaml:"transfers,omitempty" mapstructure:"transfers,omitempty"`           // Parallel transfers
+	Transfers      int    `json:"transfers,omitempty" yaml:"transfers,omitempty" mapstructure:"transfers,omitempty"` // Parallel transfers
 	Checkers       int    `json:"checkers,omitempty" yaml:"checkers,omitempty" mapstructure:"checkers,omitempty"`
 	BandwidthLimit string `json:"bandwidth_limit,omitempty" yaml:"bandwidth_limit,omitempty" mapstructure:"bandwidth_limit,omitempty"` // e.g., "10M"
 
@@ -133,11 +133,15 @@ type ScheduleConfig struct {
 	Type string `json:"type" yaml:"type" mapstructure:"type"` // "timer", "onboot", "manual"
 
 	// Timer Configuration (systemd timer syntax)
-	OnCalendar         string `json:"on_calendar,omitempty" yaml:"on_calendar,omitempty" mapstructure:"on_calendar,omitempty"`                     // e.g., "daily", "*-*-* 02:00:00"
-	OnBootSec          string `json:"on_boot_sec,omitempty" yaml:"on_boot_sec,omitempty" mapstructure:"on_boot_sec,omitempty"`                     // e.g., "5min"
+	OnCalendar         string `json:"on_calendar,omitempty" yaml:"on_calendar,omitempty" mapstructure:"on_calendar,omitempty"` // e.g., "daily", "*-*-* 02:00:00"
+	OnBootSec          string `json:"on_boot_sec,omitempty" yaml:"on_boot_sec,omitempty" mapstructure:"on_boot_sec,omitempty"` // e.g., "5min"
 	OnActiveSec        string `json:"on_active_sec,omitempty" yaml:"on_active_sec,omitempty" mapstructure:"on_active_sec,omitempty"`
 	RandomizedDelaySec string `json:"randomized_delay_sec,omitempty" yaml:"randomized_delay_sec,omitempty" mapstructure:"randomized_delay_sec,omitempty"`
 	Persistent         bool   `json:"persistent,omitempty" yaml:"persistent,omitempty" mapstructure:"persistent,omitempty"` // Catch up missed runs
+
+	// Run Conditions
+	RequireACPower   bool `json:"require_ac_power,omitempty" yaml:"require_ac_power,omitempty" mapstructure:"require_ac_power,omitempty"`    // Only run when on AC power
+	RequireUnmetered bool `json:"require_unmetered,omitempty" yaml:"require_unmetered,omitempty" mapstructure:"require_unmetered,omitempty"` // Only run on non-metered connection
 }
 
 // ServiceStatus represents the status of a systemd service.
