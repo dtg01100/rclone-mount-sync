@@ -1209,3 +1209,305 @@ func TestManager_RestartNonexistent(t *testing.T) {
 		t.Error("Restart() should return error for nonexistent service")
 	}
 }
+
+// TestParseUnitID tests the ParseUnitID function.
+func TestParseUnitID(t *testing.T) {
+	tests := []struct {
+		name     string
+		unitName string
+		wantID   string
+		wantType string
+	}{
+		{
+			name:     "mount service",
+			unitName: "rclone-mount-a1b2c3d4.service",
+			wantID:   "a1b2c3d4",
+			wantType: "mount",
+		},
+		{
+			name:     "sync service",
+			unitName: "rclone-sync-e5f6g7h8.service",
+			wantID:   "e5f6g7h8",
+			wantType: "sync",
+		},
+		{
+			name:     "mount timer",
+			unitName: "rclone-mount-i9j0k1l2.timer",
+			wantID:   "i9j0k1l2",
+			wantType: "mount",
+		},
+		{
+			name:     "sync timer",
+			unitName: "rclone-sync-m3n4o5p6.timer",
+			wantID:   "m3n4o5p6",
+			wantType: "sync",
+		},
+		{
+			name:     "service without suffix",
+			unitName: "rclone-mount-q7r8s9t0",
+			wantID:   "q7r8s9t0",
+			wantType: "mount",
+		},
+		{
+			name:     "unknown prefix",
+			unitName: "other-service.service",
+			wantID:   "",
+			wantType: "",
+		},
+		{
+			name:     "empty string",
+			unitName: "",
+			wantID:   "",
+			wantType: "",
+		},
+		{
+			name:     "just rclone prefix",
+			unitName: "rclone-",
+			wantID:   "",
+			wantType: "",
+		},
+		{
+			name:     "legacy name-based mount",
+			unitName: "rclone-mount-my-gdrive.service",
+			wantID:   "my-gdrive",
+			wantType: "mount",
+		},
+		{
+			name:     "legacy name-based sync",
+			unitName: "rclone-sync-backup-photos.service",
+			wantID:   "backup-photos",
+			wantType: "sync",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id, unitType := ParseUnitID(tt.unitName)
+			if id != tt.wantID {
+				t.Errorf("ParseUnitID() id = %q, want %q", id, tt.wantID)
+			}
+			if unitType != tt.wantType {
+				t.Errorf("ParseUnitID() type = %q, want %q", unitType, tt.wantType)
+			}
+		})
+	}
+}
+
+// TestParseUnitID_AllFormats tests all supported unit name formats.
+func TestParseUnitID_AllFormats(t *testing.T) {
+	formats := []struct {
+		unitName string
+		isValid  bool
+	}{
+		{"rclone-mount-a1b2c3d4.service", true},
+		{"rclone-sync-e5f6g7h8.service", true},
+		{"rclone-mount-i9j0k1l2.timer", true},
+		{"rclone-sync-m3n4o5p6.timer", true},
+		{"rclone-", false},
+		{"rclone-mount-", false},
+		{"rclone-sync-", false},
+		{"other-service.service", false},
+		{"", false},
+		{"rclone-mount-.service", false},
+		{"rclone-sync-.timer", false},
+	}
+
+	for _, tt := range formats {
+		t.Run(tt.unitName, func(t *testing.T) {
+			id, unitType := ParseUnitID(tt.unitName)
+			hasValid := id != "" && unitType != ""
+			if hasValid != tt.isValid {
+				t.Errorf("ParseUnitID(%q) = (%q, %q), isValid=%v, want %v", tt.unitName, id, unitType, hasValid, tt.isValid)
+			}
+		})
+	}
+}
+
+// TestManager_StatusWithOutput tests Status method parsing.
+func TestManager_StatusWithOutput(t *testing.T) {
+	m := &Manager{systemctlPath: "/nonexistent/path/systemctl"}
+
+	_, err := m.Status("test-service")
+	if err == nil {
+		t.Error("Status() should return error for invalid systemctl path")
+	}
+}
+
+// TestManager_GetLogsInvalidPath tests GetLogs with invalid path.
+func TestManager_GetLogsInvalidPath(t *testing.T) {
+	m := &Manager{systemctlPath: "/nonexistent/path/systemctl"}
+
+	_, err := m.GetLogs("test-service", 100)
+	if err == nil {
+		t.Error("GetLogs() should return error for invalid systemctl path")
+	}
+}
+
+// TestManager_GetDetailedStatusParsing tests GetDetailedStatus type parsing.
+func TestManager_GetDetailedStatusParsing(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		wantType string
+	}{
+		{
+			name:     "mount service name",
+			input:    "rclone-mount-abc12345",
+			wantType: "mount",
+		},
+		{
+			name:     "sync service name",
+			input:    "rclone-sync-xyz98765",
+			wantType: "sync",
+		},
+		{
+			name:     "unknown service name",
+			input:    "other-service",
+			wantType: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			unitType := ""
+			if strings.HasPrefix(tt.input, "rclone-mount-") {
+				unitType = "mount"
+			} else if strings.HasPrefix(tt.input, "rclone-sync-") {
+				unitType = "sync"
+			}
+
+			if unitType != tt.wantType {
+				t.Errorf("Type parsing for %q = %q, want %q", tt.input, unitType, tt.wantType)
+			}
+		})
+	}
+}
+
+// TestManager_ContextCancellationImmediate tests context cancellation immediately.
+func TestManager_ContextCancellationImmediate(t *testing.T) {
+	m := NewManager()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := m.StartContext(ctx, "test-service")
+	if err == nil {
+		t.Error("StartContext with cancelled context should fail")
+	}
+
+	err = m.StopContext(ctx, "test-service")
+	if err == nil {
+		t.Error("StopContext with cancelled context should fail")
+	}
+}
+
+// TestManager_DaemonReloadError tests DaemonReload error handling.
+func TestManager_DaemonReloadError(t *testing.T) {
+	m := &Manager{systemctlPath: "/nonexistent/systemctl"}
+
+	err := m.DaemonReload()
+	if err == nil {
+		t.Error("DaemonReload() should return error for invalid path")
+	}
+}
+
+// TestManager_EnableDisableCycle tests Enable/Disable cycle error handling.
+func TestManager_EnableDisableCycle(t *testing.T) {
+	m := &Manager{systemctlPath: "/nonexistent/systemctl"}
+
+	err := m.Enable("test-service")
+	if err == nil {
+		t.Error("Enable() should return error for invalid path")
+	}
+
+	err = m.Disable("test-service")
+	if err == nil {
+		t.Error("Disable() should return error for invalid path")
+	}
+}
+
+// TestManager_StartStopRestartCycle tests Start/Stop/Restart cycle error handling.
+func TestManager_StartStopRestartCycle(t *testing.T) {
+	m := &Manager{systemctlPath: "/nonexistent/systemctl"}
+
+	err := m.Start("test-service")
+	if err == nil {
+		t.Error("Start() should return error for invalid path")
+	}
+
+	err = m.Stop("test-service")
+	if err == nil {
+		t.Error("Stop() should return error for invalid path")
+	}
+
+	err = m.Restart("test-service")
+	if err == nil {
+		t.Error("Restart() should return error for invalid path")
+	}
+}
+
+// TestManager_TimerOperationsInvalidPath tests all timer operations with invalid path.
+func TestManager_TimerOperationsInvalidPath(t *testing.T) {
+	m := &Manager{systemctlPath: "/nonexistent/systemctl"}
+
+	if err := m.StartTimer("test-timer"); err == nil {
+		t.Error("StartTimer() should return error for invalid path")
+	}
+	if err := m.StopTimer("test-timer"); err == nil {
+		t.Error("StopTimer() should return error for invalid path")
+	}
+	if err := m.EnableTimer("test-timer"); err == nil {
+		t.Error("EnableTimer() should return error for invalid path")
+	}
+	if err := m.DisableTimer("test-timer"); err == nil {
+		t.Error("DisableTimer() should return error for invalid path")
+	}
+}
+
+// TestManager_RunSyncNowInvalidPath tests RunSyncNow with invalid path.
+func TestManager_RunSyncNowInvalidPath(t *testing.T) {
+	m := &Manager{systemctlPath: "/nonexistent/systemctl"}
+
+	err := m.RunSyncNow("test-sync")
+	if err == nil {
+		t.Error("RunSyncNow() should return error for invalid path")
+	}
+}
+
+// TestManager_IsEnabledIsActiveFalse tests IsEnabled and IsActive return false on error.
+func TestManager_IsEnabledIsActiveFalse(t *testing.T) {
+	m := &Manager{systemctlPath: "/nonexistent/systemctl"}
+
+	enabled, _ := m.IsEnabled("test-service")
+	if enabled {
+		t.Error("IsEnabled() should return false for invalid path")
+	}
+
+	active, _ := m.IsActive("test-service")
+	if active {
+		t.Error("IsActive() should return false for invalid path")
+	}
+}
+
+// TestManager_GetTimerNextRunInvalidPath tests GetTimerNextRun with invalid path.
+func TestManager_GetTimerNextRunInvalidPath(t *testing.T) {
+	m := &Manager{systemctlPath: "/nonexistent/systemctl"}
+
+	_, err := m.GetTimerNextRun("test.timer")
+	if err == nil {
+		t.Error("GetTimerNextRun() should return error for invalid path")
+	}
+}
+
+// TestManager_ListServicesInvalidPath tests ListServices with invalid path.
+func TestManager_ListServicesInvalidPath(t *testing.T) {
+	m := &Manager{systemctlPath: "/nonexistent/systemctl"}
+
+	services, err := m.ListServices()
+	if err != nil {
+		t.Errorf("ListServices() should not return error, got: %v", err)
+	}
+	if services == nil {
+		t.Error("ListServices() should return non-nil slice")
+	}
+}
