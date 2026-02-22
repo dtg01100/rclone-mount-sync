@@ -21,6 +21,7 @@ Set up scheduled sync operations between local and remote storage:
 - **Filtering**: Include/exclude patterns, age-based filtering
 - **Performance Tuning**: Parallel transfers, checkers, bandwidth limits
 - **Dry-run Mode**: Preview changes before execution
+- **Run Conditions**: Optionally require AC power or non-metered internet connection
 
 ### Systemd Integration
 Automatic generation of systemd user service and timer units with proper dependencies and resource limits.
@@ -193,6 +194,8 @@ sync_jobs:
       type: "timer"
       on_calendar: "daily"
       persistent: true
+      require_ac_power: true      # Only run on AC power
+      require_unmetered: true     # Only run on non-metered connection
     auto_start: true
     enabled: true
 ```
@@ -214,6 +217,9 @@ Sync services are generated with:
 - **Resource Limits**: Memory and CPU limits to prevent runaway processes
 - **Network Dependency**: Waits for network to be available
 - **Working Directory**: Set appropriately for the sync operation
+- **Run Conditions**: Optional conditions to skip execution based on power or network status:
+  - `ConditionACPower` - Only run when connected to AC power (laptops)
+  - `ExecCondition` - Check for non-metered connection via NetworkManager
 
 ### Sync Timer (`rclone-sync-{name}.timer`)
 
@@ -222,6 +228,7 @@ Timer units support:
 - **Boot-based**: Run after system boot with optional delay
 - **Persistent**: Catch up on missed runs if system was off
 - **Randomized Delay**: Spread load across multiple jobs
+- **Run Conditions**: Control when timers are allowed to trigger the service
 
 ## Development
 
