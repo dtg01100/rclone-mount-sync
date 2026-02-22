@@ -289,9 +289,13 @@ func HelpBar(width int, items []HelpItem) string {
 
 	content := strings.Join(parts, Styles.HelpText.Render(" • "))
 	
-	// Truncate if too wide
+	// Truncate if too wide by removing items from the end
+	// This preserves ANSI escape codes and respects visual width
 	if lipgloss.Width(content) > width {
-		content = content[:width-3] + "..."
+		for len(parts) > 1 && lipgloss.Width(content) > width-3 {
+			parts = parts[:len(parts)-1]
+			content = strings.Join(parts, Styles.HelpText.Render(" • ")) + Styles.HelpText.Render("...")
+		}
 	}
 
 	return Styles.StatusLine.Width(width).Render(content)
