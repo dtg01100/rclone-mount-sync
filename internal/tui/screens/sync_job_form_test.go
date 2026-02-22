@@ -85,8 +85,10 @@ func TestNewSyncJobForm_Edit(t *testing.T) {
 			LogLevel:       "DEBUG",
 		},
 		Schedule: models.ScheduleConfig{
-			Type:       "timer",
-			OnCalendar: "daily",
+			Type:             "timer",
+			OnCalendar:       "daily",
+			RequireACPower:   true,
+			RequireUnmetered: true,
 		},
 		Enabled: true,
 	}
@@ -125,6 +127,14 @@ func TestNewSyncJobForm_Edit(t *testing.T) {
 
 	if form.enabled != existingJob.Enabled {
 		t.Errorf("enabled = %v, want %v", form.enabled, existingJob.Enabled)
+	}
+
+	if form.requireACPower != existingJob.Schedule.RequireACPower {
+		t.Errorf("requireACPower = %v, want %v", form.requireACPower, existingJob.Schedule.RequireACPower)
+	}
+
+	if form.requireUnmetered != existingJob.Schedule.RequireUnmetered {
+		t.Errorf("requireUnmetered = %v, want %v", form.requireUnmetered, existingJob.Schedule.RequireUnmetered)
 	}
 }
 
@@ -547,6 +557,8 @@ func TestSyncJobForm_SubmitFormCreatesSyncJobConfig(t *testing.T) {
 	form.bandwidthLimit = "10M"
 	form.logLevel = "DEBUG"
 	form.enabled = true
+	form.requireACPower = true
+	form.requireUnmetered = true
 
 	// Submit the form
 	msg := form.submitForm()
@@ -597,6 +609,14 @@ func TestSyncJobForm_SubmitFormCreatesSyncJobConfig(t *testing.T) {
 
 	if job.Schedule.OnCalendar != "daily" {
 		t.Errorf("job.Schedule.OnCalendar = %q, want 'daily'", job.Schedule.OnCalendar)
+	}
+
+	if !job.Schedule.RequireACPower {
+		t.Error("job.Schedule.RequireACPower should be true")
+	}
+
+	if !job.Schedule.RequireUnmetered {
+		t.Error("job.Schedule.RequireUnmetered should be true")
 	}
 
 	if !job.Enabled {
@@ -1039,9 +1059,11 @@ func TestSyncJobForm_EditPreservesAllOptions(t *testing.T) {
 			LogLevel:         "DEBUG",
 		},
 		Schedule: models.ScheduleConfig{
-			Type:       "onboot",
-			OnBootSec:  "2min",
-			OnCalendar: "",
+			Type:             "onboot",
+			OnBootSec:        "2min",
+			OnCalendar:       "",
+			RequireACPower:   true,
+			RequireUnmetered: true,
 		},
 		Enabled: true,
 	}
@@ -1071,6 +1093,12 @@ func TestSyncJobForm_EditPreservesAllOptions(t *testing.T) {
 	}
 	if form.onBootSec != "2min" {
 		t.Errorf("onBootSec = %q, want '2min'", form.onBootSec)
+	}
+	if !form.requireACPower {
+		t.Error("requireACPower should be true")
+	}
+	if !form.requireUnmetered {
+		t.Error("requireUnmetered should be true")
 	}
 }
 
