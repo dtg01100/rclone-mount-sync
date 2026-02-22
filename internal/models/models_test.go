@@ -906,6 +906,55 @@ func TestScheduleConfig(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "require AC power",
+			config: ScheduleConfig{
+				Type:           "timer",
+				OnCalendar:     "daily",
+				RequireACPower: true,
+			},
+			check: func(t *testing.T, c ScheduleConfig) {
+				if !c.RequireACPower {
+					t.Error("RequireACPower should be true")
+				}
+				if c.RequireUnmetered {
+					t.Error("RequireUnmetered should be false")
+				}
+			},
+		},
+		{
+			name: "require unmetered",
+			config: ScheduleConfig{
+				Type:             "timer",
+				OnCalendar:       "daily",
+				RequireUnmetered: true,
+			},
+			check: func(t *testing.T, c ScheduleConfig) {
+				if !c.RequireUnmetered {
+					t.Error("RequireUnmetered should be true")
+				}
+				if c.RequireACPower {
+					t.Error("RequireACPower should be false")
+				}
+			},
+		},
+		{
+			name: "require both AC power and unmetered",
+			config: ScheduleConfig{
+				Type:             "timer",
+				OnCalendar:       "daily",
+				RequireACPower:   true,
+				RequireUnmetered: true,
+			},
+			check: func(t *testing.T, c ScheduleConfig) {
+				if !c.RequireACPower {
+					t.Error("RequireACPower should be true")
+				}
+				if !c.RequireUnmetered {
+					t.Error("RequireUnmetered should be true")
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -923,6 +972,8 @@ func TestScheduleConfigJSONSerialization(t *testing.T) {
 		OnActiveSec:        "30min",
 		RandomizedDelaySec: "600",
 		Persistent:         true,
+		RequireACPower:     true,
+		RequireUnmetered:   true,
 	}
 
 	data, err := json.Marshal(config)
@@ -952,6 +1003,12 @@ func TestScheduleConfigJSONSerialization(t *testing.T) {
 	}
 	if unmarshaled.Persistent != config.Persistent {
 		t.Errorf("Persistent = %v, want %v", unmarshaled.Persistent, config.Persistent)
+	}
+	if unmarshaled.RequireACPower != config.RequireACPower {
+		t.Errorf("RequireACPower = %v, want %v", unmarshaled.RequireACPower, config.RequireACPower)
+	}
+	if unmarshaled.RequireUnmetered != config.RequireUnmetered {
+		t.Errorf("RequireUnmetered = %v, want %v", unmarshaled.RequireUnmetered, config.RequireUnmetered)
 	}
 }
 
@@ -1270,6 +1327,12 @@ func TestScheduleConfigZeroValues(t *testing.T) {
 	}
 	if config.Persistent {
 		t.Error("Persistent should be false")
+	}
+	if config.RequireACPower {
+		t.Error("RequireACPower should be false")
+	}
+	if config.RequireUnmetered {
+		t.Error("RequireUnmetered should be false")
 	}
 }
 
