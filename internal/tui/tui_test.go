@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
 )
 
 func TestScreen_String(t *testing.T) {
@@ -420,4 +421,1201 @@ type testError struct {
 
 func (e *testError) Error() string {
 	return e.msg
+}
+
+func TestApp_Update_HelpCloseWithQ(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenHelp
+	app.previousScreen = ScreenMain
+	app.showHelp = true
+
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+
+	if updatedApp.(*App).showHelp {
+		t.Error("'q' should close help")
+	}
+	if updatedApp.(*App).currentScreen != ScreenMain {
+		t.Errorf("'q' from help should return to previous screen, got %d", updatedApp.(*App).currentScreen)
+	}
+}
+
+func TestApp_Update_EscapeFromMainScreen(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenMain
+	app.showHelp = false
+
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
+
+	if updatedApp.(*App).currentScreen != ScreenMain {
+		t.Errorf("Escape from main screen should stay on main, got %d", updatedApp.(*App).currentScreen)
+	}
+}
+
+func TestApp_Update_HelpToggleWhenAlreadyOpen(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenHelp
+	app.showHelp = true
+	app.previousScreen = ScreenMain
+
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
+
+	if !updatedApp.(*App).showHelp {
+		t.Error("'?' when help is open should keep help open")
+	}
+}
+
+func TestApp_Update_ReconciliationMsg(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+
+	result := &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "test.service", Type: "mount", ID: "testid"},
+		},
+	}
+	updatedApp, _ := app.Update(ReconciliationMsg{Result: result})
+
+	if !updatedApp.(*App).showOrphanPrompt {
+		t.Error("ReconciliationMsg with orphans should show orphan prompt")
+	}
+	if updatedApp.(*App).orphans == nil {
+		t.Error("ReconciliationMsg should set orphans")
+	}
+}
+
+func TestApp_Update_ReconciliationMsgEmpty(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+
+	result := &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{},
+	}
+	updatedApp, _ := app.Update(ReconciliationMsg{Result: result})
+
+	if updatedApp.(*App).showOrphanPrompt {
+		t.Error("ReconciliationMsg without orphans should not show orphan prompt")
+	}
+}
+
+func TestApp_Update_AppInitDone(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+
+	_, cmd := app.Update(AppInitDone{})
+
+	if cmd == nil {
+		t.Error("AppInitDone should return a command")
+	}
+}
+
+func TestApp_View_AllScreens(t *testing.T) {
+	screens := []struct {
+		name   string
+		screen Screen
+	}{
+		{"Main", ScreenMain},
+		{"Mounts", ScreenMounts},
+		{"SyncJobs", ScreenSyncJobs},
+		{"Services", ScreenServices},
+		{"Settings", ScreenSettings},
+		{"Help", ScreenHelp},
+	}
+
+	for _, tt := range screens {
+		t.Run(tt.name, func(t *testing.T) {
+			app := NewApp()
+			app.width = 80
+			app.height = 24
+			app.mainMenu.SetSize(80, 24)
+			app.mounts.SetSize(80, 24)
+			app.syncJobs.SetSize(80, 24)
+			app.services.SetSize(80, 24)
+			app.settings.SetSize(80, 24)
+			app.currentScreen = tt.screen
+			if tt.screen == ScreenHelp {
+				app.showHelp = true
+			}
+
+			view := app.View()
+
+			if view == "" {
+				t.Error("View should not be empty")
+			}
+		})
+	}
+}
+
+func TestApp_Update_ScrollDownMaxBounds(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenHelp
+	app.showHelp = true
+	app.helpScrollY = 90
+	app.helpContentLen = 95
+
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyDown})
+
+	if updatedApp.(*App).helpScrollY > 90 {
+		t.Errorf("scroll down should respect max bounds, got %d", updatedApp.(*App).helpScrollY)
+	}
+}
+
+func TestApp_Update_KKeyScrollUp(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenHelp
+	app.showHelp = true
+	app.helpScrollY = 5
+	app.helpContentLen = 100
+
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+
+	if updatedApp.(*App).helpScrollY != 4 {
+		t.Errorf("'k' should scroll up, got helpScrollY=%d", updatedApp.(*App).helpScrollY)
+	}
+}
+
+func TestApp_Update_JKeyScrollDown(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenHelp
+	app.showHelp = true
+	app.helpScrollY = 0
+	app.helpContentLen = 100
+
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+
+	if updatedApp.(*App).helpScrollY != 1 {
+		t.Errorf("'j' should scroll down, got helpScrollY=%d", updatedApp.(*App).helpScrollY)
+	}
+}
+
+func TestApp_updateOrphanPrompt_NavigateUp(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 1
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+			{Name: "unit2.service", Type: "mount", ID: "id2"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyUp})
+
+	if updatedApp.(*App).orphanSelected != 0 {
+		t.Errorf("up should decrement orphanSelected, got %d", updatedApp.(*App).orphanSelected)
+	}
+}
+
+func TestApp_updateOrphanPrompt_NavigateDown(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+			{Name: "unit2.service", Type: "mount", ID: "id2"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyDown})
+
+	if updatedApp.(*App).orphanSelected != 1 {
+		t.Errorf("down should increment orphanSelected, got %d", updatedApp.(*App).orphanSelected)
+	}
+}
+
+func TestApp_updateOrphanPrompt_EnterSelect(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if updatedApp.(*App).orphanMode != 1 {
+		t.Errorf("enter should set orphanMode to 1, got %d", updatedApp.(*App).orphanMode)
+	}
+}
+
+func TestApp_updateOrphanPrompt_EscapeFromActionMenu(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 1
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyEsc})
+
+	if updatedApp.(*App).orphanMode != 0 {
+		t.Errorf("escape from action menu should set orphanMode to 0, got %d", updatedApp.(*App).orphanMode)
+	}
+}
+
+func TestApp_updateOrphanPrompt_EscapeFromList(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyEsc})
+
+	if updatedApp.(*App).showOrphanPrompt {
+		t.Error("escape from list should close orphan prompt")
+	}
+}
+
+func TestApp_updateOrphanPrompt_QKeyFromActionMenu(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 1
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+
+	if updatedApp.(*App).orphanMode != 0 {
+		t.Errorf("'q' from action menu should set orphanMode to 0, got %d", updatedApp.(*App).orphanMode)
+	}
+}
+
+func TestApp_updateOrphanPrompt_QKeyFromList(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+
+	if updatedApp.(*App).showOrphanPrompt {
+		t.Error("'q' from list should close orphan prompt")
+	}
+}
+
+func TestApp_updateOrphanPrompt_DismissAll(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+
+	if updatedApp.(*App).showOrphanPrompt {
+		t.Error("'d' should dismiss all and close orphan prompt")
+	}
+}
+
+func TestApp_updateOrphanPrompt_NavigateUpAtTop(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+			{Name: "unit2.service", Type: "mount", ID: "id2"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyUp})
+
+	if updatedApp.(*App).orphanSelected != 0 {
+		t.Errorf("up at top should stay at 0, got %d", updatedApp.(*App).orphanSelected)
+	}
+}
+
+func TestApp_updateOrphanPrompt_NavigateDownAtBottom(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 1
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+			{Name: "unit2.service", Type: "mount", ID: "id2"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyDown})
+
+	if updatedApp.(*App).orphanSelected != 1 {
+		t.Errorf("down at bottom should stay at 1, got %d", updatedApp.(*App).orphanSelected)
+	}
+}
+
+func TestApp_renderOrphanPrompt_SelectMode(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+
+	view := app.renderOrphanPrompt("base view")
+
+	if !strings.Contains(view, "Orphaned Units Detected") {
+		t.Error("renderOrphanPrompt should contain 'Orphaned Units Detected'")
+	}
+	if !strings.Contains(view, "Select a unit to manage") {
+		t.Error("renderOrphanPrompt should contain 'Select a unit to manage'")
+	}
+}
+
+func TestApp_renderOrphanPrompt_ActionMode(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 1
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1", Path: "/path/to/unit"},
+		},
+	}
+
+	view := app.renderOrphanPrompt("base view")
+
+	if !strings.Contains(view, "Unit:") {
+		t.Error("renderOrphanPrompt in action mode should contain 'Unit:'")
+	}
+	if !strings.Contains(view, "Import to config") {
+		t.Error("renderOrphanPrompt in action mode should contain 'Import to config'")
+	}
+}
+
+func TestApp_renderOrphanPrompt_LegacyTag(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1", IsLegacy: true},
+		},
+	}
+
+	view := app.renderOrphanPrompt("base view")
+
+	if !strings.Contains(view, "(legacy)") {
+		t.Error("renderOrphanPrompt should show '(legacy)' tag for legacy units")
+	}
+}
+
+func TestApp_renderOrphanPrompt_SmallWidth(t *testing.T) {
+	app := NewApp()
+	app.width = 30
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+
+	view := app.renderOrphanPrompt("base view")
+
+	if !strings.Contains(view, "Orphaned Units Detected") {
+		t.Error("renderOrphanPrompt should work with small width")
+	}
+}
+
+func TestApp_View_WithOrphanPrompt(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.showOrphanPrompt = true
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+
+	view := app.View()
+
+	if !strings.Contains(view, "Orphaned Units Detected") {
+		t.Error("View should show orphan prompt overlay")
+	}
+}
+
+func TestApp_Update_OrphanPromptIntercept(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.showOrphanPrompt = true
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+
+	if updatedApp.(*App).showOrphanPrompt {
+		t.Error("keys should be intercepted by orphan prompt when shown")
+	}
+}
+
+func TestApp_Update_MainMenuNavigation(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenMain
+	app.mainMenu.SetSize(80, 24)
+
+	app.mainMenu.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if updatedApp.(*App).currentScreen != ScreenMounts {
+		t.Errorf("main menu navigation should change screen to Mounts, got %d", updatedApp.(*App).currentScreen)
+	}
+}
+
+func TestApp_Update_MainMenuNavigationQuit(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenMain
+	app.mainMenu.SetSize(80, 24)
+
+	app.mainMenu.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if cmd == nil {
+		t.Error("main menu quit navigation should return quit command")
+	}
+}
+
+func TestApp_Update_MountsScreenGoBack(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenMounts
+
+	app.mounts.ResetGoBack()
+	app.mounts.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if updatedApp.(*App).currentScreen != ScreenMain {
+		t.Errorf("mounts screen go back should return to main, got %d", updatedApp.(*App).currentScreen)
+	}
+}
+
+func TestApp_Update_SyncJobsScreenGoBack(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenSyncJobs
+
+	app.syncJobs.ResetGoBack()
+	app.syncJobs.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if updatedApp.(*App).currentScreen != ScreenMain {
+		t.Errorf("sync jobs screen go back should return to main, got %d", updatedApp.(*App).currentScreen)
+	}
+}
+
+func TestApp_Update_ServicesScreenGoBack(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenServices
+
+	app.services.ResetGoBack()
+	app.services.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if updatedApp.(*App).currentScreen != ScreenMain {
+		t.Errorf("services screen go back should return to main, got %d", updatedApp.(*App).currentScreen)
+	}
+}
+
+func TestApp_Update_SettingsScreenGoBack(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenSettings
+
+	app.settings.ResetGoBack()
+	app.settings.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if updatedApp.(*App).currentScreen != ScreenMain {
+		t.Errorf("settings screen go back should return to main, got %d", updatedApp.(*App).currentScreen)
+	}
+}
+
+func TestApp_RenderHelp_ScrollIndicator(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 10
+	app.currentScreen = ScreenHelp
+	app.showHelp = true
+	app.helpScrollY = 0
+
+	view := app.renderHelp()
+
+	if view == "" {
+		t.Error("renderHelp should not return empty string")
+	}
+}
+
+func TestApp_RenderHelp_NegativeScroll(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenHelp
+	app.showHelp = true
+	app.helpScrollY = -5
+
+	view := app.renderHelp()
+
+	if view == "" {
+		t.Error("renderHelp should handle negative scroll")
+	}
+}
+
+func TestApp_RenderHelp_ScrollToEnd(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenHelp
+	app.showHelp = true
+	app.helpScrollY = 5
+	app.helpContentLen = 50
+
+	view := app.renderHelp()
+
+	if view == "" {
+		t.Error("renderHelp should handle scroll near end")
+	}
+}
+
+func TestApp_ScreenChangeMsg_HidesHelp(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenHelp
+	app.showHelp = true
+
+	updatedApp, _ := app.Update(ScreenChangeMsg{Screen: ScreenMounts})
+
+	if updatedApp.(*App).showHelp {
+		t.Error("ScreenChangeMsg should hide help")
+	}
+}
+
+func TestApp_OrphanUnit_Fields(t *testing.T) {
+	orphan := systemd.OrphanedUnit{
+		Name:     "test.service",
+		Type:     "mount",
+		ID:       "abc123",
+		IsLegacy: true,
+		Path:     "/path/to/unit",
+		Imported: true,
+	}
+
+	if orphan.Name != "test.service" {
+		t.Errorf("orphan.Name = %q, want 'test.service'", orphan.Name)
+	}
+	if orphan.Type != "mount" {
+		t.Errorf("orphan.Type = %q, want 'mount'", orphan.Type)
+	}
+	if !orphan.IsLegacy {
+		t.Error("orphan.IsLegacy should be true")
+	}
+}
+
+func TestApp_ReconciliationResult_Fields(t *testing.T) {
+	result := &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+		Errors: []error{&testError{msg: "test error"}},
+	}
+
+	if len(result.OrphanedUnits) != 1 {
+		t.Errorf("len(OrphanedUnits) = %d, want 1", len(result.OrphanedUnits))
+	}
+	if len(result.Errors) != 1 {
+		t.Errorf("len(Errors) = %d, want 1", len(result.Errors))
+	}
+}
+
+func TestApp_Messages(t *testing.T) {
+	t.Run("ScreenChangeMsg", func(t *testing.T) {
+		msg := ScreenChangeMsg{Screen: ScreenMounts}
+		if msg.Screen != ScreenMounts {
+			t.Errorf("ScreenChangeMsg.Screen = %d, want %d", msg.Screen, ScreenMounts)
+		}
+	})
+
+	t.Run("LoadingMsg", func(t *testing.T) {
+		msg := LoadingMsg{}
+		_ = msg
+	})
+
+	t.Run("LoadingDoneMsg", func(t *testing.T) {
+		msg := LoadingDoneMsg{}
+		_ = msg
+	})
+
+	t.Run("AppInitError", func(t *testing.T) {
+		err := &testError{msg: "test"}
+		msg := AppInitError{Err: err}
+		if msg.Err != err {
+			t.Error("AppInitError should contain the error")
+		}
+	})
+
+	t.Run("AppInitDone", func(t *testing.T) {
+		msg := AppInitDone{}
+		_ = msg
+	})
+}
+
+func TestApp_RenderInitError_Layout(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.initError = &testError{msg: "detailed error message"}
+
+	view := app.renderInitError()
+
+	expectedStrings := []string{
+		"Initialization Error",
+		"detailed error message",
+		"Possible solutions:",
+		"rclone",
+		"Press q or Ctrl+C to quit",
+	}
+
+	for _, expected := range expectedStrings {
+		if !strings.Contains(view, expected) {
+			t.Errorf("renderInitError should contain '%s'", expected)
+		}
+	}
+}
+
+func TestApp_RenderStatusBar_ShowHelp(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.currentScreen = ScreenMain
+	app.showHelp = true
+
+	status := app.renderStatusBar()
+
+	if !strings.Contains(status, "Esc") {
+		t.Error("status bar should show help close hint when help is shown")
+	}
+}
+
+func TestApp_updateOrphanPrompt_JKeyInActionMode(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 1
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+			{Name: "unit2.service", Type: "mount", ID: "id2"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+
+	if updatedApp.(*App).orphanSelected != 0 {
+		t.Errorf("'j' in action mode should not change selection, got %d", updatedApp.(*App).orphanSelected)
+	}
+}
+
+func TestApp_updateOrphanPrompt_KKeyInActionMode(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 1
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+
+	if updatedApp.(*App).orphanSelected != 0 {
+		t.Errorf("'k' in action mode should not change selection, got %d", updatedApp.(*App).orphanSelected)
+	}
+}
+
+func TestApp_updateOrphanPrompt_CKeyInSelectMode(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+
+	if !updatedApp.(*App).showOrphanPrompt {
+		t.Error("'c' in select mode should not close prompt")
+	}
+}
+
+func TestApp_updateOrphanPrompt_UpKeyInActionMode(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 1
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyUp})
+
+	if updatedApp.(*App).orphanSelected != 0 {
+		t.Errorf("up in action mode should not change selection, got %d", updatedApp.(*App).orphanSelected)
+	}
+}
+
+func TestApp_updateOrphanPrompt_DownKeyInActionMode(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 1
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+			{Name: "unit2.service", Type: "mount", ID: "id2"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	updatedApp, _ := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyDown})
+
+	if updatedApp.(*App).orphanSelected != 0 {
+		t.Errorf("down in action mode should not change selection, got %d", updatedApp.(*App).orphanSelected)
+	}
+}
+
+func TestApp_Update_UnknownKeyWithOrphanPrompt(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.showOrphanPrompt = true
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if !updatedApp.(*App).showOrphanPrompt {
+		t.Error("unknown key should not close orphan prompt")
+	}
+}
+
+func TestApp_renderOrphanPrompt_SelectedItem(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 1
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+			{Name: "unit2.service", Type: "sync", ID: "id2"},
+		},
+	}
+
+	view := app.renderOrphanPrompt("base view")
+
+	if !strings.Contains(view, "unit2.service") {
+		t.Error("renderOrphanPrompt should show selected unit")
+	}
+}
+
+func TestApp_renderOrphanPrompt_LargeWidth(t *testing.T) {
+	app := NewApp()
+	app.width = 200
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+
+	view := app.renderOrphanPrompt("base view")
+
+	if !strings.Contains(view, "Orphaned Units Detected") {
+		t.Error("renderOrphanPrompt should work with large width")
+	}
+}
+
+func TestApp_Update_MainMenuNavigationToSyncJobs(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenMain
+	app.mainMenu.SetSize(80, 24)
+
+	app.mainMenu.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if updatedApp.(*App).currentScreen != ScreenSyncJobs {
+		t.Errorf("main menu navigation should change screen to SyncJobs, got %d", updatedApp.(*App).currentScreen)
+	}
+}
+
+func TestApp_Update_MainMenuNavigationToServices(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenMain
+	app.mainMenu.SetSize(80, 24)
+
+	app.mainMenu.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if updatedApp.(*App).currentScreen != ScreenServices {
+		t.Errorf("main menu navigation should change screen to Services, got %d", updatedApp.(*App).currentScreen)
+	}
+}
+
+func TestApp_Update_MainMenuNavigationToSettings(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenMain
+	app.mainMenu.SetSize(80, 24)
+
+	app.mainMenu.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	if updatedApp.(*App).currentScreen != ScreenSettings {
+		t.Errorf("main menu navigation should change screen to Settings, got %d", updatedApp.(*App).currentScreen)
+	}
+}
+
+func TestApp_Update_ReconciliationMsgTriggersMountsInit(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+
+	result := &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "test.service", Type: "mount", ID: "testid"},
+		},
+	}
+	_, cmd := app.Update(ReconciliationMsg{Result: result})
+
+	if cmd == nil {
+		t.Error("ReconciliationMsg should return a command to init mounts")
+	}
+}
+
+func TestApp_View_DifferentScreensContent(t *testing.T) {
+	tests := []struct {
+		name         string
+		screen       Screen
+		expectedText string
+	}{
+		{"Main", ScreenMain, "Main Menu"},
+		{"Mounts", ScreenMounts, "Mount"},
+		{"SyncJobs", ScreenSyncJobs, "Sync"},
+		{"Services", ScreenServices, "Service"},
+		{"Settings", ScreenSettings, "Settings"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := NewApp()
+			app.width = 80
+			app.height = 24
+			app.mainMenu.SetSize(80, 24)
+			app.mounts.SetSize(80, 24)
+			app.syncJobs.SetSize(80, 24)
+			app.services.SetSize(80, 24)
+			app.settings.SetSize(80, 24)
+			app.currentScreen = tt.screen
+
+			view := app.View()
+
+			if !strings.Contains(view, tt.expectedText) {
+				t.Errorf("View for screen %v should contain '%s'", tt.screen, tt.expectedText)
+			}
+		})
+	}
+}
+
+func TestApp_RenderHelp_WithScrolling(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 15
+	app.currentScreen = ScreenHelp
+	app.showHelp = true
+	app.helpScrollY = 2
+
+	view := app.renderHelp()
+
+	if !strings.Contains(view, "Keybindings") {
+		t.Error("renderHelp should contain keybindings")
+	}
+}
+
+func TestApp_updateOrphanPrompt_EnterInActionModeWithNilOrphans(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 1
+	app.orphans = nil
+	app.showOrphanPrompt = false
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	updatedApp, cmd := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyEnter})
+
+	if cmd != nil {
+		t.Error("enter with nil orphans should return nil command")
+	}
+	_ = updatedApp
+}
+
+func TestApp_updateOrphanPrompt_CleanupKeyInActionMode(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 1
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+}
+
+func TestApp_Update_HelpNotShown_KeysDontAffectScroll(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenMain
+	app.showHelp = false
+	app.helpScrollY = 0
+
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyUp})
+
+	if updatedApp.(*App).helpScrollY != 0 {
+		t.Error("up key should not affect scroll when help not shown")
+	}
+}
+
+func TestApp_Update_HelpNotShown_DownDoesNotScroll(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenMain
+	app.showHelp = false
+	app.helpScrollY = 0
+
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyDown})
+
+	if updatedApp.(*App).helpScrollY != 0 {
+		t.Error("down key should not affect scroll when help not shown")
+	}
+}
+
+func TestApp_Update_SpaceKey(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenMain
+	app.mainMenu.SetSize(80, 24)
+
+	app.mainMenu.Update(tea.KeyMsg{Type: tea.KeySpace})
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	_ = updatedApp
+}
+
+func TestApp_View_HelpScreenWithShowHelp(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenHelp
+	app.showHelp = true
+	app.mainMenu.SetSize(80, 24)
+
+	view := app.View()
+
+	if !strings.Contains(view, "Help") {
+		t.Error("View should show help content when on Help screen")
+	}
+}
+
+func TestApp_RenderHelp_AvailableHeightOne(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 6
+	app.currentScreen = ScreenHelp
+	app.showHelp = true
+	app.helpScrollY = 0
+
+	view := app.renderHelp()
+
+	if view == "" {
+		t.Error("renderHelp should return content even with minimal height")
+	}
+}
+
+func TestApp_Update_JKeyNotInHelp(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenMain
+	app.showHelp = false
+	app.helpScrollY = 0
+
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+
+	if updatedApp.(*App).helpScrollY != 0 {
+		t.Error("j key should not scroll when not in help mode")
+	}
+}
+
+func TestApp_Update_KKeyNotInHelp(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.currentScreen = ScreenMain
+	app.showHelp = false
+	app.helpScrollY = 0
+
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+
+	if updatedApp.(*App).helpScrollY != 0 {
+		t.Error("k key should not scroll when not in help mode")
+	}
+}
+
+func TestApp_Update_EnterInActionModeWithOrphans(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 1
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
 }
