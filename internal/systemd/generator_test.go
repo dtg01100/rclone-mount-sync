@@ -117,27 +117,27 @@ func TestGenerator_ServiceName(t *testing.T) {
 	}{
 		{
 			name:     "mount unit",
-			unitName: "gdrive",
+			unitName: "abc12345",
 			unitType: "mount",
-			want:     "rclone-mount-gdrive",
+			want:     "rclone-mount-abc12345",
 		},
 		{
 			name:     "sync unit",
-			unitName: "backup",
+			unitName: "def67890",
 			unitType: "sync",
-			want:     "rclone-sync-backup",
+			want:     "rclone-sync-def67890",
 		},
 		{
-			name:     "name with spaces",
-			unitName: "My Backup",
+			name:     "alphanumeric id",
+			unitName: "a1b2c3d4",
 			unitType: "sync",
-			want:     "rclone-sync-my-backup",
+			want:     "rclone-sync-a1b2c3d4",
 		},
 		{
-			name:     "complex name",
-			unitName: "Google Drive Backup",
+			name:     "uppercase id",
+			unitName: "ABC12345",
 			unitType: "mount",
-			want:     "rclone-mount-google-drive-backup",
+			want:     "rclone-mount-ABC12345",
 		},
 	}
 
@@ -481,6 +481,7 @@ func TestGenerator_GenerateMountService(t *testing.T) {
 	}
 
 	mount := &models.MountConfig{
+		ID:          "a1b2c3d4",
 		Name:        "gdrive",
 		Remote:      "gdrive:",
 		RemotePath:  "/",
@@ -523,6 +524,7 @@ func TestGenerator_GenerateSyncService(t *testing.T) {
 	}
 
 	job := &models.SyncJobConfig{
+		ID:          "e5f6g7h8",
 		Name:        "backup-photos",
 		Source:      "gdrive:/Photos",
 		Destination: "/home/user/Backup/Photos",
@@ -573,6 +575,7 @@ func TestGenerator_GenerateSyncTimer(t *testing.T) {
 		{
 			name: "daily timer",
 			job: &models.SyncJobConfig{
+				ID:   "i9j0k1l2",
 				Name: "backup",
 				Schedule: models.ScheduleConfig{
 					Type:       "timer",
@@ -590,6 +593,7 @@ func TestGenerator_GenerateSyncTimer(t *testing.T) {
 		{
 			name: "hourly timer",
 			job: &models.SyncJobConfig{
+				ID:   "m3n4o5p6",
 				Name: "frequent-backup",
 				Schedule: models.ScheduleConfig{
 					Type:       "timer",
@@ -601,6 +605,7 @@ func TestGenerator_GenerateSyncTimer(t *testing.T) {
 		{
 			name: "timer with persistent",
 			job: &models.SyncJobConfig{
+				ID:   "q7r8s9t0",
 				Name: "persistent-backup",
 				Schedule: models.ScheduleConfig{
 					Type:       "timer",
@@ -886,6 +891,7 @@ func TestGenerator_GenerateMountServiceWithMountOptions(t *testing.T) {
 	}
 
 	mount := &models.MountConfig{
+		ID:         "u1v2w3x4",
 		Name:       "gdrive",
 		Remote:     "gdrive:",
 		RemotePath: "/",
@@ -927,6 +933,7 @@ func TestGenerator_GenerateSyncServiceWithSyncOptions(t *testing.T) {
 	}
 
 	job := &models.SyncJobConfig{
+		ID:          "y5z6a7b8",
 		Name:        "backup",
 		Source:      "gdrive:/Photos",
 		Destination: "/home/user/Backup/Photos",
@@ -992,6 +999,7 @@ func TestGenerator_WriteMountService(t *testing.T) {
 	}
 
 	mount := &models.MountConfig{
+		ID:          "c9d0e1f2",
 		Name:        "test-mount",
 		Remote:      "gdrive:",
 		RemotePath:  "/",
@@ -1041,6 +1049,7 @@ func TestGenerator_WriteSyncUnits(t *testing.T) {
 		{
 			name: "timer schedule",
 			job: &models.SyncJobConfig{
+				ID:          "g3h4i5j6",
 				Name:        "backup-timer",
 				Source:      "gdrive:/Photos",
 				Destination: "/home/user/Backup/Photos",
@@ -1055,6 +1064,7 @@ func TestGenerator_WriteSyncUnits(t *testing.T) {
 		{
 			name: "onboot schedule",
 			job: &models.SyncJobConfig{
+				ID:          "k7l8m9n0",
 				Name:        "backup-onboot",
 				Source:      "gdrive:/Documents",
 				Destination: "/home/user/Backup/Documents",
@@ -1069,6 +1079,7 @@ func TestGenerator_WriteSyncUnits(t *testing.T) {
 		{
 			name: "manual schedule",
 			job: &models.SyncJobConfig{
+				ID:          "o1p2q3r4",
 				Name:        "backup-manual",
 				Source:      "gdrive:/Manual",
 				Destination: "/home/user/Backup/Manual",
@@ -1251,6 +1262,7 @@ func TestGenerator_GenerateMountService_EdgeCases(t *testing.T) {
 		{
 			name: "empty name",
 			mount: &models.MountConfig{
+				ID:         "s5t6u7v8",
 				Name:       "",
 				Remote:     "gdrive:",
 				RemotePath: "/",
@@ -1261,6 +1273,7 @@ func TestGenerator_GenerateMountService_EdgeCases(t *testing.T) {
 		{
 			name: "special characters in name",
 			mount: &models.MountConfig{
+				ID:         "w9x0y1z2",
 				Name:       "My-Google.Drive@Work!",
 				Remote:     "gdrive:",
 				RemotePath: "/Work",
@@ -1271,6 +1284,7 @@ func TestGenerator_GenerateMountService_EdgeCases(t *testing.T) {
 		{
 			name: "path with tilde",
 			mount: &models.MountConfig{
+				ID:         "a3b4c5d6",
 				Name:       "home-mount",
 				Remote:     "gdrive:",
 				RemotePath: "/",
@@ -1281,6 +1295,7 @@ func TestGenerator_GenerateMountService_EdgeCases(t *testing.T) {
 		{
 			name: "empty remote path",
 			mount: &models.MountConfig{
+				ID:         "e7f8g9h0",
 				Name:       "empty-remote-path",
 				Remote:     "gdrive:",
 				RemotePath: "",
@@ -1291,6 +1306,7 @@ func TestGenerator_GenerateMountService_EdgeCases(t *testing.T) {
 		{
 			name: "all mount options",
 			mount: &models.MountConfig{
+				ID:         "i1j2k3l4",
 				Name:       "full-options",
 				Remote:     "gdrive:",
 				RemotePath: "/",
@@ -1353,6 +1369,7 @@ func TestGenerator_GenerateSyncService_EdgeCases(t *testing.T) {
 		{
 			name: "empty direction defaults to sync",
 			job: &models.SyncJobConfig{
+				ID:          "m5n6o7p8",
 				Name:        "default-direction",
 				Source:      "gdrive:/Photos",
 				Destination: "/home/user/Backup",
@@ -1365,6 +1382,7 @@ func TestGenerator_GenerateSyncService_EdgeCases(t *testing.T) {
 		{
 			name: "copy direction",
 			job: &models.SyncJobConfig{
+				ID:          "q9r0s1t2",
 				Name:        "copy-job",
 				Source:      "gdrive:/Photos",
 				Destination: "/home/user/Backup",
@@ -1377,6 +1395,7 @@ func TestGenerator_GenerateSyncService_EdgeCases(t *testing.T) {
 		{
 			name: "move direction",
 			job: &models.SyncJobConfig{
+				ID:          "u3v4w5x6",
 				Name:        "move-job",
 				Source:      "gdrive:/Photos",
 				Destination: "/home/user/Backup",
@@ -1389,6 +1408,7 @@ func TestGenerator_GenerateSyncService_EdgeCases(t *testing.T) {
 		{
 			name: "all sync options",
 			job: &models.SyncJobConfig{
+				ID:          "y7z8a9b0",
 				Name:        "full-options",
 				Source:      "gdrive:/Full",
 				Destination: "/home/user/Full",
@@ -1415,6 +1435,7 @@ func TestGenerator_GenerateSyncService_EdgeCases(t *testing.T) {
 		{
 			name: "path with tilde",
 			job: &models.SyncJobConfig{
+				ID:          "c1d2e3f4",
 				Name:        "tilde-path",
 				Source:      "gdrive:/Docs",
 				Destination: "~/Backup/Docs",
@@ -1454,6 +1475,7 @@ func TestGenerator_GenerateSyncTimer_EdgeCases(t *testing.T) {
 		{
 			name: "weekly schedule",
 			job: &models.SyncJobConfig{
+				ID:   "g5h6i7j8",
 				Name: "weekly-backup",
 				Schedule: models.ScheduleConfig{
 					Type:       "timer",
@@ -1465,6 +1487,7 @@ func TestGenerator_GenerateSyncTimer_EdgeCases(t *testing.T) {
 		{
 			name: "multiple OnCalendar expressions",
 			job: &models.SyncJobConfig{
+				ID:   "k9l0m1n2",
 				Name: "multi-schedule",
 				Schedule: models.ScheduleConfig{
 					Type:       "timer",
@@ -1476,6 +1499,7 @@ func TestGenerator_GenerateSyncTimer_EdgeCases(t *testing.T) {
 		{
 			name: "onboot with onactive",
 			job: &models.SyncJobConfig{
+				ID:   "o3p4q5r6",
 				Name: "boot-and-repeat",
 				Schedule: models.ScheduleConfig{
 					Type:        "onboot",

@@ -159,18 +159,18 @@ func TestManager_StartTimerNameHandling(t *testing.T) {
 	}{
 		{
 			name:     "name without suffix",
-			input:    "rclone-sync-backup",
-			expected: "rclone-sync-backup.timer",
+			input:    "rclone-sync-e5f6g7h8",
+			expected: "rclone-sync-e5f6g7h8.timer",
 		},
 		{
 			name:     "name with .timer suffix",
-			input:    "rclone-sync-backup.timer",
-			expected: "rclone-sync-backup.timer",
+			input:    "rclone-sync-e5f6g7h8.timer",
+			expected: "rclone-sync-e5f6g7h8.timer",
 		},
 		{
 			name:     "name with .service suffix",
-			input:    "rclone-sync-backup.service",
-			expected: "rclone-sync-backup.service.timer",
+			input:    "rclone-sync-e5f6g7h8.service",
+			expected: "rclone-sync-e5f6g7h8.service.timer",
 		},
 	}
 
@@ -196,13 +196,13 @@ func TestManager_StopTimerNameHandling(t *testing.T) {
 	}{
 		{
 			name:     "name without suffix",
-			input:    "rclone-sync-backup",
-			expected: "rclone-sync-backup.timer",
+			input:    "rclone-sync-e5f6g7h8",
+			expected: "rclone-sync-e5f6g7h8.timer",
 		},
 		{
 			name:     "name with .timer suffix",
-			input:    "rclone-sync-backup.timer",
-			expected: "rclone-sync-backup.timer",
+			input:    "rclone-sync-e5f6g7h8.timer",
+			expected: "rclone-sync-e5f6g7h8.timer",
 		},
 	}
 
@@ -228,13 +228,13 @@ func TestManager_EnableTimerNameHandling(t *testing.T) {
 	}{
 		{
 			name:     "name without suffix",
-			input:    "rclone-sync-backup",
-			expected: "rclone-sync-backup.timer",
+			input:    "rclone-sync-i9j0k1l2",
+			expected: "rclone-sync-i9j0k1l2.timer",
 		},
 		{
 			name:     "name with .timer suffix",
-			input:    "rclone-sync-backup.timer",
-			expected: "rclone-sync-backup.timer",
+			input:    "rclone-sync-i9j0k1l2.timer",
+			expected: "rclone-sync-i9j0k1l2.timer",
 		},
 	}
 
@@ -260,13 +260,13 @@ func TestManager_DisableTimerNameHandling(t *testing.T) {
 	}{
 		{
 			name:     "name without suffix",
-			input:    "rclone-sync-backup",
-			expected: "rclone-sync-backup.timer",
+			input:    "rclone-sync-m3n4o5p6",
+			expected: "rclone-sync-m3n4o5p6.timer",
 		},
 		{
 			name:     "name with .timer suffix",
-			input:    "rclone-sync-backup.timer",
-			expected: "rclone-sync-backup.timer",
+			input:    "rclone-sync-m3n4o5p6.timer",
+			expected: "rclone-sync-m3n4o5p6.timer",
 		},
 	}
 
@@ -292,13 +292,13 @@ func TestManager_RunSyncNowNameHandling(t *testing.T) {
 	}{
 		{
 			name:     "name without suffix",
-			input:    "rclone-sync-backup",
-			expected: "rclone-sync-backup.service",
+			input:    "rclone-sync-q7r8s9t0",
+			expected: "rclone-sync-q7r8s9t0.service",
 		},
 		{
 			name:     "name with .service suffix",
-			input:    "rclone-sync-backup.service",
-			expected: "rclone-sync-backup.service",
+			input:    "rclone-sync-q7r8s9t0.service",
+			expected: "rclone-sync-q7r8s9t0.service",
 		},
 	}
 
@@ -750,7 +750,7 @@ func TestManager_GetTimerNextRunNonexistent(t *testing.T) {
 func TestManager_StartTimerWithServiceSuffix(t *testing.T) {
 	m := NewManager()
 
-	err := m.StartTimer("rclone-sync-backup.service")
+	err := m.StartTimer("rclone-sync-u1v2w3x4.service")
 	// Should fail because timer doesn't exist, but name should be handled
 	if err == nil {
 		t.Error("StartTimer() should return error for nonexistent timer")
@@ -761,7 +761,7 @@ func TestManager_StartTimerWithServiceSuffix(t *testing.T) {
 func TestManager_StopTimerWithServiceSuffix(t *testing.T) {
 	m := NewManager()
 
-	err := m.StopTimer("rclone-sync-backup.service")
+	err := m.StopTimer("rclone-sync-y5z6a7b8.service")
 	// Should fail because timer doesn't exist, but name should be handled
 	if err == nil {
 		t.Error("StopTimer() should return error for nonexistent timer")
@@ -772,7 +772,7 @@ func TestManager_StopTimerWithServiceSuffix(t *testing.T) {
 func TestManager_EnableTimerWithServiceSuffix(t *testing.T) {
 	m := NewManager()
 
-	err := m.EnableTimer("rclone-sync-backup.service")
+	err := m.EnableTimer("rclone-sync-c9d0e1f2.service")
 	// Should fail because timer doesn't exist, but name should be handled
 	if err == nil {
 		t.Error("EnableTimer() should return error for nonexistent timer")
@@ -783,7 +783,7 @@ func TestManager_EnableTimerWithServiceSuffix(t *testing.T) {
 func TestManager_DisableTimerWithServiceSuffix(t *testing.T) {
 	m := NewManager()
 
-	err := m.DisableTimer("rclone-sync-backup.service")
+	err := m.DisableTimer("rclone-sync-g3h4i5j6.service")
 	// Should fail because timer doesn't exist, but name should be handled
 	if err == nil {
 		t.Error("DisableTimer() should return error for nonexistent timer")
@@ -794,7 +794,7 @@ func TestManager_DisableTimerWithServiceSuffix(t *testing.T) {
 func TestManager_RunSyncNowWithTimerSuffix(t *testing.T) {
 	m := NewManager()
 
-	err := m.RunSyncNow("rclone-sync-backup.timer")
+	err := m.RunSyncNow("rclone-sync-k7l8m9n0.timer")
 	// Should fail because service doesn't exist, but name should be handled
 	if err == nil {
 		t.Error("RunSyncNow() should return error for nonexistent service")
@@ -1117,12 +1117,12 @@ func TestManager_GetDetailedStatus_NameParsing(t *testing.T) {
 	}{
 		{
 			name:     "mount service",
-			unitName: "rclone-mount-gdrive.service",
+			unitName: "rclone-mount-s5t6u7v8.service",
 			wantType: "mount",
 		},
 		{
 			name:     "sync service",
-			unitName: "rclone-sync-backup.service",
+			unitName: "rclone-sync-w9x0y1z2.service",
 			wantType: "sync",
 		},
 		{
