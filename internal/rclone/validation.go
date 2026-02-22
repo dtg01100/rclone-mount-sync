@@ -12,11 +12,11 @@ import (
 
 // CheckResult represents the result of a single pre-flight check.
 type CheckResult struct {
-	Name        string // Name of the check
-	Passed      bool   // Whether the check passed
-	Message     string // Error or success message
-	Suggestion  string // User-friendly suggestion for fixing the issue
-	IsCritical  bool   // If true, the application cannot continue without this check passing
+	Name       string // Name of the check
+	Passed     bool   // Whether the check passed
+	Message    string // Error or success message
+	Suggestion string // User-friendly suggestion for fixing the issue
+	IsCritical bool   // If true, the application cannot continue without this check passing
 }
 
 // PreflightChecks runs all pre-flight validation checks and returns the results.
@@ -92,10 +92,13 @@ func checkRcloneBinary(client *Client) CheckResult {
 	binaryPath := client.binaryPath
 	if binaryPath == "rclone" {
 		result.Message = "rclone binary not found in PATH"
-		result.Suggestion = "Install rclone using your package manager (e.g., 'sudo apt install rclone') or download from https://rclone.org/install/"
+		result.Suggestion = "Install rclone:\n" +
+			"  • Package manager: sudo apt install rclone (Debian/Ubuntu), sudo dnf install rclone (Fedora), brew install rclone (macOS)\n" +
+			"  • Or download from: https://rclone.org/install/\n" +
+			"After installation, run 'rclone config' to set up your remotes."
 	} else {
 		result.Message = fmt.Sprintf("rclone binary not found at configured path: %s", binaryPath)
-		result.Suggestion = "Verify the rclone_binary_path in your settings or install rclone"
+		result.Suggestion = "Verify the rclone_binary_path in your settings or install rclone from https://rclone.org/install/"
 	}
 
 	return result
@@ -143,7 +146,7 @@ func checkRcloneVersion(client *Client) CheckResult {
 func checkConfiguredRemotes(client *Client) CheckResult {
 	result := CheckResult{
 		Name:       "Configured Remotes",
-		IsCritical: true,
+		IsCritical: false, // Non-fatal: app can still run, but forms will show helpful messages
 	}
 
 	// Use a context with timeout for the remote listing
@@ -179,7 +182,12 @@ func checkConfiguredRemotes(client *Client) CheckResult {
 		if len(res.remotes) == 0 {
 			result.Passed = false
 			result.Message = "No rclone remotes are configured"
-			result.Suggestion = "Run 'rclone config' to set up a remote storage provider first"
+			result.Suggestion = "Configure a remote storage provider:\n" +
+				"  1. Run 'rclone config' in your terminal\n" +
+				"  2. Select 'n' for new remote\n" +
+				"  3. Follow the interactive prompts to configure your cloud storage\n" +
+				"  4. Supported providers include: Google Drive, Dropbox, S3, OneDrive, and many more\n" +
+				"Documentation: https://rclone.org/docs/"
 			return result
 		}
 
@@ -357,6 +365,70 @@ func AllPassed(results []CheckResult) bool {
 		}
 	}
 	return true
+}
+
+// ValidateOnCalendar validates a systemd timer OnCalendar string.
+// Returns an error with a helpful message if the format is invalid.
+func ValidateOnCalendar(calendar string) error {
+	if calendar == "" {
+		return fmt.Errorf("calendar schedule cannot be empty")
+	}
+
+	normalized := strings.ToLower(strings.TrimSpace(calendar))
+
+	// Named schedules (simple shortcuts)
+	namedSchedules := []string{"daily", "hourly", "weekly", "monthly", "yearly", "annually", "quarterly", "semiannually"}
+	for _, named := range namedSchedules {
+		if normalized == named {
+			return nil
+		}
+	}
+
+	// Check for detailed calendar expressions
+	// Format: [day-of-week] year-month-day hour:minute:second
+	// Examples:
+	//   *-*-* 00:00:00           - every day at midnight
+	//   Mon *-*-* 00:00:00       - every Monday at midnight
+	//   *-*-* 02:00:00           - every day at 2am
+	//   2024-01-01 00:00:00      - specific date
+	//   *-*-01 00:00:00          - first day of every month
+	//   Mon,Fri *-*-* 09:00:00   - Monday and Friday at 9am
+
+	// Day of week pattern (optional prefix): Mon, Tue, Wed, Thu, Fri, Sat, Sun (can be comma-separated)
+	dowPattern := `(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)(?:,(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun))*\s+)?`
+
+	// Date pattern: year-month-day (allowing * and partial wildcards)
+	// Examples: *-*-*, 2024-01-01, *-*-01, 2024-*-01, *-01-*
+	dateComponent := `(?:\*|\d{1,4})`
+	datePattern := dateComponent + `-(?:\*|\d{1,2})-(?:\*|\d{1,2})`
+
+	// Time pattern: hour:minute:second (allowing * and partial wildcards)
+	// Examples: 00:00:00, *:*:*, *:00:00, 02:00
+	timeComponent := `(?:\*|\d{1,2})`
+	timePattern := timeComponent + `(?::` + timeComponent + `){0,2}`
+
+	// Full calendar pattern
+	calendarPattern := `^` + dowPattern + datePattern + `\s+` + timePattern + `$`
+
+	matched, err := regexp.MatchString(calendarPattern, calendar)
+	if err != nil {
+		return fmt.Errorf("internal validation error: %w", err)
+	}
+
+	if matched {
+		return nil
+	}
+
+	// Provide helpful error message with examples
+	return fmt.Errorf("invalid OnCalendar format: %q\n"+
+		"Valid formats:\n"+
+		"  - Named schedules: daily, hourly, weekly, monthly, yearly\n"+
+		"  - Every day at specific time: *-*-* 02:00:00\n"+
+		"  - Specific day of week: Mon *-*-* 09:00:00\n"+
+		"  - Specific date: 2024-01-01 00:00:00\n"+
+		"  - First of month: *-*-01 00:00:00\n"+
+		"  - Multiple days: Mon,Fri *-*-* 09:00:00",
+		calendar)
 }
 
 // FormatResults formats the check results for display.

@@ -527,6 +527,9 @@ func TestCheckRcloneBinaryNotFound(t *testing.T) {
 	if !result.IsCritical {
 		t.Error("checkRcloneBinary should always be critical")
 	}
+	if !strings.Contains(result.Suggestion, "rclone.org/install") {
+		t.Error("checkRcloneBinary() suggestion should contain 'rclone.org/install'")
+	}
 }
 
 func TestCheckRcloneVersionSuccess(t *testing.T) {
@@ -628,6 +631,12 @@ echo ""
 	}
 	if result.Suggestion == "" {
 		t.Error("checkConfiguredRemotes() should provide suggestion")
+	}
+	if result.IsCritical {
+		t.Error("checkConfiguredRemotes() should not be critical - it's a non-fatal warning")
+	}
+	if !strings.Contains(result.Suggestion, "rclone config") {
+		t.Error("checkConfiguredRemotes() suggestion should mention 'rclone config'")
 	}
 }
 
@@ -816,5 +825,272 @@ func TestCheckRcloneBinaryWithDefaultPath(t *testing.T) {
 
 	if result.Passed {
 		t.Error("checkRcloneBinary() should fail when rclone not in PATH")
+	}
+}
+
+func TestValidateOnCalendar(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "daily",
+			input:   "daily",
+			wantErr: false,
+		},
+		{
+			name:    "hourly",
+			input:   "hourly",
+			wantErr: false,
+		},
+		{
+			name:    "weekly",
+			input:   "weekly",
+			wantErr: false,
+		},
+		{
+			name:    "monthly",
+			input:   "monthly",
+			wantErr: false,
+		},
+		{
+			name:    "yearly",
+			input:   "yearly",
+			wantErr: false,
+		},
+		{
+			name:    "annually",
+			input:   "annually",
+			wantErr: false,
+		},
+		{
+			name:    "quarterly",
+			input:   "quarterly",
+			wantErr: false,
+		},
+		{
+			name:    "semiannually",
+			input:   "semiannually",
+			wantErr: false,
+		},
+		{
+			name:    "named schedule uppercase",
+			input:   "DAILY",
+			wantErr: false,
+		},
+		{
+			name:    "named schedule mixed case",
+			input:   "Weekly",
+			wantErr: false,
+		},
+		{
+			name:    "every day at midnight",
+			input:   "*-*-* 00:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "every day at 2am",
+			input:   "*-*-* 02:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "every day with wildcard time",
+			input:   "*-*-* *:*:*",
+			wantErr: false,
+		},
+		{
+			name:    "specific date",
+			input:   "2024-01-01 00:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "first day of month",
+			input:   "*-*-01 00:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "Monday at midnight",
+			input:   "Mon *-*-* 00:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "Friday at 5pm",
+			input:   "Fri *-*-* 17:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "multiple days Monday and Friday",
+			input:   "Mon,Fri *-*-* 09:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "weekend days",
+			input:   "Sat,Sun *-*-* 10:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "every hour wildcard",
+			input:   "*-*-* *:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "every minute",
+			input:   "*-*-* *:*:00",
+			wantErr: false,
+		},
+		{
+			name:    "year and month wildcard with day",
+			input:   "*-*-15 12:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "specific year month wildcard",
+			input:   "2024-*-01 00:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "empty string",
+			input:   "",
+			wantErr: true,
+		},
+		{
+			name:    "whitespace only",
+			input:   "   ",
+			wantErr: true,
+		},
+		{
+			name:    "random string",
+			input:   "notaschedule",
+			wantErr: true,
+		},
+		{
+			name:    "invalid named schedule",
+			input:   "biweekly",
+			wantErr: true,
+		},
+		{
+			name:    "invalid day name",
+			input:   "XYZ *-*-* 00:00:00",
+			wantErr: true,
+		},
+		{
+			name:    "missing time component",
+			input:   "*-*-*",
+			wantErr: true,
+		},
+		{
+			name:    "missing date component",
+			input:   "00:00:00",
+			wantErr: true,
+		},
+		{
+			name:    "malformed date",
+			input:   "2024/01/01 00:00:00",
+			wantErr: true,
+		},
+		{
+			name:    "malformed time",
+			input:   "*-*-* 00-00-00",
+			wantErr: true,
+		},
+		{
+			name:    "invalid hour value",
+			input:   "*-*-* 25:00:00",
+			wantErr: false, // We don't validate semantic correctness of values
+		},
+		{
+			name:    "time without seconds",
+			input:   "*-*-* 02:00",
+			wantErr: false,
+		},
+		{
+			name:    "time with just hour",
+			input:   "*-*-* 02",
+			wantErr: false,
+		},
+		{
+			name:    "date with just year",
+			input:   "2024",
+			wantErr: true,
+		},
+		{
+			name:    "trailing space",
+			input:   "daily ",
+			wantErr: false,
+		},
+		{
+			name:    "leading space",
+			input:   " daily",
+			wantErr: false,
+		},
+		{
+			name:    "Wednesday with space",
+			input:   "Wed *-*-* 14:30:00",
+			wantErr: false,
+		},
+		{
+			name:    "Thursday abbreviation",
+			input:   "Thu *-*-* 09:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "Tuesday abbreviation",
+			input:   "Tue *-*-* 08:00:00",
+			wantErr: false,
+		},
+		{
+			name:    "Sunday abbreviation",
+			input:   "Sun *-*-* 00:00:00",
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateOnCalendar(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateOnCalendar(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+
+			if err != nil && tt.input != "" && !strings.Contains(err.Error(), "Valid formats:") {
+				t.Errorf("ValidateOnCalendar error should contain helpful format examples")
+			}
+		})
+	}
+}
+
+func TestValidateOnCalendarErrorMessage(t *testing.T) {
+	err := ValidateOnCalendar("invalid")
+	if err == nil {
+		t.Fatal("expected error for invalid input")
+	}
+
+	errMsg := err.Error()
+
+	if !strings.Contains(errMsg, "invalid OnCalendar format") {
+		t.Error("error message should contain 'invalid OnCalendar format'")
+	}
+	if !strings.Contains(errMsg, "daily") {
+		t.Error("error message should suggest 'daily' as valid format")
+	}
+	if !strings.Contains(errMsg, "weekly") {
+		t.Error("error message should suggest 'weekly' as valid format")
+	}
+	if !strings.Contains(errMsg, "*-*-* 02:00:00") {
+		t.Error("error message should show example '*-*-* 02:00:00'")
+	}
+	if !strings.Contains(errMsg, "Mon *-*-* 09:00:00") {
+		t.Error("error message should show example 'Mon *-*-* 09:00:00'")
+	}
+}
+
+func TestValidateOnCalendarEmptyInput(t *testing.T) {
+	err := ValidateOnCalendar("")
+	if err == nil {
+		t.Fatal("expected error for empty input")
+	}
+	if !strings.Contains(err.Error(), "cannot be empty") {
+		t.Errorf("expected 'cannot be empty' error, got: %v", err)
 	}
 }
