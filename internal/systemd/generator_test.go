@@ -558,6 +558,117 @@ func TestGenerator_GenerateSyncService(t *testing.T) {
 	}
 }
 
+// TestGenerateSyncService_ConditionDirectives tests condition directives in sync service generation.
+func TestGenerateSyncService_ConditionDirectives(t *testing.T) {
+	g := &Generator{
+		systemdDir: t.TempDir(),
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     t.TempDir(),
+	}
+
+	tests := []struct {
+		name        string
+		job         *models.SyncJobConfig
+		contains    []string
+		notContains []string
+	}{
+		{
+			name: "RequireACPower true",
+			job: &models.SyncJobConfig{
+				ID:          "test-ac",
+				Name:        "test-ac-job",
+				Source:      "gdrive:/Data",
+				Destination: "/home/user/Backup/Data",
+				Schedule: models.ScheduleConfig{
+					RequireACPower: true,
+				},
+			},
+			contains: []string{
+				"ConditionACPower=true",
+			},
+			notContains: []string{
+				"ExecCondition=",
+			},
+		},
+		{
+			name: "RequireUnmetered true",
+			job: &models.SyncJobConfig{
+				ID:          "test-unmetered",
+				Name:        "test-unmetered-job",
+				Source:      "gdrive:/Data",
+				Destination: "/home/user/Backup/Data",
+				Schedule: models.ScheduleConfig{
+					RequireUnmetered: true,
+				},
+			},
+			contains: []string{
+				"ExecCondition=/bin/sh -c 'test \"$(dbus-send --system --print-reply=literal --dest=org.freedesktop.NetworkManager",
+			},
+			notContains: []string{
+				"ConditionACPower=true",
+			},
+		},
+		{
+			name: "Both conditions false",
+			job: &models.SyncJobConfig{
+				ID:          "test-none",
+				Name:        "test-none-job",
+				Source:      "gdrive:/Data",
+				Destination: "/home/user/Backup/Data",
+				Schedule: models.ScheduleConfig{
+					RequireACPower:   false,
+					RequireUnmetered: false,
+				},
+			},
+			contains: []string{},
+			notContains: []string{
+				"ConditionACPower=true",
+				"ExecCondition=",
+			},
+		},
+		{
+			name: "Both conditions true",
+			job: &models.SyncJobConfig{
+				ID:          "test-both",
+				Name:        "test-both-job",
+				Source:      "gdrive:/Data",
+				Destination: "/home/user/Backup/Data",
+				Schedule: models.ScheduleConfig{
+					RequireACPower:   true,
+					RequireUnmetered: true,
+				},
+			},
+			contains: []string{
+				"ConditionACPower=true",
+				"ExecCondition=/bin/sh -c 'test \"$(dbus-send --system --print-reply=literal --dest=org.freedesktop.NetworkManager",
+			},
+			notContains: []string{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			content, err := g.GenerateSyncService(tt.job)
+			if err != nil {
+				t.Fatalf("GenerateSyncService() error = %v", err)
+			}
+
+			for _, expected := range tt.contains {
+				if !strings.Contains(content, expected) {
+					t.Errorf("GenerateSyncService() missing expected content %q", expected)
+				}
+			}
+
+			for _, unexpected := range tt.notContains {
+				if strings.Contains(content, unexpected) {
+					t.Errorf("GenerateSyncService() should not contain %q", unexpected)
+				}
+			}
+		})
+	}
+}
+
 // TestGenerateSyncTimer tests the GenerateSyncTimer method.
 func TestGenerator_GenerateSyncTimer(t *testing.T) {
 	g := &Generator{
