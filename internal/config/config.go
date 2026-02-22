@@ -3,16 +3,38 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
 	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 	"github.com/google/uuid"
 	"github.com/spf13/viper"
+	"gopkg.in/yaml.v3"
 )
+
+// ImportMode defines how configuration should be imported.
+type ImportMode int
+
+const (
+	// ImportModeMerge merges imported config with existing config.
+	// Existing items with the same name are skipped.
+	ImportModeMerge ImportMode = iota
+	// ImportModeReplace replaces the entire configuration with imported config.
+	ImportModeReplace
+)
+
+// ExportData represents the data structure for exported configuration.
+type ExportData struct {
+	Version  string                 `json:"version" yaml:"version"`
+	Mounts   []models.MountConfig   `json:"mounts" yaml:"mounts"`
+	SyncJobs []models.SyncJobConfig `json:"sync_jobs" yaml:"sync_jobs"`
+	Exported string                 `json:"exported" yaml:"exported"`
+}
 
 // Config represents the application configuration.
 type Config struct {
@@ -91,6 +113,8 @@ func Load() (*Config, error) {
 }
 
 // Save writes the configuration to the default config file location.
+// It uses an atomic write pattern: writes to a temp file first, then renames.
+// A backup of the existing config is created before overwriting.
 func (c *Config) Save() error {
 	configDir, err := getConfigDir()
 	if err != nil {
@@ -101,12 +125,18 @@ func (c *Config) Save() error {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
+	configPath := filepath.Join(configDir, "config.yaml")
+	backupPath := configPath + ".bak"
+
+	if _, err := os.Stat(configPath); err == nil {
+		if err := createBackup(configPath, backupPath); err != nil {
+			return fmt.Errorf("failed to create backup: %w", err)
+		}
+	}
+
 	v := viper.New()
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
-	v.AddConfigPath(configDir)
-
-	configPath := filepath.Join(configDir, "config.yaml")
 	v.SetConfigFile(configPath)
 
 	v.Set("version", c.Version)
@@ -123,8 +153,91 @@ func (c *Config) Save() error {
 	v.Set("defaults.sync.transfers", c.Defaults.Sync.Transfers)
 	v.Set("defaults.sync.checkers", c.Defaults.Sync.Checkers)
 
-	if err := v.WriteConfigAs(configPath); err != nil {
+	tempPath := configPath + ".tmp.yaml"
+
+	if err := v.WriteConfigAs(tempPath); err != nil {
+		os.Remove(tempPath)
 		return fmt.Errorf("failed to write config file: %w", err)
+	}
+
+	if err := os.Rename(tempPath, configPath); err != nil {
+		os.Remove(tempPath)
+		return fmt.Errorf("failed to rename temp file: %w", err)
+	}
+
+	return nil
+}
+
+// RestoreFromBackup restores the configuration from the backup file.
+// Returns an error if no backup exists.
+func RestoreFromBackup() error {
+	configDir, err := getConfigDir()
+	if err != nil {
+		return fmt.Errorf("failed to get config directory: %w", err)
+	}
+
+	configPath := filepath.Join(configDir, "config.yaml")
+	backupPath := configPath + ".bak"
+
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		return fmt.Errorf("no backup file found")
+	}
+
+	if err := os.Rename(backupPath, configPath); err != nil {
+		return fmt.Errorf("failed to restore from backup: %w", err)
+	}
+
+	return nil
+}
+
+// HasBackup returns true if a backup file exists.
+func HasBackup() (bool, error) {
+	configDir, err := getConfigDir()
+	if err != nil {
+		return false, fmt.Errorf("failed to get config directory: %w", err)
+	}
+
+	backupPath := filepath.Join(configDir, "config.yaml.bak")
+	_, err = os.Stat(backupPath)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// createBackup creates a backup of the existing config file.
+// It overwrites any existing backup to keep only the most recent one.
+func createBackup(configPath, backupPath string) error {
+	srcFile, err := os.Open(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to open config file: %w", err)
+	}
+	defer srcFile.Close()
+
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to stat config file: %w", err)
+	}
+
+	dstFile, err := os.OpenFile(backupPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
+	if err != nil {
+		return fmt.Errorf("failed to create backup file: %w", err)
+	}
+	defer dstFile.Close()
+
+	if _, err := srcFile.Seek(0, 0); err != nil {
+		return fmt.Errorf("failed to seek config file: %w", err)
+	}
+
+	if _, err := dstFile.ReadFrom(srcFile); err != nil {
+		return fmt.Errorf("failed to copy config to backup: %w", err)
+	}
+
+	if err := dstFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync backup file: %w", err)
 	}
 
 	return nil
@@ -288,4 +401,140 @@ func newConfigWithDefaults() *Config {
 // generateID generates a unique ID for mounts and sync jobs.
 func generateID() string {
 	return uuid.New().String()[:8]
+}
+
+// ExportConfig exports the current mounts and sync jobs to a file.
+// The file format is determined by the file extension (.json or .yaml/.yml).
+func (c *Config) ExportConfig(filePath string) error {
+	data := ExportData{
+		Version:  c.Version,
+		Mounts:   c.Mounts,
+		SyncJobs: c.SyncJobs,
+		Exported: time.Now().Format(time.RFC3339),
+	}
+
+	fileDir := filepath.Dir(filePath)
+	if fileDir != "" && fileDir != "." {
+		if err := utils.EnsureDir(fileDir); err != nil {
+			return fmt.Errorf("failed to create export directory: %w", err)
+		}
+	}
+
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create export file: %w", err)
+	}
+	defer file.Close()
+
+	ext := strings.ToLower(filepath.Ext(filePath))
+	switch ext {
+	case ".json":
+		encoder := json.NewEncoder(file)
+		encoder.SetIndent("", "  ")
+		if err := encoder.Encode(data); err != nil {
+			return fmt.Errorf("failed to encode JSON: %w", err)
+		}
+	case ".yaml", ".yml":
+		encoder := yaml.NewEncoder(file)
+		encoder.SetIndent(2)
+		if err := encoder.Encode(data); err != nil {
+			return fmt.Errorf("failed to encode YAML: %w", err)
+		}
+	default:
+		return fmt.Errorf("unsupported file format: %s (use .json, .yaml, or .yml)", ext)
+	}
+
+	return nil
+}
+
+// ImportConfig imports mounts and sync jobs from a file.
+// The import mode determines how conflicts are handled.
+func (c *Config) ImportConfig(filePath string, mode ImportMode) error {
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		return fmt.Errorf("import file does not exist: %s", filePath)
+	}
+
+	file, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open import file: %w", err)
+	}
+	defer file.Close()
+
+	var data ExportData
+	ext := strings.ToLower(filepath.Ext(filePath))
+
+	switch ext {
+	case ".json":
+		decoder := json.NewDecoder(file)
+		if err := decoder.Decode(&data); err != nil {
+			return fmt.Errorf("failed to decode JSON: %w", err)
+		}
+	case ".yaml", ".yml":
+		decoder := yaml.NewDecoder(file)
+		if err := decoder.Decode(&data); err != nil {
+			return fmt.Errorf("failed to decode YAML: %w", err)
+		}
+	default:
+		return fmt.Errorf("unsupported file format: %s (use .json, .yaml, or .yml)", ext)
+	}
+
+	if data.Version == "" && len(data.Mounts) == 0 && len(data.SyncJobs) == 0 {
+		return fmt.Errorf("invalid config file: no valid configuration data found")
+	}
+
+	switch mode {
+	case ImportModeReplace:
+		c.Mounts = data.Mounts
+		c.SyncJobs = data.SyncJobs
+	case ImportModeMerge:
+		c.mergeImport(data)
+	}
+
+	return nil
+}
+
+// mergeImport merges the imported data with the existing configuration.
+// Items with duplicate names are skipped with an error recorded.
+func (c *Config) mergeImport(data ExportData) {
+	existingMountNames := make(map[string]bool)
+	for _, m := range c.Mounts {
+		existingMountNames[m.Name] = true
+	}
+
+	for _, mount := range data.Mounts {
+		if existingMountNames[mount.Name] {
+			continue
+		}
+		if mount.ID == "" {
+			mount.ID = generateID()
+		}
+		if mount.CreatedAt.IsZero() {
+			mount.CreatedAt = time.Now()
+		}
+		if mount.ModifiedAt.IsZero() {
+			mount.ModifiedAt = time.Now()
+		}
+		c.Mounts = append(c.Mounts, mount)
+	}
+
+	existingSyncJobNames := make(map[string]bool)
+	for _, j := range c.SyncJobs {
+		existingSyncJobNames[j.Name] = true
+	}
+
+	for _, job := range data.SyncJobs {
+		if existingSyncJobNames[job.Name] {
+			continue
+		}
+		if job.ID == "" {
+			job.ID = generateID()
+		}
+		if job.CreatedAt.IsZero() {
+			job.CreatedAt = time.Now()
+		}
+		if job.ModifiedAt.IsZero() {
+			job.ModifiedAt = time.Now()
+		}
+		c.SyncJobs = append(c.SyncJobs, job)
+	}
 }

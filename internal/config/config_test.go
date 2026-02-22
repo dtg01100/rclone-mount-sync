@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1152,5 +1153,744 @@ func TestSyncJobTimestampsSetOnAdd(t *testing.T) {
 	}
 	if job.CreatedAt.Before(beforeAdd) {
 		t.Error("CreatedAt should be after or equal to time before add")
+	}
+}
+
+func TestSaveCreatesBackup(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origGetConfigDir := getConfigDir
+	getConfigDir = func() (string, error) { return tmpDir, nil }
+	defer func() { getConfigDir = origGetConfigDir }()
+
+	cfg := newConfigWithDefaults()
+	cfg.Settings.DefaultMountDir = "/first/mnt"
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("First Save() error = %v", err)
+	}
+
+	backupPath := filepath.Join(tmpDir, "config.yaml.bak")
+	if _, err := os.Stat(backupPath); !os.IsNotExist(err) {
+		t.Error("Backup should not exist after first save (no existing config)")
+	}
+
+	cfg.Settings.DefaultMountDir = "/second/mnt"
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Second Save() error = %v", err)
+	}
+
+	if _, err := os.Stat(backupPath); os.IsNotExist(err) {
+		t.Fatal("Backup file should exist after second save")
+	}
+
+	backupContent, err := os.ReadFile(backupPath)
+	if err != nil {
+		t.Fatalf("Failed to read backup file: %v", err)
+	}
+
+	if !strings.Contains(string(backupContent), "/first/mnt") {
+		t.Error("Backup should contain the first config")
+	}
+
+	configContent, err := os.ReadFile(filepath.Join(tmpDir, "config.yaml"))
+	if err != nil {
+		t.Fatalf("Failed to read config file: %v", err)
+	}
+
+	if !strings.Contains(string(configContent), "/second/mnt") {
+		t.Error("Config should contain the second value")
+	}
+}
+
+func TestAtomicWriteTempFileCleanup(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origGetConfigDir := getConfigDir
+	getConfigDir = func() (string, error) { return tmpDir, nil }
+	defer func() { getConfigDir = origGetConfigDir }()
+
+	cfg := newConfigWithDefaults()
+	cfg.Settings.DefaultMountDir = "/original/mnt"
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("First Save() error = %v", err)
+	}
+
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to read config dir: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".tmp.yaml") {
+			t.Error("Temp file should not remain after successful save")
+		}
+	}
+
+	cfg.Settings.DefaultMountDir = "/new/mnt"
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Second Save() error = %v", err)
+	}
+
+	entries, err = os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to read config dir: %v", err)
+	}
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".tmp.yaml") {
+			t.Error("Temp file should not remain after successful save")
+		}
+	}
+
+	configContent, err := os.ReadFile(filepath.Join(tmpDir, "config.yaml"))
+	if err != nil {
+		t.Fatalf("Failed to read config file: %v", err)
+	}
+	if !strings.Contains(string(configContent), "/new/mnt") {
+		t.Error("Config should contain the new value")
+	}
+}
+
+func TestRestoreFromBackup(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origGetConfigDir := getConfigDir
+	getConfigDir = func() (string, error) { return tmpDir, nil }
+	defer func() { getConfigDir = origGetConfigDir }()
+
+	cfg := newConfigWithDefaults()
+	cfg.Settings.DefaultMountDir = "/original/mnt"
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("First Save() error = %v", err)
+	}
+
+	cfg.Settings.DefaultMountDir = "/new/mnt"
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Second Save() error = %v", err)
+	}
+
+	hasBackup, err := HasBackup()
+	if err != nil {
+		t.Fatalf("HasBackup() error = %v", err)
+	}
+	if !hasBackup {
+		t.Fatal("HasBackup() should return true")
+	}
+
+	if err := RestoreFromBackup(); err != nil {
+		t.Fatalf("RestoreFromBackup() error = %v", err)
+	}
+
+	loaded, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+
+	if loaded.Settings.DefaultMountDir != "/original/mnt" {
+		t.Errorf("DefaultMountDir = %q, want %q", loaded.Settings.DefaultMountDir, "/original/mnt")
+	}
+
+	hasBackup, err = HasBackup()
+	if err != nil {
+		t.Fatalf("HasBackup() after restore error = %v", err)
+	}
+	if hasBackup {
+		t.Error("HasBackup() should return false after restore (backup consumed)")
+	}
+}
+
+func TestRestoreFromBackupNoBackup(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origGetConfigDir := getConfigDir
+	getConfigDir = func() (string, error) { return tmpDir, nil }
+	defer func() { getConfigDir = origGetConfigDir }()
+
+	hasBackup, err := HasBackup()
+	if err != nil {
+		t.Fatalf("HasBackup() error = %v", err)
+	}
+	if hasBackup {
+		t.Error("HasBackup() should return false when no backup exists")
+	}
+
+	err = RestoreFromBackup()
+	if err == nil {
+		t.Error("RestoreFromBackup() should return error when no backup exists")
+	}
+}
+
+func TestBackupOnlyKeepsMostRecent(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origGetConfigDir := getConfigDir
+	getConfigDir = func() (string, error) { return tmpDir, nil }
+	defer func() { getConfigDir = origGetConfigDir }()
+
+	cfg := newConfigWithDefaults()
+	for i := 0; i < 5; i++ {
+		cfg.Settings.DefaultMountDir = fmt.Sprintf("/mnt/%d", i)
+		if err := cfg.Save(); err != nil {
+			t.Fatalf("Save() iteration %d error = %v", i, err)
+		}
+	}
+
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("Failed to read config dir: %v", err)
+	}
+
+	backupCount := 0
+	for _, entry := range entries {
+		if strings.HasSuffix(entry.Name(), ".bak") {
+			backupCount++
+		}
+	}
+
+	if backupCount != 1 {
+		t.Errorf("Expected 1 backup file, got %d", backupCount)
+	}
+
+	backupPath := filepath.Join(tmpDir, "config.yaml.bak")
+	backupContent, err := os.ReadFile(backupPath)
+	if err != nil {
+		t.Fatalf("Failed to read backup: %v", err)
+	}
+
+	if !strings.Contains(string(backupContent), "/mnt/3") {
+		t.Errorf("Backup should contain the second-to-last config (/mnt/3)")
+	}
+}
+
+func TestHasBackup(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origGetConfigDir := getConfigDir
+	getConfigDir = func() (string, error) { return tmpDir, nil }
+	defer func() { getConfigDir = origGetConfigDir }()
+
+	hasBackup, err := HasBackup()
+	if err != nil {
+		t.Fatalf("HasBackup() error = %v", err)
+	}
+	if hasBackup {
+		t.Error("HasBackup() should be false initially")
+	}
+
+	cfg := newConfigWithDefaults()
+	cfg.Settings.DefaultMountDir = "/first"
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("First Save() error = %v", err)
+	}
+
+	hasBackup, _ = HasBackup()
+	if hasBackup {
+		t.Error("HasBackup() should be false after first save (no prior config)")
+	}
+
+	cfg.Settings.DefaultMountDir = "/second"
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Second Save() error = %v", err)
+	}
+
+	hasBackup, err = HasBackup()
+	if err != nil {
+		t.Fatalf("HasBackup() after second save error = %v", err)
+	}
+	if !hasBackup {
+		t.Error("HasBackup() should be true after second save")
+	}
+}
+
+func TestExportConfig(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := newConfigWithDefaults()
+	cfg.AddMount(models.MountConfig{
+		Name:       "test-mount",
+		Remote:     "gdrive:",
+		MountPoint: "/mnt/test",
+	})
+	cfg.AddSyncJob(models.SyncJobConfig{
+		Name:        "test-sync",
+		Source:      "gdrive:/Photos",
+		Destination: "/backup/photos",
+	})
+
+	tests := []struct {
+		name     string
+		filePath string
+	}{
+		{"export to YAML", filepath.Join(tmpDir, "export.yaml")},
+		{"export to JSON", filepath.Join(tmpDir, "export.json")},
+		{"export to YML extension", filepath.Join(tmpDir, "export.yml")},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := cfg.ExportConfig(tt.filePath); err != nil {
+				t.Fatalf("ExportConfig() error = %v", err)
+			}
+
+			if _, err := os.Stat(tt.filePath); os.IsNotExist(err) {
+				t.Fatal("Export file was not created")
+			}
+
+			content, err := os.ReadFile(tt.filePath)
+			if err != nil {
+				t.Fatalf("Failed to read export file: %v", err)
+			}
+
+			if len(content) == 0 {
+				t.Error("Export file is empty")
+			}
+		})
+	}
+}
+
+func TestExportConfigUnsupportedFormat(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := newConfigWithDefaults()
+
+	err = cfg.ExportConfig(filepath.Join(tmpDir, "export.txt"))
+	if err == nil {
+		t.Error("ExportConfig() should return error for unsupported format")
+	}
+}
+
+func TestExportConfigCreatesDirectory(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	cfg := newConfigWithDefaults()
+
+	exportPath := filepath.Join(tmpDir, "nested", "dir", "export.yaml")
+	if err := cfg.ExportConfig(exportPath); err != nil {
+		t.Fatalf("ExportConfig() error = %v", err)
+	}
+
+	if _, err := os.Stat(exportPath); os.IsNotExist(err) {
+		t.Error("Export file was not created in nested directory")
+	}
+}
+
+func TestImportConfigYAML(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	exportPath := filepath.Join(tmpDir, "test-export.yaml")
+	exportContent := `version: "1.0"
+mounts:
+  - id: mount1
+    name: imported-mount
+    remote: "gdrive:"
+    remote_path: /
+    mount_point: /mnt/imported
+    enabled: true
+sync_jobs:
+  - id: sync1
+    name: imported-sync
+    source: "gdrive:/Docs"
+    destination: /backup/docs
+    enabled: true
+exported: "2024-01-01T00:00:00Z"
+`
+	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil {
+		t.Fatalf("Failed to write export file: %v", err)
+	}
+
+	cfg := newConfigWithDefaults()
+	if err := cfg.ImportConfig(exportPath, ImportModeMerge); err != nil {
+		t.Fatalf("ImportConfig() error = %v", err)
+	}
+
+	if len(cfg.Mounts) != 1 {
+		t.Errorf("Mounts count = %d, want 1", len(cfg.Mounts))
+	} else if cfg.Mounts[0].Name != "imported-mount" {
+		t.Errorf("Mount name = %q, want 'imported-mount'", cfg.Mounts[0].Name)
+	}
+
+	if len(cfg.SyncJobs) != 1 {
+		t.Errorf("SyncJobs count = %d, want 1", len(cfg.SyncJobs))
+	} else if cfg.SyncJobs[0].Name != "imported-sync" {
+		t.Errorf("SyncJob name = %q, want 'imported-sync'", cfg.SyncJobs[0].Name)
+	}
+}
+
+func TestImportConfigJSON(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	exportPath := filepath.Join(tmpDir, "test-export.json")
+	exportContent := `{
+  "version": "1.0",
+  "mounts": [
+    {
+      "id": "mount1",
+      "name": "json-mount",
+      "remote": "dropbox:",
+      "remote_path": "/",
+      "mount_point": "/mnt/json",
+      "enabled": true
+    }
+  ],
+  "sync_jobs": [],
+  "exported": "2024-01-01T00:00:00Z"
+}`
+	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil {
+		t.Fatalf("Failed to write export file: %v", err)
+	}
+
+	cfg := newConfigWithDefaults()
+	if err := cfg.ImportConfig(exportPath, ImportModeMerge); err != nil {
+		t.Fatalf("ImportConfig() error = %v", err)
+	}
+
+	if len(cfg.Mounts) != 1 {
+		t.Errorf("Mounts count = %d, want 1", len(cfg.Mounts))
+	} else if cfg.Mounts[0].Name != "json-mount" {
+		t.Errorf("Mount name = %q, want 'json-mount'", cfg.Mounts[0].Name)
+	}
+}
+
+func TestImportConfigFileNotExist(t *testing.T) {
+	cfg := newConfigWithDefaults()
+
+	err := cfg.ImportConfig("/nonexistent/file.yaml", ImportModeMerge)
+	if err == nil {
+		t.Error("ImportConfig() should return error for non-existent file")
+	}
+}
+
+func TestImportConfigInvalidFormat(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	exportPath := filepath.Join(tmpDir, "invalid.txt")
+	if err := os.WriteFile(exportPath, []byte("invalid content"), 0644); err != nil {
+		t.Fatalf("Failed to write export file: %v", err)
+	}
+
+	cfg := newConfigWithDefaults()
+	err = cfg.ImportConfig(exportPath, ImportModeMerge)
+	if err == nil {
+		t.Error("ImportConfig() should return error for unsupported format")
+	}
+}
+
+func TestImportConfigInvalidContent(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	exportPath := filepath.Join(tmpDir, "empty.yaml")
+	if err := os.WriteFile(exportPath, []byte("{}"), 0644); err != nil {
+		t.Fatalf("Failed to write export file: %v", err)
+	}
+
+	cfg := newConfigWithDefaults()
+	err = cfg.ImportConfig(exportPath, ImportModeMerge)
+	if err == nil {
+		t.Error("ImportConfig() should return error for invalid/empty config")
+	}
+}
+
+func TestImportConfigMergeMode(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	exportPath := filepath.Join(tmpDir, "merge-test.yaml")
+	exportContent := `version: "1.0"
+mounts:
+  - id: new-mount
+    name: new-mount
+    remote: "gdrive:"
+    remote_path: /
+    mount_point: /mnt/new
+    enabled: true
+sync_jobs:
+  - id: new-sync
+    name: new-sync
+    source: "gdrive:/New"
+    destination: /backup/new
+    enabled: true
+exported: "2024-01-01T00:00:00Z"
+`
+	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil {
+		t.Fatalf("Failed to write export file: %v", err)
+	}
+
+	cfg := newConfigWithDefaults()
+	cfg.AddMount(models.MountConfig{
+		Name:       "existing-mount",
+		Remote:     "dropbox:",
+		MountPoint: "/mnt/existing",
+	})
+	cfg.AddSyncJob(models.SyncJobConfig{
+		Name:        "existing-sync",
+		Source:      "dropbox:/Docs",
+		Destination: "/backup/docs",
+	})
+
+	if err := cfg.ImportConfig(exportPath, ImportModeMerge); err != nil {
+		t.Fatalf("ImportConfig() error = %v", err)
+	}
+
+	if len(cfg.Mounts) != 2 {
+		t.Errorf("Mounts count = %d, want 2", len(cfg.Mounts))
+	}
+
+	if len(cfg.SyncJobs) != 2 {
+		t.Errorf("SyncJobs count = %d, want 2", len(cfg.SyncJobs))
+	}
+
+	mountNames := make(map[string]bool)
+	for _, m := range cfg.Mounts {
+		mountNames[m.Name] = true
+	}
+	if !mountNames["existing-mount"] || !mountNames["new-mount"] {
+		t.Error("Merge should keep existing and add new mounts")
+	}
+}
+
+func TestImportConfigMergeModeDuplicateNames(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	exportPath := filepath.Join(tmpDir, "dup-test.yaml")
+	exportContent := `version: "1.0"
+mounts:
+  - id: imported-mount
+    name: duplicate-name
+    remote: "gdrive:"
+    remote_path: /
+    mount_point: /mnt/imported
+    enabled: true
+sync_jobs: []
+exported: "2024-01-01T00:00:00Z"
+`
+	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil {
+		t.Fatalf("Failed to write export file: %v", err)
+	}
+
+	cfg := newConfigWithDefaults()
+	cfg.AddMount(models.MountConfig{
+		Name:       "duplicate-name",
+		Remote:     "dropbox:",
+		MountPoint: "/mnt/existing",
+	})
+
+	if err := cfg.ImportConfig(exportPath, ImportModeMerge); err != nil {
+		t.Fatalf("ImportConfig() error = %v", err)
+	}
+
+	if len(cfg.Mounts) != 1 {
+		t.Errorf("Mounts count = %d, want 1 (duplicate should be skipped)", len(cfg.Mounts))
+	}
+
+	if cfg.Mounts[0].Remote != "dropbox:" {
+		t.Error("Existing mount should be kept, not replaced by imported")
+	}
+}
+
+func TestImportConfigReplaceMode(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	exportPath := filepath.Join(tmpDir, "replace-test.yaml")
+	exportContent := `version: "1.0"
+mounts:
+  - id: replaced-mount
+    name: replaced-mount
+    remote: "gdrive:"
+    remote_path: /
+    mount_point: /mnt/replaced
+    enabled: true
+sync_jobs:
+  - id: replaced-sync
+    name: replaced-sync
+    source: "gdrive:/Replaced"
+    destination: /backup/replaced
+    enabled: true
+exported: "2024-01-01T00:00:00Z"
+`
+	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil {
+		t.Fatalf("Failed to write export file: %v", err)
+	}
+
+	cfg := newConfigWithDefaults()
+	cfg.AddMount(models.MountConfig{
+		Name:       "old-mount",
+		Remote:     "dropbox:",
+		MountPoint: "/mnt/old",
+	})
+	cfg.AddSyncJob(models.SyncJobConfig{
+		Name:        "old-sync",
+		Source:      "dropbox:/Old",
+		Destination: "/backup/old",
+	})
+
+	if err := cfg.ImportConfig(exportPath, ImportModeReplace); err != nil {
+		t.Fatalf("ImportConfig() error = %v", err)
+	}
+
+	if len(cfg.Mounts) != 1 {
+		t.Errorf("Mounts count = %d, want 1", len(cfg.Mounts))
+	}
+
+	if cfg.Mounts[0].Name != "replaced-mount" {
+		t.Errorf("Mount name = %q, want 'replaced-mount'", cfg.Mounts[0].Name)
+	}
+
+	if len(cfg.SyncJobs) != 1 {
+		t.Errorf("SyncJobs count = %d, want 1", len(cfg.SyncJobs))
+	}
+
+	if cfg.SyncJobs[0].Name != "replaced-sync" {
+		t.Errorf("SyncJob name = %q, want 'replaced-sync'", cfg.SyncJobs[0].Name)
+	}
+}
+
+func TestExportImportRoundTrip(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origConfig := newConfigWithDefaults()
+	origConfig.AddMount(models.MountConfig{
+		Name:       "mount1",
+		Remote:     "gdrive:",
+		MountPoint: "/mnt/gdrive",
+	})
+	origConfig.AddMount(models.MountConfig{
+		Name:       "mount2",
+		Remote:     "dropbox:",
+		MountPoint: "/mnt/dropbox",
+	})
+	origConfig.AddSyncJob(models.SyncJobConfig{
+		Name:        "sync1",
+		Source:      "gdrive:/Photos",
+		Destination: "/backup/photos",
+	})
+
+	exportPath := filepath.Join(tmpDir, "roundtrip.yaml")
+	if err := origConfig.ExportConfig(exportPath); err != nil {
+		t.Fatalf("ExportConfig() error = %v", err)
+	}
+
+	newConfig := newConfigWithDefaults()
+	if err := newConfig.ImportConfig(exportPath, ImportModeReplace); err != nil {
+		t.Fatalf("ImportConfig() error = %v", err)
+	}
+
+	if len(newConfig.Mounts) != len(origConfig.Mounts) {
+		t.Errorf("Mounts count mismatch: got %d, want %d", len(newConfig.Mounts), len(origConfig.Mounts))
+	}
+
+	if len(newConfig.SyncJobs) != len(origConfig.SyncJobs) {
+		t.Errorf("SyncJobs count mismatch: got %d, want %d", len(newConfig.SyncJobs), len(origConfig.SyncJobs))
+	}
+
+	for i := range origConfig.Mounts {
+		if newConfig.Mounts[i].Name != origConfig.Mounts[i].Name {
+			t.Errorf("Mount[%d].Name = %q, want %q", i, newConfig.Mounts[i].Name, origConfig.Mounts[i].Name)
+		}
+		if newConfig.Mounts[i].Remote != origConfig.Mounts[i].Remote {
+			t.Errorf("Mount[%d].Remote = %q, want %q", i, newConfig.Mounts[i].Remote, origConfig.Mounts[i].Remote)
+		}
+	}
+}
+
+func TestImportConfigGeneratesMissingIDs(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	exportPath := filepath.Join(tmpDir, "no-ids.yaml")
+	exportContent := `version: "1.0"
+mounts:
+  - name: no-id-mount
+    remote: "gdrive:"
+    remote_path: /
+    mount_point: /mnt/noid
+sync_jobs:
+  - name: no-id-sync
+    source: "gdrive:/Docs"
+    destination: /backup/docs
+exported: "2024-01-01T00:00:00Z"
+`
+	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil {
+		t.Fatalf("Failed to write export file: %v", err)
+	}
+
+	cfg := newConfigWithDefaults()
+	if err := cfg.ImportConfig(exportPath, ImportModeMerge); err != nil {
+		t.Fatalf("ImportConfig() error = %v", err)
+	}
+
+	if cfg.Mounts[0].ID == "" {
+		t.Error("Mount ID should be generated when missing")
+	}
+
+	if cfg.SyncJobs[0].ID == "" {
+		t.Error("SyncJob ID should be generated when missing")
 	}
 }
