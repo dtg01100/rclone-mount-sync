@@ -4,6 +4,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -11,84 +12,185 @@ import (
 	"github.com/dtg01100/rclone-mount-sync/internal/tui"
 )
 
-// version is set at build time via ldflags.
 var version = "dev"
 
-func main() {
-	// CLI flags
-	showVersion := flag.Bool("version", false, "Print version and exit")
-	skipChecks := flag.Bool("skip-checks", false, "Skip pre-flight validation checks")
-	configDir := flag.String("config", "", "Custom config directory (overrides XDG_CONFIG_HOME)")
-	flag.Parse()
-
-	if *showVersion {
-		fmt.Println(version)
-		return
-	}
-
-	// If a custom config directory is provided, set XDG_CONFIG_HOME so
-	// internal config loading will pick it up via os.UserConfigDir().
-	if *configDir != "" {
-		// If a file path was passed, use its directory
-		if fi, err := os.Stat(*configDir); err == nil && !fi.IsDir() {
-			*configDir = filepath.Dir(*configDir)
-		}
-		os.Setenv("XDG_CONFIG_HOME", *configDir)
-	}
-
-	// Run pre-flight checks unless skipped
-	if !*skipChecks {
-		if err := runPreflightChecks(); err != nil {
-			os.Exit(1)
-		}
-	}
-
-	// Set version for TUI
-	tui.Version = version
-
-	// Run the TUI application
-	if err := tui.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
+type Config struct {
+	ShowVersion bool
+	SkipChecks  bool
+	ConfigDir   string
 }
 
-// runPreflightChecks executes all pre-flight validation checks and displays results.
-// Returns an error if any critical checks fail.
-func runPreflightChecks() error {
-	fmt.Println("Running pre-flight checks...")
-	fmt.Println()
+type PreflightChecker interface {
+	PreflightChecks() []rclone.CheckResult
+	HasCriticalFailure([]rclone.CheckResult) bool
+	AllPassed([]rclone.CheckResult) bool
+	FormatResults([]rclone.CheckResult) string
+}
 
-	// Create rclone client
-	client := rclone.NewClient()
+type defaultPreflightChecker struct {
+	client *rclone.Client
+}
 
-	// Run pre-flight checks
-	results := rclone.PreflightChecks(client)
+func (d *defaultPreflightChecker) PreflightChecks() []rclone.CheckResult {
+	return rclone.PreflightChecks(d.client)
+}
 
-	// Display results
-	fmt.Print(rclone.FormatResults(results))
-	fmt.Println()
+func (d *defaultPreflightChecker) HasCriticalFailure(results []rclone.CheckResult) bool {
+	return rclone.HasCriticalFailure(results)
+}
 
-	// Check for critical failures
-	if rclone.HasCriticalFailure(results) {
-		fmt.Println("╔══════════════════════════════════════════════════════════════════╗")
-		fmt.Println("║  Critical pre-flight check(s) failed. Cannot start application.  ║")
-		fmt.Println("╚══════════════════════════════════════════════════════════════════╝")
-		fmt.Println()
-		fmt.Println("Please fix the issues above and try again.")
-		fmt.Println("You can skip these checks with --skip-checks (not recommended).")
+func (d *defaultPreflightChecker) AllPassed(results []rclone.CheckResult) bool {
+	return rclone.AllPassed(results)
+}
+
+func (d *defaultPreflightChecker) FormatResults(results []rclone.CheckResult) string {
+	return rclone.FormatResults(results)
+}
+
+type TUIRunner interface {
+	Run() error
+}
+
+type defaultTUIRunner struct{}
+
+func (d *defaultTUIRunner) Run() error {
+	return tui.Run()
+}
+
+func parseFlags(args []string) (*Config, error) {
+	fs := flag.NewFlagSet("rclone-mount-sync", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+
+	showVersion := fs.Bool("version", false, "Print version and exit")
+	skipChecks := fs.Bool("skip-checks", false, "Skip pre-flight validation checks")
+	configDir := fs.String("config", "", "Custom config directory (overrides XDG_CONFIG_HOME)")
+
+	if err := fs.Parse(args); err != nil {
+		return nil, err
+	}
+
+	return &Config{
+		ShowVersion: *showVersion,
+		SkipChecks:  *skipChecks,
+		ConfigDir:   *configDir,
+	}, nil
+}
+
+func printVersion(w io.Writer, v string) {
+	fmt.Fprintln(w, v)
+}
+
+func handleConfigDir(configDir string) error {
+	if configDir == "" {
+		return nil
+	}
+
+	resolvedDir := configDir
+	if fi, err := os.Stat(configDir); err == nil && !fi.IsDir() {
+		resolvedDir = filepath.Dir(configDir)
+	}
+
+	return os.Setenv("XDG_CONFIG_HOME", resolvedDir)
+}
+
+func runPreflightChecksTo(w io.Writer, checker PreflightChecker) error {
+	fmt.Fprintln(w, "Running pre-flight checks...")
+	fmt.Fprintln(w)
+
+	results := checker.PreflightChecks()
+
+	fmt.Fprint(w, checker.FormatResults(results))
+	fmt.Fprintln(w)
+
+	if checker.HasCriticalFailure(results) {
+		fmt.Fprintln(w, "╔══════════════════════════════════════════════════════════════════╗")
+		fmt.Fprintln(w, "║  Critical pre-flight check(s) failed. Cannot start application.  ║")
+		fmt.Fprintln(w, "╚══════════════════════════════════════════════════════════════════╝")
+		fmt.Fprintln(w)
+		fmt.Fprintln(w, "Please fix the issues above and try again.")
+		fmt.Fprintln(w, "You can skip these checks with --skip-checks (not recommended).")
 		return fmt.Errorf("critical pre-flight checks failed")
 	}
 
-	// Check for non-critical failures
-	if !rclone.AllPassed(results) {
-		fmt.Println("⚠ Some optional checks failed. The application will start, but some")
-		fmt.Println("  features may not work correctly.")
-		fmt.Println()
+	if !checker.AllPassed(results) {
+		fmt.Fprintln(w, "⚠ Some optional checks failed. The application will start, but some")
+		fmt.Fprintln(w, "  features may not work correctly.")
+		fmt.Fprintln(w)
 	}
 
-	fmt.Println("Pre-flight checks completed. Starting application...")
-	fmt.Println()
+	fmt.Fprintln(w, "Pre-flight checks completed. Starting application...")
+	fmt.Fprintln(w)
 
 	return nil
+}
+
+func runPreflightChecks() error {
+	client := rclone.NewClient()
+	checker := &defaultPreflightChecker{client: client}
+	return runPreflightChecksTo(os.Stdout, checker)
+}
+
+type AppDeps struct {
+	Stdout       io.Writer
+	Stderr       io.Writer
+	NewClient    func() *rclone.Client
+	NewTUIRunner func() TUIRunner
+	ParseFlags   func(args []string) (*Config, error)
+}
+
+func DefaultAppDeps(stdout, stderr io.Writer) *AppDeps {
+	return &AppDeps{
+		Stdout:    stdout,
+		Stderr:    stderr,
+		NewClient: rclone.NewClient,
+		NewTUIRunner: func() TUIRunner {
+			return &defaultTUIRunner{}
+		},
+		ParseFlags: parseFlags,
+	}
+}
+
+func runMainWithDeps(args []string, deps *AppDeps) int {
+	cfg, err := deps.ParseFlags(args)
+	if err != nil {
+		fmt.Fprintf(deps.Stderr, "Error parsing flags: %v\n", err)
+		return 2
+	}
+
+	if cfg.ShowVersion {
+		printVersion(deps.Stdout, version)
+		return 0
+	}
+
+	if err := handleConfigDir(cfg.ConfigDir); err != nil {
+		fmt.Fprintf(deps.Stderr, "Error handling config directory: %v\n", err)
+		return 1
+	}
+
+	if !cfg.SkipChecks {
+		client := deps.NewClient()
+		checker := &defaultPreflightChecker{client: client}
+
+		if err := runPreflightChecksTo(deps.Stdout, checker); err != nil {
+			return 1
+		}
+	}
+
+	tui.Version = version
+
+	runner := deps.NewTUIRunner()
+	if err := runner.Run(); err != nil {
+		fmt.Fprintf(deps.Stderr, "Error: %v\n", err)
+		return 1
+	}
+
+	return 0
+}
+
+func runMain(args []string, stdout, stderr io.Writer) int {
+	return runMainWithDeps(args, DefaultAppDeps(stdout, stderr))
+}
+
+func main() {
+	os.Exit(runMain(os.Args[1:], os.Stdout, os.Stderr))
 }
