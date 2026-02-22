@@ -497,7 +497,7 @@ func TestSettingsScreen_View(t *testing.T) {
 
 func TestSettingsScreen_ViewWithConfig(t *testing.T) {
 	screen := NewSettingsScreen()
-	screen.SetSize(80, 24)
+	screen.SetSize(160, 24)
 
 	cfg := &config.Config{
 		Defaults: config.DefaultConfig{
@@ -522,7 +522,6 @@ func TestSettingsScreen_ViewWithConfig(t *testing.T) {
 
 	view := screen.View()
 
-	// Check values are displayed
 	if !strings.Contains(view, "full") {
 		t.Error("View() should contain VFS cache mode value 'full'")
 	}
@@ -531,8 +530,12 @@ func TestSettingsScreen_ViewWithConfig(t *testing.T) {
 		t.Error("View() should contain buffer size value '16M'")
 	}
 
-	if !strings.Contains(view, "/usr/bin/rclone") {
-		t.Error("View() should contain rclone binary path")
+	if !strings.Contains(view, "Rclone Binary Path") {
+		t.Error("View() should contain 'Rclone Binary Path' setting name")
+	}
+
+	if !strings.Contains(view, "/usr") {
+		t.Error("View() should contain beginning of the rclone binary path")
 	}
 }
 

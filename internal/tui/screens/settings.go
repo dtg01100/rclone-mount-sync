@@ -3,10 +3,11 @@ package screens
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
-	"github.com/charmbracelet/huh"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/tui/components"
@@ -14,12 +15,13 @@ import (
 
 // SettingsScreen handles application settings.
 type SettingsScreen struct {
-	settings    []SettingItem
-	cursor      int
-	width       int
-	height      int
-	goBack      bool
-	config      *config.Config
+	settings []SettingItem
+	actions  []ActionItem
+	cursor   int
+	width    int
+	height   int
+	goBack   bool
+	config   *config.Config
 
 	// Form state
 	form        *huh.Form
@@ -27,6 +29,25 @@ type SettingsScreen struct {
 	editIndex   int
 	message     string
 	messageType string // "success" or "error"
+
+	// Action handling state
+	showingActions    bool
+	actionCursor      int
+	importMode        string
+	confirmDialog     *huh.Form
+	showingImportMode bool
+	showingConfirm    bool
+	showingFilePicker bool
+	pendingImportPath string
+	exportPath        string
+}
+
+// ActionItem represents an action item in settings.
+type ActionItem struct {
+	Name        string
+	Description string
+	Key         string
+	actionType  string
 }
 
 // SettingItem represents a setting item.
@@ -109,6 +130,20 @@ func NewSettingsScreen() *SettingsScreen {
 				Key:         "e",
 				settingType: "string",
 				configKey:   "settings.editor",
+			},
+		},
+		actions: []ActionItem{
+			{
+				Name:        "Export Configuration",
+				Description: "Save mounts and sync jobs to a file",
+				Key:         "x",
+				actionType:  "export",
+			},
+			{
+				Name:        "Import Configuration",
+				Description: "Load mounts and sync jobs from a file",
+				Key:         "i",
+				actionType:  "import",
 			},
 		},
 	}
@@ -214,7 +249,18 @@ func (s *SettingsScreen) Init() tea.Cmd {
 
 // Update handles screen updates.
 func (s *SettingsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// If editing, handle form updates
+	if s.showingConfirm && s.confirmDialog != nil {
+		return s.updateConfirmDialog(msg)
+	}
+
+	if s.showingImportMode && s.form != nil {
+		return s.updateImportModeForm(msg)
+	}
+
+	if s.showingFilePicker && s.form != nil {
+		return s.updateFilePicker(msg)
+	}
+
 	if s.editing && s.form != nil {
 		return s.updateForm(msg)
 	}
@@ -223,17 +269,49 @@ func (s *SettingsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		switch msg.String() {
 		case "up", "k":
-			if s.cursor > 0 {
-				s.cursor--
+			if s.showingActions {
+				if s.actionCursor > 0 {
+					s.actionCursor--
+				}
+			} else {
+				if s.cursor > 0 {
+					s.cursor--
+				}
 			}
 		case "down", "j":
-			if s.cursor < len(s.settings)-1 {
-				s.cursor++
+			if s.showingActions {
+				if s.actionCursor < len(s.actions)-1 {
+					s.actionCursor++
+				}
+			} else {
+				if s.cursor < len(s.settings)-1 {
+					s.cursor++
+				}
+			}
+		case "right", "l":
+			if !s.showingActions {
+				s.showingActions = true
+				s.actionCursor = 0
+			}
+		case "left", "h":
+			if s.showingActions {
+				s.showingActions = false
 			}
 		case "enter":
+			if s.showingActions {
+				return s.executeAction()
+			}
 			return s.startEditing()
+		case "x":
+			return s.startExport()
+		case "i":
+			return s.startImport()
 		case "esc":
-			s.goBack = true
+			if s.showingActions {
+				s.showingActions = false
+			} else {
+				s.goBack = true
+			}
 		}
 	}
 
@@ -355,6 +433,255 @@ func (s *SettingsScreen) submitForm() (tea.Model, tea.Cmd) {
 	return s, nil
 }
 
+// startExport initiates the export configuration flow.
+func (s *SettingsScreen) startExport() (tea.Model, tea.Cmd) {
+	s.exportPath = ""
+	s.form = huh.NewForm(
+		huh.NewGroup(
+			huh.NewFilePicker().
+				Title("Export Configuration").
+				Description("Select a directory and enter filename with .yaml or .json extension.").
+				DirAllowed(true).
+				FileAllowed(true).
+				CurrentDirectory(components.ExpandHome("~")).
+				Value(&s.exportPath),
+		),
+	)
+	s.form.WithTheme(huh.ThemeBase16())
+	s.showingFilePicker = true
+	return s, s.form.Init()
+}
+
+// startImport initiates the import configuration flow.
+func (s *SettingsScreen) startImport() (tea.Model, tea.Cmd) {
+	s.pendingImportPath = ""
+	s.form = huh.NewForm(
+		huh.NewGroup(
+			huh.NewFilePicker().
+				Title("Import Configuration").
+				Description("Select configuration file to import (.yaml or .json)").
+				DirAllowed(false).
+				FileAllowed(true).
+				CurrentDirectory(components.ExpandHome("~")).
+				Value(&s.pendingImportPath),
+		),
+	)
+	s.form.WithTheme(huh.ThemeBase16())
+	s.showingFilePicker = true
+	return s, s.form.Init()
+}
+
+// updateFilePicker handles file picker updates.
+func (s *SettingsScreen) updateFilePicker(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "esc" {
+			s.form = nil
+			s.showingFilePicker = false
+			s.exportPath = ""
+			s.pendingImportPath = ""
+			return s, nil
+		}
+	}
+
+	form, cmd := s.form.Update(msg)
+	s.form = form.(*huh.Form)
+
+	if s.form.State == huh.StateCompleted {
+		s.showingFilePicker = false
+		if s.exportPath != "" {
+			exportPath := s.exportPath
+			s.exportPath = ""
+			s.form = nil
+			return s.completeExport(exportPath)
+		}
+		importPath := s.pendingImportPath
+		s.pendingImportPath = ""
+		s.form = nil
+		return s.completeImportFileSelection(importPath)
+	}
+
+	return s, cmd
+}
+
+// completeExport completes the export operation.
+func (s *SettingsScreen) completeExport(filePath string) (tea.Model, tea.Cmd) {
+	if s.config == nil {
+		s.message = "No configuration to export"
+		s.messageType = "error"
+		return s, nil
+	}
+
+	if err := s.config.ExportConfig(filePath); err != nil {
+		s.message = fmt.Sprintf("Export failed: %v", err)
+		s.messageType = "error"
+	} else {
+		s.message = fmt.Sprintf("Configuration exported to %s", filePath)
+		s.messageType = "success"
+	}
+
+	s.exportPath = ""
+	return s, nil
+}
+
+// completeImportFileSelection handles the file selection for import.
+func (s *SettingsScreen) completeImportFileSelection(filePath string) (tea.Model, tea.Cmd) {
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		s.message = fmt.Sprintf("File does not exist: %s", filePath)
+		s.messageType = "error"
+		return s, nil
+	}
+
+	s.pendingImportPath = filePath
+	return s.showImportModeSelection()
+}
+
+// showImportModeSelection shows the import mode selection form.
+func (s *SettingsScreen) showImportModeSelection() (tea.Model, tea.Cmd) {
+	s.importMode = "merge"
+	s.form = huh.NewForm(
+		huh.NewGroup(
+			huh.NewSelect[string]().
+				Title("Import Mode").
+				Description("How should the imported configuration be merged?").
+				Options(
+					huh.NewOption("Merge - Add new items, keep existing", "merge"),
+					huh.NewOption("Replace - Replace all items with imported", "replace"),
+				).
+				Value(&s.importMode),
+		),
+	)
+	s.form.WithTheme(huh.ThemeBase16())
+	s.showingImportMode = true
+	return s, s.form.Init()
+}
+
+// updateImportModeForm handles the import mode selection form.
+func (s *SettingsScreen) updateImportModeForm(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "esc" {
+			s.showingImportMode = false
+			s.form = nil
+			s.pendingImportPath = ""
+			return s, nil
+		}
+	}
+
+	form, cmd := s.form.Update(msg)
+	s.form = form.(*huh.Form)
+
+	if s.form.State == huh.StateCompleted {
+		s.showingImportMode = false
+		if s.importMode == "replace" {
+			return s.showReplaceConfirm()
+		}
+		return s.executeImport()
+	}
+
+	return s, cmd
+}
+
+// showReplaceConfirm shows a confirmation dialog for replace mode.
+func (s *SettingsScreen) showReplaceConfirm() (tea.Model, tea.Cmd) {
+	confirm := false
+	s.confirmDialog = huh.NewForm(
+		huh.NewGroup(
+			huh.NewConfirm().
+				Title("Replace Configuration?").
+				Description("This will replace ALL existing mounts and sync jobs. This action cannot be undone.").
+				Value(&confirm),
+		),
+	)
+	s.confirmDialog.WithTheme(huh.ThemeBase16())
+	s.showingConfirm = true
+	return s, s.confirmDialog.Init()
+}
+
+// updateConfirmDialog handles the confirmation dialog.
+func (s *SettingsScreen) updateConfirmDialog(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		if msg.String() == "esc" {
+			s.showingConfirm = false
+			s.confirmDialog = nil
+			s.pendingImportPath = ""
+			return s, nil
+		}
+	}
+
+	form, cmd := s.confirmDialog.Update(msg)
+	s.confirmDialog = form.(*huh.Form)
+
+	if s.confirmDialog.State == huh.StateCompleted {
+		s.showingConfirm = false
+		confirm := s.confirmDialog.GetBool("confirm")
+		s.confirmDialog = nil
+		if confirm {
+			return s.executeImport()
+		}
+		s.pendingImportPath = ""
+		s.message = "Import cancelled"
+		s.messageType = "info"
+		return s, nil
+	}
+
+	return s, cmd
+}
+
+// executeImport executes the import operation.
+func (s *SettingsScreen) executeImport() (tea.Model, tea.Cmd) {
+	if s.config == nil {
+		s.message = "No configuration to import into"
+		s.messageType = "error"
+		s.pendingImportPath = ""
+		return s, nil
+	}
+
+	var mode config.ImportMode
+	if s.importMode == "replace" {
+		mode = config.ImportModeReplace
+	} else {
+		mode = config.ImportModeMerge
+	}
+
+	if err := s.config.ImportConfig(s.pendingImportPath, mode); err != nil {
+		s.message = fmt.Sprintf("Import failed: %v", err)
+		s.messageType = "error"
+	} else {
+		if err := s.config.Save(); err != nil {
+			s.message = fmt.Sprintf("Imported but failed to save: %v", err)
+			s.messageType = "error"
+		} else {
+			s.message = fmt.Sprintf("Configuration imported from %s (%s mode)", s.pendingImportPath, s.importMode)
+			s.messageType = "success"
+		}
+	}
+
+	s.pendingImportPath = ""
+	s.importMode = ""
+	return s, nil
+}
+
+// executeAction executes the selected action.
+func (s *SettingsScreen) executeAction() (tea.Model, tea.Cmd) {
+	if s.actionCursor < 0 || s.actionCursor >= len(s.actions) {
+		return s, nil
+	}
+
+	action := s.actions[s.actionCursor]
+	s.showingActions = false
+
+	switch action.actionType {
+	case "export":
+		return s.startExport()
+	case "import":
+		return s.startImport()
+	}
+
+	return s, nil
+}
+
 // ShouldGoBack returns true if the screen should go back to the main menu.
 func (s *SettingsScreen) ShouldGoBack() bool {
 	return s.goBack
@@ -367,14 +694,24 @@ func (s *SettingsScreen) ResetGoBack() {
 
 // View renders the screen.
 func (s *SettingsScreen) View() string {
-	// If editing, show the form
+	if s.showingConfirm && s.confirmDialog != nil {
+		return s.renderConfirmDialog()
+	}
+
+	if s.showingImportMode && s.form != nil {
+		return s.renderImportModeForm()
+	}
+
+	if s.showingFilePicker && s.form != nil {
+		return s.renderFilePicker()
+	}
+
 	if s.editing && s.form != nil {
 		return s.renderForm()
 	}
 
 	var b strings.Builder
 
-	// Title
 	title := components.Styles.Title.Render("Settings")
 	b.WriteString(lipgloss.NewStyle().
 		Width(s.width).
@@ -382,7 +719,6 @@ func (s *SettingsScreen) View() string {
 		Render(title))
 	b.WriteString("\n\n")
 
-	// Message (if any)
 	if s.message != "" {
 		var msgStyle lipgloss.Style
 		if s.messageType == "success" {
@@ -398,17 +734,107 @@ func (s *SettingsScreen) View() string {
 		b.WriteString("\n\n")
 	}
 
-	// Settings list
-	b.WriteString(s.renderSettingsList())
+	leftWidth := s.width/2 - 2
+	rightWidth := s.width/2 - 2
+	if leftWidth < 30 {
+		leftWidth = s.width - 4
+		rightWidth = 0
+	}
 
-	// Help bar
+	leftPanel := s.renderSettingsListCompact(leftWidth)
+
+	if rightWidth > 0 {
+		rightPanel := s.renderActionsListCompact(rightWidth)
+		row := lipgloss.JoinHorizontal(lipgloss.Top, leftPanel, "  ", rightPanel)
+		b.WriteString(row)
+	} else {
+		b.WriteString(leftPanel)
+		b.WriteString("\n")
+		b.WriteString(s.renderActionsListCompact(leftWidth))
+	}
+
 	b.WriteString("\n\n")
-	helpText := components.HelpBar(s.width, []components.HelpItem{
+	helpItems := []components.HelpItem{
 		{Key: "↑/↓", Desc: "navigate"},
-		{Key: "Enter", Desc: "edit"},
-		{Key: "Esc", Desc: "back"},
-	})
+		{Key: "Enter", Desc: "edit/action"},
+	}
+	if rightWidth > 0 {
+		helpItems = append(helpItems, components.HelpItem{Key: "←/→", Desc: "switch panel"})
+	}
+	helpItems = append(helpItems, components.HelpItem{Key: "x", Desc: "export"})
+	helpItems = append(helpItems, components.HelpItem{Key: "i", Desc: "import"})
+	helpItems = append(helpItems, components.HelpItem{Key: "Esc", Desc: "back"})
+	helpText := components.HelpBar(s.width, helpItems)
 	b.WriteString(helpText)
+
+	return b.String()
+}
+
+// renderFilePicker renders the file picker form.
+func (s *SettingsScreen) renderFilePicker() string {
+	var b strings.Builder
+
+	title := components.Styles.Title.Render("File Selection")
+	b.WriteString(lipgloss.NewStyle().
+		Width(s.width).
+		Align(lipgloss.Center).
+		Render(title))
+	b.WriteString("\n\n")
+
+	b.WriteString(s.form.View())
+
+	b.WriteString("\n\n")
+	help := components.Styles.HelpText.Render("Enter: select  Esc: cancel")
+	b.WriteString(lipgloss.NewStyle().
+		Width(s.width).
+		Align(lipgloss.Center).
+		Render(help))
+
+	return b.String()
+}
+
+// renderImportModeForm renders the import mode selection form.
+func (s *SettingsScreen) renderImportModeForm() string {
+	var b strings.Builder
+
+	title := components.Styles.Title.Render("Import Mode")
+	b.WriteString(lipgloss.NewStyle().
+		Width(s.width).
+		Align(lipgloss.Center).
+		Render(title))
+	b.WriteString("\n\n")
+
+	b.WriteString(s.form.View())
+
+	b.WriteString("\n\n")
+	help := components.Styles.HelpText.Render("Enter: confirm  Esc: cancel")
+	b.WriteString(lipgloss.NewStyle().
+		Width(s.width).
+		Align(lipgloss.Center).
+		Render(help))
+
+	return b.String()
+}
+
+// renderConfirmDialog renders the confirmation dialog.
+func (s *SettingsScreen) renderConfirmDialog() string {
+	var b strings.Builder
+
+	title := components.Styles.Title.Render("Confirm Import")
+	b.WriteString(lipgloss.NewStyle().
+		Width(s.width).
+		Align(lipgloss.Center).
+		Render(title))
+	b.WriteString("\n\n")
+
+	b.WriteString(s.confirmDialog.View())
+
+	b.WriteString("\n\n")
+	help := components.Styles.HelpText.Render("Enter: confirm  Esc: cancel")
+	b.WriteString(lipgloss.NewStyle().
+		Width(s.width).
+		Align(lipgloss.Center).
+		Render(help))
 
 	return b.String()
 }
@@ -474,6 +900,78 @@ func (s *SettingsScreen) renderSettingsList() string {
 				components.Styles.Normal.Render(setting.Value))
 		}
 		b.WriteString(line + "\n")
+	}
+
+	return b.String()
+}
+
+// renderSettingsListCompact renders the list of settings in a compact format.
+func (s *SettingsScreen) renderSettingsListCompact(width int) string {
+	var b strings.Builder
+
+	header := components.Styles.Subtitle.Render("Settings")
+	b.WriteString(header + "\n")
+	b.WriteString(components.Styles.Subtitle.Render(strings.Repeat("─", width-2)) + "\n")
+
+	for i, setting := range s.settings {
+		name := setting.Name
+		maxNameLen := width - 15
+		if maxNameLen < 10 {
+			maxNameLen = 10
+		}
+		if len(name) > maxNameLen {
+			name = name[:maxNameLen-3] + "..."
+		}
+
+		value := setting.Value
+		maxValueLen := width - maxNameLen - 5
+		if maxValueLen < 10 {
+			maxValueLen = 10
+		}
+		if len(value) > maxValueLen {
+			value = value[:maxValueLen-3] + "..."
+		}
+
+		if !s.showingActions && i == s.cursor {
+			line := fmt.Sprintf("▸ %-*s %s", maxNameLen, components.Styles.Selected.Render(name), value)
+			b.WriteString(line + "\n")
+		} else {
+			line := fmt.Sprintf("  %-*s %s", maxNameLen, name, value)
+			b.WriteString(line + "\n")
+		}
+	}
+
+	return b.String()
+}
+
+// renderActionsListCompact renders the list of actions in a compact format.
+func (s *SettingsScreen) renderActionsListCompact(width int) string {
+	var b strings.Builder
+
+	header := components.Styles.Subtitle.Render("Actions")
+	b.WriteString(header + "\n")
+	b.WriteString(components.Styles.Subtitle.Render(strings.Repeat("─", width-2)) + "\n")
+
+	for i, action := range s.actions {
+		name := action.Name
+		maxNameLen := width - 6
+		if maxNameLen < 10 {
+			maxNameLen = 10
+		}
+		if len(name) > maxNameLen {
+			name = name[:maxNameLen-3] + "..."
+		}
+
+		if s.showingActions && i == s.actionCursor {
+			line := fmt.Sprintf("▸ %s", components.Styles.Selected.Render(name))
+			b.WriteString(line + "\n")
+			if len(action.Description) <= maxNameLen {
+				b.WriteString(fmt.Sprintf("  %s\n", components.Styles.Subtitle.Render(action.Description)))
+			}
+		} else {
+			line := fmt.Sprintf("  %s", name)
+			b.WriteString(line + "\n")
+		}
 	}
 
 	return b.String()
