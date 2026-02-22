@@ -85,7 +85,7 @@ func TestNewMountForm_Edit(t *testing.T) {
 
 	// Create an existing mount to edit
 	existingMount := &models.MountConfig{
-		ID:          "test123",
+		ID:          "t1e2s3t4",
 		Name:        "Test Mount",
 		Remote:      "gdrive",
 		RemotePath:  "/Photos",
@@ -572,7 +572,7 @@ func TestMountForm_SubmitFormEditMode(t *testing.T) {
 
 	// Create an existing mount
 	existingMount := &models.MountConfig{
-		ID:         "existing123",
+		ID:         "e1x2i3s4",
 		Name:       "Existing Mount",
 		Remote:     "gdrive",
 		RemotePath: "/",
@@ -599,8 +599,8 @@ func TestMountForm_SubmitFormEditMode(t *testing.T) {
 	mount := updatedMsg.Mount
 
 	// Verify ID was preserved
-	if mount.ID != "existing123" {
-		t.Errorf("mount.ID = %q, want 'existing123'", mount.ID)
+	if mount.ID != "e1x2i3s4" {
+		t.Errorf("mount.ID = %q, want 'e1x2i3s4'", mount.ID)
 	}
 
 	// Verify name was preserved
@@ -776,7 +776,7 @@ func TestMountForm_EditPreservesAdvancedOptions(t *testing.T) {
 	remotes := createTestRemotes()
 
 	existingMount := &models.MountConfig{
-		ID:          "test123",
+		ID:          "t1e2s3t4",
 		Name:        "Test Mount",
 		Remote:      "gdrive",
 		RemotePath:  "/Photos",
@@ -854,4 +854,3 @@ func TestMountForm_ExpandPathWithHomeError(t *testing.T) {
 		}
 	}
 }
-

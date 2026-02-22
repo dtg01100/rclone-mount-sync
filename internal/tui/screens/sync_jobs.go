@@ -96,7 +96,7 @@ func (s *SyncJobsScreen) loadSyncJobs() tea.Msg {
 	// Load statuses for each sync job (only if generator and manager are available)
 	if s.generator != nil && s.manager != nil {
 		for _, job := range s.jobs {
-			serviceName := s.generator.ServiceName(job.Name, "sync") + ".service"
+			serviceName := s.generator.ServiceName(job.ID, "sync") + ".service"
 			status, err := s.manager.GetDetailedStatus(serviceName)
 			if err == nil {
 				s.statuses[job.Name] = status
@@ -332,7 +332,7 @@ func (s *SyncJobsScreen) startEditForm() (tea.Model, tea.Cmd) {
 
 	// Stop timer if running before editing (only if services are available)
 	if s.generator != nil && s.manager != nil {
-		timerName := s.generator.ServiceName(job.Name, "sync") + ".timer"
+		timerName := s.generator.ServiceName(job.ID, "sync") + ".timer"
 		_ = s.manager.StopTimer(timerName)
 		_ = s.manager.DisableTimer(timerName)
 	}
@@ -377,7 +377,7 @@ func (s *SyncJobsScreen) runSyncJobNow() (tea.Model, tea.Cmd) {
 	}
 
 	job := s.jobs[s.cursor]
-	serviceName := s.generator.ServiceName(job.Name, "sync") + ".service"
+	serviceName := s.generator.ServiceName(job.ID, "sync") + ".service"
 
 	return s, func() tea.Msg {
 		if err := s.manager.RunSyncNow(serviceName); err != nil {
@@ -396,7 +396,7 @@ func (s *SyncJobsScreen) toggleTimer() (tea.Model, tea.Cmd) {
 	}
 
 	job := s.jobs[s.cursor]
-	timerName := s.generator.ServiceName(job.Name, "sync") + ".timer"
+	timerName := s.generator.ServiceName(job.ID, "sync") + ".timer"
 
 	// Check if timer is currently active
 	isActive, _ := s.manager.IsActive(timerName)
@@ -729,7 +729,7 @@ func NewSyncJobDetails(job models.SyncJobConfig, manager *systemd.Manager, gener
 
 // loadStatus loads the service and timer status.
 func (d *SyncJobDetails) loadStatus() {
-	serviceName := d.generator.ServiceName(d.job.Name, "sync") + ".service"
+	serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
 	status, err := d.manager.GetDetailedStatus(serviceName)
 	if err == nil {
 		d.status = status
@@ -741,7 +741,7 @@ func (d *SyncJobDetails) loadStatus() {
 
 // loadLogs loads the service logs.
 func (d *SyncJobDetails) loadLogs() {
-	serviceName := d.generator.ServiceName(d.job.Name, "sync") + ".service"
+	serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
 	logs, err := d.manager.GetLogs(serviceName, 30)
 	if err == nil {
 		d.logs = logs
@@ -772,13 +772,13 @@ func (d *SyncJobDetails) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.tab = (d.tab + 1) % 2
 		case "r":
 			// Run sync job now
-			serviceName := d.generator.ServiceName(d.job.Name, "sync") + ".service"
+			serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
 			_ = d.manager.RunSyncNow(serviceName)
 			d.loadStatus()
 			d.loadLogs()
 		case "t":
 			// Toggle timer
-			timerName := d.generator.ServiceName(d.job.Name, "sync") + ".timer"
+			timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
 			isActive, _ := d.manager.IsActive(timerName)
 			if isActive {
 				_ = d.manager.StopTimer(timerName)
@@ -790,13 +790,13 @@ func (d *SyncJobDetails) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.loadStatus()
 		case "e":
 			// Enable timer
-			timerName := d.generator.ServiceName(d.job.Name, "sync") + ".timer"
+			timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
 			_ = d.manager.EnableTimer(timerName)
 			_ = d.manager.StartTimer(timerName)
 			d.loadStatus()
 		case "d":
 			// Disable timer
-			timerName := d.generator.ServiceName(d.job.Name, "sync") + ".timer"
+			timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
 			_ = d.manager.StopTimer(timerName)
 			_ = d.manager.DisableTimer(timerName)
 			d.loadStatus()
@@ -1016,8 +1016,8 @@ func (d *SyncJobDeleteConfirm) confirmDelete() (tea.Model, tea.Cmd) {
 // deleteServiceOnly deletes only the systemd service and timer.
 func (d *SyncJobDeleteConfirm) deleteServiceOnly() tea.Cmd {
 	return func() tea.Msg {
-		serviceName := d.generator.ServiceName(d.job.Name, "sync") + ".service"
-		timerName := d.generator.ServiceName(d.job.Name, "sync") + ".timer"
+		serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
+		timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
 
 		// Stop the service if running
 		_ = d.manager.Stop(serviceName)
@@ -1043,8 +1043,8 @@ func (d *SyncJobDeleteConfirm) deleteServiceOnly() tea.Cmd {
 // deleteServiceAndConfig deletes both the service and config entry.
 func (d *SyncJobDeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 	return func() tea.Msg {
-		serviceName := d.generator.ServiceName(d.job.Name, "sync") + ".service"
-		timerName := d.generator.ServiceName(d.job.Name, "sync") + ".timer"
+		serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
+		timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
 
 		// Stop the service if running
 		_ = d.manager.Stop(serviceName)

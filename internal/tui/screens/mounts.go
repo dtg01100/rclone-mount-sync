@@ -96,7 +96,7 @@ func (s *MountsScreen) loadMounts() tea.Msg {
 	// Load statuses for each mount (only if generator and manager are available)
 	if s.generator != nil && s.manager != nil {
 		for _, mount := range s.mounts {
-			serviceName := s.generator.ServiceName(mount.Name, "mount") + ".service"
+			serviceName := s.generator.ServiceName(mount.ID, "mount") + ".service"
 			status, err := s.manager.Status(serviceName)
 			if err == nil {
 				s.statuses[mount.Name] = status
@@ -375,7 +375,7 @@ func (s *MountsScreen) toggleMount() (tea.Model, tea.Cmd) {
 	}
 
 	mount := s.mounts[s.cursor]
-	serviceName := s.generator.ServiceName(mount.Name, "mount") + ".service"
+	serviceName := s.generator.ServiceName(mount.ID, "mount") + ".service"
 
 	// Check current status
 	status, err := s.manager.Status(serviceName)
@@ -416,7 +416,7 @@ func (s *MountsScreen) startMount() (tea.Model, tea.Cmd) {
 	}
 
 	mount := s.mounts[s.cursor]
-	serviceName := s.generator.ServiceName(mount.Name, "mount") + ".service"
+	serviceName := s.generator.ServiceName(mount.ID, "mount") + ".service"
 
 	return s, func() tea.Msg {
 		if err := s.manager.Start(serviceName); err != nil {
@@ -435,7 +435,7 @@ func (s *MountsScreen) stopMount() (tea.Model, tea.Cmd) {
 	}
 
 	mount := s.mounts[s.cursor]
-	serviceName := s.generator.ServiceName(mount.Name, "mount") + ".service"
+	serviceName := s.generator.ServiceName(mount.ID, "mount") + ".service"
 
 	return s, func() tea.Msg {
 		if err := s.manager.Stop(serviceName); err != nil {
@@ -757,7 +757,7 @@ func (d *DeleteConfirm) confirmDelete() (tea.Model, tea.Cmd) {
 // deleteServiceOnly deletes only the systemd service.
 func (d *DeleteConfirm) deleteServiceOnly() tea.Cmd {
 	return func() tea.Msg {
-		serviceName := d.generator.ServiceName(d.mount.Name, "mount") + ".service"
+		serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 
 		// Stop the service if running
 		_ = d.manager.Stop(serviceName)
@@ -778,7 +778,7 @@ func (d *DeleteConfirm) deleteServiceOnly() tea.Cmd {
 // deleteServiceAndConfig deletes both the service and config entry.
 func (d *DeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 	return func() tea.Msg {
-		serviceName := d.generator.ServiceName(d.mount.Name, "mount") + ".service"
+		serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 
 		// Stop the service if running
 		_ = d.manager.Stop(serviceName)
@@ -882,7 +882,7 @@ func NewMountDetails(mount models.MountConfig, manager *systemd.Manager, generat
 
 // loadStatus loads the service status.
 func (d *MountDetails) loadStatus() {
-	serviceName := d.generator.ServiceName(d.mount.Name, "mount") + ".service"
+	serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 	status, err := d.manager.Status(serviceName)
 	if err == nil {
 		d.status = status
@@ -891,7 +891,7 @@ func (d *MountDetails) loadStatus() {
 
 // loadLogs loads the service logs.
 func (d *MountDetails) loadLogs() {
-	serviceName := d.generator.ServiceName(d.mount.Name, "mount") + ".service"
+	serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 	logs, err := d.manager.GetLogs(serviceName, 20)
 	if err == nil {
 		d.logs = logs
@@ -922,22 +922,22 @@ func (d *MountDetails) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.tab = (d.tab + 1) % 2
 		case "s":
 			// Start service
-			serviceName := d.generator.ServiceName(d.mount.Name, "mount") + ".service"
+			serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 			_ = d.manager.Start(serviceName)
 			d.loadStatus()
 		case "x":
 			// Stop service
-			serviceName := d.generator.ServiceName(d.mount.Name, "mount") + ".service"
+			serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 			_ = d.manager.Stop(serviceName)
 			d.loadStatus()
 		case "e":
 			// Enable service
-			serviceName := d.generator.ServiceName(d.mount.Name, "mount") + ".service"
+			serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 			_ = d.manager.Enable(serviceName)
 			d.loadStatus()
 		case "d":
 			// Disable service
-			serviceName := d.generator.ServiceName(d.mount.Name, "mount") + ".service"
+			serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 			_ = d.manager.Disable(serviceName)
 			d.loadStatus()
 		case "r":

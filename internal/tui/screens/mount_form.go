@@ -479,7 +479,7 @@ func (f *MountForm) submitForm() tea.Msg {
 			_ = f.manager.DaemonReload()
 
 			// Enable service if requested
-			serviceName := f.generator.ServiceName(mount.Name, "mount") + ".service"
+			serviceName := f.generator.ServiceName(mount.ID, "mount") + ".service"
 			if mount.Enabled {
 				_ = f.manager.Enable(serviceName)
 			}

@@ -60,44 +60,55 @@ type LoadingMsg struct{}
 // LoadingDoneMsg is sent when loading is complete.
 type LoadingDoneMsg struct{}
 
+// ReconciliationMsg is sent when orphan detection is complete.
+type ReconciliationMsg struct {
+	Result *systemd.ReconciliationResult
+}
+
 // App is the main TUI application model.
 type App struct {
-	currentScreen Screen
+	currentScreen  Screen
 	previousScreen Screen
-	width         int
-	height        int
-	loading       bool
-	showHelp      bool
-	initError     error
+	width          int
+	height         int
+	loading        bool
+	showHelp       bool
+	initError      error
 
 	// Help screen scroll state
 	helpScrollY    int
 	helpContentLen int
 
 	// Screen models
-	mainMenu   *screens.MainMenuScreen
-	mounts     *screens.MountsScreen
-	syncJobs   *screens.SyncJobsScreen
-	services   *screens.ServicesScreen
-	settings   *screens.SettingsScreen
+	mainMenu *screens.MainMenuScreen
+	mounts   *screens.MountsScreen
+	syncJobs *screens.SyncJobsScreen
+	services *screens.ServicesScreen
+	settings *screens.SettingsScreen
 
 	// Services
-	config     *config.Config
-	rclone     *rclone.Client
-	generator  *systemd.Generator
-	manager    *systemd.Manager
+	config    *config.Config
+	rclone    *rclone.Client
+	generator *systemd.Generator
+	manager   *systemd.Manager
+
+	// Orphan detection
+	orphans          *systemd.ReconciliationResult
+	showOrphanPrompt bool
+	orphanSelected   int
+	orphanMode       int
 }
 
 // NewApp creates a new TUI application.
 func NewApp() *App {
 	return &App{
-		currentScreen: ScreenMain,
+		currentScreen:  ScreenMain,
 		previousScreen: ScreenMain,
-		mainMenu:      screens.NewMainMenuScreen(),
-		mounts:        screens.NewMountsScreen(),
-		syncJobs:      screens.NewSyncJobsScreen(),
-		services:      screens.NewServicesScreen(),
-		settings:      screens.NewSettingsScreen(),
+		mainMenu:       screens.NewMainMenuScreen(),
+		mounts:         screens.NewMountsScreen(),
+		syncJobs:       screens.NewSyncJobsScreen(),
+		services:       screens.NewServicesScreen(),
+		settings:       screens.NewSettingsScreen(),
 	}
 }
 
@@ -133,8 +144,30 @@ func (a *App) initializeServices() tea.Msg {
 
 	// Pass services to screens
 	a.mounts.SetServices(cfg, a.rclone, gen, a.manager)
-	a.services.SetServices(cfg, a.manager)
+	a.services.SetServices(cfg, a.manager, gen)
 	a.settings.SetConfig(cfg)
+
+	// Run reconciliation to detect orphaned units
+	reconciler := systemd.NewReconciler(gen, a.manager)
+
+	// Build sets of valid IDs
+	mountIDs := make(map[string]bool)
+	for _, m := range cfg.Mounts {
+		mountIDs[m.ID] = true
+	}
+	syncIDs := make(map[string]bool)
+	for _, j := range cfg.SyncJobs {
+		syncIDs[j.ID] = true
+	}
+
+	result, err := reconciler.ScanForOrphans(mountIDs, syncIDs)
+	if err != nil {
+		return AppInitDone{}
+	}
+
+	if len(result.OrphanedUnits) > 0 {
+		return ReconciliationMsg{Result: result}
+	}
 
 	return AppInitDone{}
 }
@@ -153,6 +186,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		if a.showOrphanPrompt {
+			return a.updateOrphanPrompt(msg)
+		}
+
 		// Handle global keybindings
 		switch msg.String() {
 		case "ctrl+c":
@@ -223,12 +260,15 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	case AppInitError:
-		// Store the error and show it to the user
 		a.initError = msg.Err
 		a.loading = false
 
+	case ReconciliationMsg:
+		a.orphans = msg.Result
+		a.showOrphanPrompt = len(msg.Result.OrphanedUnits) > 0
+		cmds = append(cmds, a.mounts.Init())
+
 	case AppInitDone:
-		// Services initialized, now initialize the mounts screen
 		cmds = append(cmds, a.mounts.Init())
 	}
 
@@ -361,11 +401,18 @@ func (a *App) View() string {
 	status := a.renderStatusBar()
 
 	// Combine all parts
-	return lipgloss.JoinVertical(lipgloss.Left,
+	view := lipgloss.JoinVertical(lipgloss.Left,
 		header,
 		contentBox,
 		status,
 	)
+
+	// Show orphan prompt overlay if needed
+	if a.showOrphanPrompt && a.orphans != nil {
+		view = a.renderOrphanPrompt(view)
+	}
+
+	return view
 }
 
 // renderHeader renders the top header bar.
@@ -579,6 +626,170 @@ func (a *App) renderInitError() string {
 		Render(quitHint))
 
 	return b.String()
+}
+
+func (a *App) updateOrphanPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	orphans := a.orphans.OrphanedUnits
+
+	switch msg.String() {
+	case "up", "k":
+		if a.orphanMode == 0 && a.orphanSelected > 0 {
+			a.orphanSelected--
+		}
+	case "down", "j":
+		if a.orphanMode == 0 && a.orphanSelected < len(orphans)-1 {
+			a.orphanSelected++
+		}
+	case "enter":
+		if a.orphanMode == 0 {
+			a.orphanMode = 1
+		} else {
+			return a.importSelectedOrphan()
+		}
+	case "c":
+		if a.orphanMode == 1 {
+			return a.cleanupSelectedOrphan()
+		}
+	case "esc", "q":
+		if a.orphanMode == 1 {
+			a.orphanMode = 0
+		} else {
+			a.showOrphanPrompt = false
+		}
+	case "d":
+		a.showOrphanPrompt = false
+	}
+	return a, nil
+}
+
+func (a *App) importSelectedOrphan() (tea.Model, tea.Cmd) {
+	orphan := a.orphans.OrphanedUnits[a.orphanSelected]
+
+	reconciler := systemd.NewReconciler(a.generator, a.manager)
+	imported, err := reconciler.Import(orphan)
+	if err != nil {
+		return a, nil
+	}
+
+	if imported.Mount != nil {
+		a.config.Mounts = append(a.config.Mounts, *imported.Mount)
+	} else if imported.SyncJob != nil {
+		a.config.SyncJobs = append(a.config.SyncJobs, *imported.SyncJob)
+	}
+
+	if err := a.config.Save(); err != nil {
+		return a, nil
+	}
+
+	if imported.Mount != nil {
+		a.generator.WriteMountService(imported.Mount)
+	} else if imported.SyncJob != nil {
+		a.generator.WriteSyncUnits(imported.SyncJob)
+	}
+
+	reconciler.RemoveOrphan(orphan)
+
+	a.manager.DaemonReload()
+
+	a.orphans.OrphanedUnits = append(
+		a.orphans.OrphanedUnits[:a.orphanSelected],
+		a.orphans.OrphanedUnits[a.orphanSelected+1:]...,
+	)
+
+	if a.orphanSelected >= len(a.orphans.OrphanedUnits) {
+		a.orphanSelected = len(a.orphans.OrphanedUnits) - 1
+	}
+	a.orphanMode = 0
+
+	if len(a.orphans.OrphanedUnits) == 0 {
+		a.showOrphanPrompt = false
+	}
+
+	return a, nil
+}
+
+func (a *App) cleanupSelectedOrphan() (tea.Model, tea.Cmd) {
+	orphan := a.orphans.OrphanedUnits[a.orphanSelected]
+
+	reconciler := systemd.NewReconciler(a.generator, a.manager)
+	reconciler.RemoveOrphan(orphan)
+
+	a.orphans.OrphanedUnits = append(
+		a.orphans.OrphanedUnits[:a.orphanSelected],
+		a.orphans.OrphanedUnits[a.orphanSelected+1:]...,
+	)
+
+	if a.orphanSelected >= len(a.orphans.OrphanedUnits) {
+		a.orphanSelected = len(a.orphans.OrphanedUnits) - 1
+	}
+	a.orphanMode = 0
+
+	if len(a.orphans.OrphanedUnits) == 0 {
+		a.showOrphanPrompt = false
+	}
+
+	return a, nil
+}
+
+func (a *App) renderOrphanPrompt(baseView string) string {
+	var b strings.Builder
+
+	b.WriteString(components.Styles.Warning.Render("Orphaned Units Detected"))
+	b.WriteString("\n\n")
+
+	if a.orphanMode == 0 {
+		b.WriteString("Select a unit to manage:\n\n")
+		for i, orphan := range a.orphans.OrphanedUnits {
+			legacyTag := ""
+			if orphan.IsLegacy {
+				legacyTag = " (legacy)"
+			}
+			cursor := "  "
+			if i == a.orphanSelected {
+				cursor = "> "
+				b.WriteString(fmt.Sprintf("%s%s [%s%s]\n", cursor, components.Styles.Selected.Render(orphan.Name), orphan.Type, legacyTag))
+			} else {
+				b.WriteString(fmt.Sprintf("%s%s [%s%s]\n", cursor, orphan.Name, orphan.Type, legacyTag))
+			}
+		}
+		b.WriteString("\n")
+		b.WriteString(components.Styles.HelpText.Render("[↑/k↓/j] Navigate  [Enter] Select  [d] Dismiss all  [q/Esc] Close"))
+	} else {
+		orphan := a.orphans.OrphanedUnits[a.orphanSelected]
+		legacyTag := ""
+		if orphan.IsLegacy {
+			legacyTag = " (legacy)"
+		}
+		b.WriteString(fmt.Sprintf("Unit: %s\n", orphan.Name))
+		b.WriteString(fmt.Sprintf("Type: %s%s\n", orphan.Type, legacyTag))
+		b.WriteString(fmt.Sprintf("Path: %s\n\n", orphan.Path))
+		b.WriteString(components.Styles.HelpText.Render("[Enter] Import to config  [c] Cleanup (delete)  [Esc] Back"))
+	}
+
+	promptContent := b.String()
+
+	boxWidth := a.width - 8
+	if boxWidth < 40 {
+		boxWidth = 40
+	}
+	if boxWidth > 70 {
+		boxWidth = 70
+	}
+
+	box := lipgloss.NewStyle().
+		Width(boxWidth).
+		Padding(1, 2).
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(lipgloss.Color("3")).
+		Render(promptContent)
+
+	overlay := lipgloss.Place(a.width, a.height,
+		lipgloss.Center, lipgloss.Center,
+		box,
+		lipgloss.WithWhitespaceChars(" "),
+	)
+
+	return baseView + "\n" + overlay
 }
 
 // Run starts the TUI application.

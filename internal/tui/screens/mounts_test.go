@@ -24,7 +24,7 @@ func createTestMountsScreen() *MountsScreen {
 func createTestMounts() []models.MountConfig {
 	return []models.MountConfig{
 		{
-			ID:          "mount1",
+			ID:          "a1b2c3d4",
 			Name:        "Google Drive",
 			Remote:      "gdrive",
 			RemotePath:  "/",
@@ -38,7 +38,7 @@ func createTestMounts() []models.MountConfig {
 			Enabled:   true,
 		},
 		{
-			ID:          "mount2",
+			ID:          "b2c3d4e5",
 			Name:        "Dropbox",
 			Remote:      "dropbox",
 			RemotePath:  "/Photos",
@@ -52,7 +52,7 @@ func createTestMounts() []models.MountConfig {
 			Enabled:   true,
 		},
 		{
-			ID:          "mount3",
+			ID:          "c3d4e5f6",
 			Name:        "S3 Bucket",
 			Remote:      "s3",
 			RemotePath:  "/backup",
@@ -360,7 +360,7 @@ func TestMountsScreen_MountCreatedMsg(t *testing.T) {
 	screen.mounts = createTestMounts()
 
 	newMount := models.MountConfig{
-		ID:          "new1",
+		ID:          "d4e5f6g7",
 		Name:        "New Mount",
 		Remote:      "newremote",
 		RemotePath:  "/",

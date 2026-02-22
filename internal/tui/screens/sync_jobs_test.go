@@ -25,7 +25,7 @@ func createTestSyncJobsScreen() *SyncJobsScreen {
 func createTestSyncJobs() []models.SyncJobConfig {
 	return []models.SyncJobConfig{
 		{
-			ID:          "job1",
+			ID:          "e5f6g7h8",
 			Name:        "Daily Backup",
 			Source:      "gdrive:/Documents",
 			Destination: "/home/user/backup/Documents",
@@ -43,7 +43,7 @@ func createTestSyncJobs() []models.SyncJobConfig {
 			Enabled:   true,
 		},
 		{
-			ID:          "job2",
+			ID:          "f6g7h8i9",
 			Name:        "Photo Sync",
 			Source:      "dropbox:/Photos",
 			Destination: "/home/user/photos",
@@ -60,7 +60,7 @@ func createTestSyncJobs() []models.SyncJobConfig {
 			Enabled:   true,
 		},
 		{
-			ID:          "job3",
+			ID:          "g7h8i9j0",
 			Name:        "Manual Sync",
 			Source:      "s3:/backup",
 			Destination: "/home/user/s3backup",
@@ -370,7 +370,7 @@ func TestSyncJobsScreen_SyncJobCreatedMsg(t *testing.T) {
 	screen.jobs = createTestSyncJobs()
 
 	newJob := models.SyncJobConfig{
-		ID:          "new1",
+		ID:          "h8i9j0k1",
 		Name:        "New Sync Job",
 		Source:      "newremote:/data",
 		Destination: "/home/user/newdata",

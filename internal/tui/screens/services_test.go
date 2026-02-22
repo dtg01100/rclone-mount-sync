@@ -25,25 +25,28 @@ func createTestServicesScreen() *ServicesScreen {
 func createTestServices() []ServiceInfo {
 	return []ServiceInfo{
 		{
-			Name:       "rclone-mount-gdrive",
-			Type:       "mount",
-			Status:     "active",
-			SubState:   "running",
-			Enabled:    true,
-			MountPoint: "/mnt/gdrive",
-			Remote:     "gdrive:",
+			Name:        "rclone-mount-gdrive",
+			DisplayName: "gdrive",
+			Type:        "mount",
+			Status:      "active",
+			SubState:    "running",
+			Enabled:     true,
+			MountPoint:  "/mnt/gdrive",
+			Remote:      "gdrive:",
 		},
 		{
-			Name:       "rclone-mount-dropbox",
-			Type:       "mount",
-			Status:     "inactive",
-			SubState:   "dead",
-			Enabled:    false,
-			MountPoint: "/mnt/dropbox",
-			Remote:     "dropbox:",
+			Name:        "rclone-mount-dropbox",
+			DisplayName: "dropbox",
+			Type:        "mount",
+			Status:      "inactive",
+			SubState:    "dead",
+			Enabled:     false,
+			MountPoint:  "/mnt/dropbox",
+			Remote:      "dropbox:",
 		},
 		{
 			Name:        "rclone-sync-backup",
+			DisplayName: "backup",
 			Type:        "sync",
 			Status:      "active",
 			SubState:    "running",
@@ -55,6 +58,7 @@ func createTestServices() []ServiceInfo {
 		},
 		{
 			Name:        "rclone-sync-photos",
+			DisplayName: "photos",
 			Type:        "sync",
 			Status:      "failed",
 			SubState:    "failed",
@@ -79,7 +83,7 @@ func createTestConfigForServices() *config.Config {
 		},
 		Mounts: []models.MountConfig{
 			{
-				ID:          "mount1",
+				ID:          "m1a2b3c4",
 				Name:        "gdrive",
 				Remote:      "gdrive:",
 				RemotePath:  "/",
@@ -88,7 +92,7 @@ func createTestConfigForServices() *config.Config {
 				Enabled:     true,
 			},
 			{
-				ID:          "mount2",
+				ID:          "m2b3c4d5",
 				Name:        "dropbox",
 				Remote:      "dropbox:",
 				RemotePath:  "/",
@@ -99,7 +103,7 @@ func createTestConfigForServices() *config.Config {
 		},
 		SyncJobs: []models.SyncJobConfig{
 			{
-				ID:          "sync1",
+				ID:          "s1c4d5e6",
 				Name:        "backup",
 				Source:      "gdrive:/Documents",
 				Destination: "/home/user/backup",
@@ -107,7 +111,7 @@ func createTestConfigForServices() *config.Config {
 				Enabled:     true,
 			},
 			{
-				ID:          "sync2",
+				ID:          "s2d5e6f7",
 				Name:        "photos",
 				Source:      "dropbox:/Photos",
 				Destination: "/home/user/photos",
@@ -465,10 +469,10 @@ func TestServicesScreen_CycleFilterKey(t *testing.T) {
 
 func TestServicesScreen_ServiceActions(t *testing.T) {
 	tests := []struct {
-		name        string
-		key         tea.KeyMsg
-		action      string
-		expectCmd   bool
+		name      string
+		key       tea.KeyMsg
+		action    string
+		expectCmd bool
 	}{
 		{
 			name:      "Start service with 's'",
@@ -535,10 +539,10 @@ func TestServicesScreen_ServiceActionsNoServices(t *testing.T) {
 
 func TestServicesScreen_ActionResultMsg(t *testing.T) {
 	tests := []struct {
-		name            string
-		msg             ServiceActionResultMsg
-		expectedType    string
-		expectedInMsg   string
+		name          string
+		msg           ServiceActionResultMsg
+		expectedType  string
+		expectedInMsg string
 	}{
 		{
 			name: "Success result",
@@ -768,10 +772,10 @@ func TestServicesScreen_View(t *testing.T) {
 		t.Error("View() should contain 'Service Status' title")
 	}
 
-	// Check service names are rendered
+	// Check service display names are rendered
 	for _, svc := range screen.filteredServices {
-		if !strings.Contains(view, svc.Name) {
-			t.Errorf("View() should contain service name '%s'", svc.Name)
+		if !strings.Contains(view, svc.DisplayName) {
+			t.Errorf("View() should contain service display name '%s'", svc.DisplayName)
 		}
 	}
 
@@ -1073,14 +1077,18 @@ func TestServicesScreen_SetServices(t *testing.T) {
 	screen := NewServicesScreen()
 	cfg := &config.Config{}
 	mgr := &systemd.Manager{}
+	gen := &systemd.Generator{}
 
-	screen.SetServices(cfg, mgr)
+	screen.SetServices(cfg, mgr, gen)
 
 	if screen.cfg != cfg {
 		t.Error("cfg should be set")
 	}
 	if screen.manager != mgr {
 		t.Error("manager should be set")
+	}
+	if screen.generator != gen {
+		t.Error("generator should be set")
 	}
 }
 
@@ -1194,7 +1202,7 @@ func TestServicesScreen_ViewSystemdStatus(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.systemdStatus = SystemdStatus{
 		Available:      true,
-		FailedUnits:     2,
+		FailedUnits:    2,
 		ActiveServices: 3,
 		ActiveTimers:   1,
 	}
@@ -1232,8 +1240,8 @@ func TestServicesScreen_ViewSystemdStatusUnavailable(t *testing.T) {
 
 func TestGetFilterDescription(t *testing.T) {
 	tests := []struct {
-		filter    string
-		expected  string
+		filter   string
+		expected string
 	}{
 		{FilterAll, "All"},
 		{FilterRunning, "Running"},
@@ -1303,8 +1311,8 @@ func TestServicesScreen_RenderLogLine(t *testing.T) {
 	screen := NewServicesScreen()
 
 	tests := []struct {
-		name     string
-		line     string
+		name string
+		line string
 	}{
 		{"Error line", "2024-01-01 ERROR Something failed"},
 		{"Warning line", "2024-01-01 WARNING Check this"},
@@ -1585,8 +1593,8 @@ func TestServicesScreen_ViewServiceListWithTimer(t *testing.T) {
 func TestServicesScreen_SystemdStatusStruct(t *testing.T) {
 	status := SystemdStatus{
 		Available:      true,
-		FailedUnits:     2,
-		SessionType:     "user@.service",
+		FailedUnits:    2,
+		SessionType:    "user@.service",
 		ActiveServices: 5,
 		ActiveTimers:   3,
 	}
@@ -1803,9 +1811,9 @@ func TestServicesScreen_StatusIndicatorInList(t *testing.T) {
 	screen := NewServicesScreen()
 	screen.SetSize(80, 24)
 	screen.services = []ServiceInfo{
-		{Name: "active-svc", Status: "active", Type: "mount"},
-		{Name: "inactive-svc", Status: "inactive", Type: "mount"},
-		{Name: "failed-svc", Status: "failed", Type: "sync"},
+		{Name: "active-svc", DisplayName: "active-svc", Status: "active", Type: "mount"},
+		{Name: "inactive-svc", DisplayName: "inactive-svc", Status: "inactive", Type: "mount"},
+		{Name: "failed-svc", DisplayName: "failed-svc", Status: "failed", Type: "sync"},
 	}
 	screen.filteredServices = screen.services
 
@@ -1813,8 +1821,8 @@ func TestServicesScreen_StatusIndicatorInList(t *testing.T) {
 
 	// All services should be shown
 	for _, svc := range screen.services {
-		if !strings.Contains(view, svc.Name) {
-			t.Errorf("View() should contain service '%s'", svc.Name)
+		if !strings.Contains(view, svc.DisplayName) {
+			t.Errorf("View() should contain service '%s'", svc.DisplayName)
 		}
 	}
 }

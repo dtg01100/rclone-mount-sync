@@ -17,10 +17,10 @@ import (
 
 // Screen modes for the services screen
 const (
-	ServicesModeList    = "list"     // Main service list
-	ServicesModeDetails = "details"  // Service details
-	ServicesModeLogs    = "logs"     // Log viewer
-	ServicesModeActions = "actions"  // Action menu
+	ServicesModeList    = "list"    // Main service list
+	ServicesModeDetails = "details" // Service details
+	ServicesModeLogs    = "logs"    // Log viewer
+	ServicesModeActions = "actions" // Action menu
 )
 
 // Service filter types
@@ -36,21 +36,22 @@ const (
 // ServicesScreen handles service status and management.
 type ServicesScreen struct {
 	// Services
-	services []ServiceInfo
+	services         []ServiceInfo
 	filteredServices []ServiceInfo
 
-	// Systemd manager
-	manager *systemd.Manager
+	// Systemd manager and generator
+	manager   *systemd.Manager
+	generator *systemd.Generator
 
 	// Config for service types
 	cfg *config.Config
 
 	// UI state
-	mode       string
-	cursor     int
-	width      int
-	height     int
-	goBack     bool
+	mode   string
+	cursor int
+	width  int
+	height int
+	goBack bool
 
 	// Filter
 	filter string
@@ -60,12 +61,12 @@ type ServicesScreen struct {
 	detailedStatus  *models.ServiceStatus
 
 	// Logs view
-	logs         string
-	logsLoading  bool
-	logFilter    string // error, warning, info, debug, all
+	logs        string
+	logsLoading bool
+	logFilter   string // error, warning, info, debug, all
 
 	// Action menu
-	showActions bool
+	showActions  bool
 	actionCursor int
 
 	// Bulk operations
@@ -73,7 +74,7 @@ type ServicesScreen struct {
 	bulkCursor   int
 
 	// Status messages
-	statusMessage    string
+	statusMessage     string
 	statusMessageType string // success, error, info
 
 	// Loading state
@@ -85,27 +86,28 @@ type ServicesScreen struct {
 
 // SystemdStatus holds overall systemd user manager status.
 type SystemdStatus struct {
-	Available       bool
-	FailedUnits     int
-	SessionType     string
+	Available      bool
+	FailedUnits    int
+	SessionType    string
 	ActiveServices int
-	ActiveTimers    int
+	ActiveTimers   int
 }
 
 // ServiceInfo represents display information about a service.
 type ServiceInfo struct {
-	Name            string
-	Type            string // "mount" or "sync"
-	Status          string // active, inactive, failed, activating
-	SubState        string // running, dead, exited
-	Enabled         bool
-	MountPoint      string // For mounts
-	Remote          string // For mounts
-	Source          string // For sync
-	Destination     string // For sync
-	NextRun         time.Time
-	LastRun         time.Time
-	TimerActive     bool
+	Name        string // ID-based systemd unit name (e.g., "rclone-mount-abc12345")
+	DisplayName string // Friendly name for display (e.g., "my-mount")
+	Type        string // "mount" or "sync"
+	Status      string // active, inactive, failed, activating
+	SubState    string // running, dead, exited
+	Enabled     bool
+	MountPoint  string // For mounts
+	Remote      string // For mounts
+	Source      string // For sync
+	Destination string // For sync
+	NextRun     time.Time
+	LastRun     time.Time
+	TimerActive bool
 }
 
 // Messages
@@ -123,10 +125,10 @@ type ServiceActionMsg struct {
 
 // ServiceActionResultMsg is sent after a service action completes.
 type ServiceActionResultMsg struct {
-	Name   string
-	Action string
+	Name    string
+	Action  string
 	Success bool
-	Error  string
+	Error   string
 }
 
 // ServiceLogsMsg is sent to request logs for a service.
@@ -146,24 +148,25 @@ type ServicesErrorMsg struct {
 }
 
 // RefreshServicesMsg triggers a refresh of the services list.
-type RefreshServicesMsg struct {}
+type RefreshServicesMsg struct{}
 
 // NewServicesScreen creates a new services screen.
 func NewServicesScreen() *ServicesScreen {
 	return &ServicesScreen{
-		services:         []ServiceInfo{},
-		filteredServices: []ServiceInfo{},
-		mode:             ServicesModeList,
-		filter:           FilterAll,
-		logFilter:        "all",
+		services:          []ServiceInfo{},
+		filteredServices:  []ServiceInfo{},
+		mode:              ServicesModeList,
+		filter:            FilterAll,
+		logFilter:         "all",
 		statusMessageType: "info",
 	}
 }
 
 // SetServices sets the required services for the screen.
-func (s *ServicesScreen) SetServices(cfg *config.Config, manager *systemd.Manager) {
+func (s *ServicesScreen) SetServices(cfg *config.Config, manager *systemd.Manager, generator *systemd.Generator) {
 	s.cfg = cfg
 	s.manager = manager
+	s.generator = generator
 }
 
 // Init initializes the screen and loads services.
@@ -182,41 +185,44 @@ func (s *ServicesScreen) loadServices() tea.Msg {
 	// Load mount services from config
 	if s.cfg != nil {
 		for _, mount := range s.cfg.Mounts {
-			serviceName := fmt.Sprintf("rclone-mount-%s", mount.Name)
+			serviceName := s.generator.ServiceName(mount.ID, "mount")
 			status, err := s.manager.Status(serviceName + ".service")
 			if err != nil {
 				// Service might not exist yet
 				services = append(services, ServiceInfo{
-					Name:       serviceName,
-					Type:       "mount",
-					Status:     "not-found",
-					Enabled:    mount.Enabled,
-					MountPoint: mount.MountPoint,
-					Remote:     mount.Remote,
+					Name:        serviceName,
+					DisplayName: mount.Name,
+					Type:        "mount",
+					Status:      "not-found",
+					Enabled:     mount.Enabled,
+					MountPoint:  mount.MountPoint,
+					Remote:      mount.Remote,
 				})
 				continue
 			}
 
 			services = append(services, ServiceInfo{
-				Name:       serviceName,
-				Type:       "mount",
-				Status:     status.State,
-				SubState:   status.SubState,
-				Enabled:    status.Enabled,
-				MountPoint: mount.MountPoint,
-				Remote:     mount.Remote,
+				Name:        serviceName,
+				DisplayName: mount.Name,
+				Type:        "mount",
+				Status:      status.State,
+				SubState:    status.SubState,
+				Enabled:     status.Enabled,
+				MountPoint:  mount.MountPoint,
+				Remote:      mount.Remote,
 			})
 		}
 
 		// Load sync job services from config
 		for _, job := range s.cfg.SyncJobs {
-			serviceName := fmt.Sprintf("rclone-sync-%s", job.Name)
+			serviceName := s.generator.ServiceName(job.ID, "sync")
 
 			// Get service status
 			status, err := s.manager.Status(serviceName + ".service")
 			if err != nil {
 				services = append(services, ServiceInfo{
 					Name:        serviceName,
+					DisplayName: job.Name,
 					Type:        "sync",
 					Status:      "not-found",
 					Enabled:     job.Enabled,
@@ -236,6 +242,7 @@ func (s *ServicesScreen) loadServices() tea.Msg {
 
 			services = append(services, ServiceInfo{
 				Name:        serviceName,
+				DisplayName: job.Name,
 				Type:        "sync",
 				Status:      status.State,
 				SubState:    status.SubState,
@@ -260,7 +267,7 @@ func (s *ServicesScreen) loadServices() tea.Msg {
 func (s *ServicesScreen) loadSystemdStatus() SystemdStatus {
 	status := SystemdStatus{
 		Available:   s.manager.IsSystemdAvailable(),
-		SessionType:  "user@.service",
+		SessionType: "user@.service",
 	}
 
 	if !status.Available {
@@ -427,7 +434,7 @@ func (s *ServicesScreen) handleListKeyPress(msg tea.KeyMsg) []tea.Cmd {
 			service := s.filteredServices[s.cursor]
 			s.mode = ServicesModeLogs
 			s.logsLoading = true
-			cmds = append(cmds, s.loadServiceLogs(service.Name + ".service"))
+			cmds = append(cmds, s.loadServiceLogs(service.Name+".service"))
 		}
 	case "a":
 		// Show actions menu
@@ -497,7 +504,7 @@ func (s *ServicesScreen) handleDetailsKeyPress(msg tea.KeyMsg) []tea.Cmd {
 		// View logs
 		if s.selectedService != nil {
 			s.logsLoading = true
-			cmds = append(cmds, s.loadServiceLogs(s.selectedService.Name + ".service"))
+			cmds = append(cmds, s.loadServiceLogs(s.selectedService.Name+".service"))
 		}
 	case "ctrl+r", "R":
 		// Refresh
@@ -973,7 +980,7 @@ func (s *ServicesScreen) renderServiceList() string {
 		if i == s.cursor {
 			line = fmt.Sprintf("▸ %-*s %-*s %s %-*s %-*s",
 				serviceWidth-1,
-				components.Styles.Selected.Render(components.Truncate(service.Name, serviceWidth-1)),
+				components.Styles.Selected.Render(components.Truncate(service.DisplayName, serviceWidth-1)),
 				typeWidth,
 				components.Styles.Selected.Render(typeStr),
 				status,
@@ -984,7 +991,7 @@ func (s *ServicesScreen) renderServiceList() string {
 		} else {
 			line = fmt.Sprintf("  %-*s %-*s %s %-*s %-*s",
 				serviceWidth-1,
-				components.Styles.Normal.Render(components.Truncate(service.Name, serviceWidth-1)),
+				components.Styles.Normal.Render(components.Truncate(service.DisplayName, serviceWidth-1)),
 				typeWidth,
 				components.Styles.Normal.Render(typeStr),
 				status,
@@ -1006,7 +1013,7 @@ func (s *ServicesScreen) renderDetailsView() string {
 	// Title
 	title := "Service Details"
 	if s.selectedService != nil {
-		title = fmt.Sprintf("Service Details - %s", s.selectedService.Name)
+		title = fmt.Sprintf("Service Details - %s", s.selectedService.DisplayName)
 	}
 	b.WriteString(components.Styles.Title.Render(title))
 	b.WriteString("\n\n")
@@ -1040,12 +1047,14 @@ func (s *ServicesScreen) renderDetailsView() string {
 
 	if service.Type == "mount" {
 		details = fmt.Sprintf(`
-  Name: %s
+  Display Name: %s
+  Service: %s
   Type: %s
   Status: %s
   Enabled: %s
   Mount Point: %s
   Remote: %s`,
+			service.DisplayName,
 			service.Name,
 			service.Type,
 			service.Status,
@@ -1065,7 +1074,8 @@ func (s *ServicesScreen) renderDetailsView() string {
 		}
 
 		details = fmt.Sprintf(`
-  Name: %s
+  Display Name: %s
+  Service: %s
   Type: %s
   Status: %s
   Enabled: %s
@@ -1073,6 +1083,7 @@ func (s *ServicesScreen) renderDetailsView() string {
   Source: %s
   Destination: %s
   Next Run: %s`,
+			service.DisplayName,
 			service.Name,
 			service.Type,
 			service.Status,
@@ -1123,7 +1134,7 @@ func (s *ServicesScreen) renderLogsView() string {
 	// Title
 	title := "Service Logs"
 	if s.selectedService != nil {
-		title = fmt.Sprintf("Logs - %s", s.selectedService.Name)
+		title = fmt.Sprintf("Logs - %s", s.selectedService.DisplayName)
 	}
 	b.WriteString(components.Styles.Title.Render(title))
 	b.WriteString("\n\n")
@@ -1192,7 +1203,7 @@ func (s *ServicesScreen) renderActionsView() string {
 	// Title
 	title := "Service Actions"
 	if s.selectedService != nil {
-		title = fmt.Sprintf("Actions - %s", s.selectedService.Name)
+		title = fmt.Sprintf("Actions - %s", s.selectedService.DisplayName)
 	}
 	b.WriteString(components.Styles.Title.Render(title))
 	b.WriteString("\n\n")

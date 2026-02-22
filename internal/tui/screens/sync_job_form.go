@@ -56,10 +56,12 @@ type SyncJobForm struct {
 	trackRenames    bool
 
 	// Form data - Schedule
-	scheduleType string
-	onCalendar   string
-	onBootSec    string
-	onBoot       bool
+	scheduleType     string
+	onCalendar       string
+	onBootSec        string
+	onBoot           bool
+	requireACPower   bool
+	requireUnmetered bool
 
 	// Form data - Filters & Performance
 	excludePattern string
@@ -125,6 +127,8 @@ func NewSyncJobForm(job *models.SyncJobConfig, remotes []rclone.Remote, cfg *con
 		f.onCalendar = job.Schedule.OnCalendar
 		f.onBootSec = job.Schedule.OnBootSec
 		f.onBoot = job.Schedule.Type == "onboot"
+		f.requireACPower = job.Schedule.RequireACPower
+		f.requireUnmetered = job.Schedule.RequireUnmetered
 
 		// Filters & Performance
 		f.excludePattern = job.SyncOptions.ExcludePattern
@@ -295,6 +299,16 @@ func (f *SyncJobForm) buildForm() {
 				Description("Delay after boot before running (e.g., 5min, 1h)").
 				Placeholder("5min").
 				Value(&f.onBootSec),
+
+			huh.NewConfirm().
+				Title("Require AC Power").
+				Description("Only run when connected to AC power (not on battery)").
+				Value(&f.requireACPower),
+
+			huh.NewConfirm().
+				Title("Require Unmetered Connection").
+				Description("Only run on non-metered internet connections").
+				Value(&f.requireUnmetered),
 		).Title("Step 3: Schedule"),
 
 		// Step 4: Filters & Performance
@@ -535,9 +549,11 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 			LogLevel:         f.logLevel,
 		},
 		Schedule: models.ScheduleConfig{
-			Type:       scheduleType,
-			OnCalendar: f.onCalendar,
-			OnBootSec:  f.onBootSec,
+			Type:             scheduleType,
+			OnCalendar:       f.onCalendar,
+			OnBootSec:        f.onBootSec,
+			RequireACPower:   f.requireACPower,
+			RequireUnmetered: f.requireUnmetered,
 		},
 		Enabled: f.enabled,
 	}
@@ -585,8 +601,8 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 		if f.manager != nil {
 			_ = f.manager.DaemonReload()
 
-			serviceName := f.generator.ServiceName(job.Name, "sync") + ".service"
-			timerName := f.generator.ServiceName(job.Name, "sync") + ".timer"
+			serviceName := f.generator.ServiceName(job.ID, "sync") + ".service"
+			timerName := f.generator.ServiceName(job.ID, "sync") + ".timer"
 
 			// Enable timer if requested
 			if job.Enabled {

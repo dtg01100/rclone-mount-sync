@@ -72,7 +72,7 @@ func TestNewSyncJobForm_Edit(t *testing.T) {
 
 	// Create an existing sync job to edit
 	existingJob := &models.SyncJobConfig{
-		ID:          "job123",
+		ID:          "j1o2b3x4",
 		Name:        "Test Sync Job",
 		Source:      "gdrive:/Photos",
 		Destination: "/home/user/Backup/Photos",
@@ -623,7 +623,7 @@ func TestSyncJobForm_SubmitFormEditMode(t *testing.T) {
 
 	// Create an existing sync job
 	existingJob := &models.SyncJobConfig{
-		ID:          "existing456",
+		ID:          "e4x5i6s7",
 		Name:        "Existing Sync Job",
 		Source:      "gdrive:/Documents",
 		Destination: "/backup/docs",
@@ -649,8 +649,8 @@ func TestSyncJobForm_SubmitFormEditMode(t *testing.T) {
 	job := updatedMsg.Job
 
 	// Verify ID was preserved
-	if job.ID != "existing456" {
-		t.Errorf("job.ID = %q, want 'existing456'", job.ID)
+	if job.ID != "e4x5i6s7" {
+		t.Errorf("job.ID = %q, want 'e4x5i6s7'", job.ID)
 	}
 
 	// Verify name was preserved
@@ -1024,7 +1024,7 @@ func TestSyncJobForm_EditPreservesAllOptions(t *testing.T) {
 	remotes := createTestRemotes()
 
 	existingJob := &models.SyncJobConfig{
-		ID:          "job123",
+		ID:          "j1o2b3x4",
 		Name:        "Test Sync",
 		Source:      "gdrive:/Documents",
 		Destination: "/backup/docs",
