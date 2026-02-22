@@ -198,11 +198,11 @@ func (s *SyncJobsScreen) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "d":
 		// Delete selected sync job
 		if len(s.jobs) > 0 && s.cursor < len(s.jobs) {
-			s.mode = SyncJobsModeDelete
 			s.delete = NewSyncJobDeleteConfirm(s.jobs[s.cursor])
 			if s.config != nil {
 				s.delete.SetServices(s.manager, s.generator, s.config)
 			}
+			s.mode = SyncJobsModeDelete
 		}
 	case "enter":
 		// View details
@@ -1043,31 +1043,57 @@ func (d *SyncJobDeleteConfirm) deleteServiceOnly() tea.Cmd {
 // deleteServiceAndConfig deletes both the service and config entry.
 func (d *SyncJobDeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 	return func() tea.Msg {
+		var rollbackData SyncJobRollbackData
+		if d.config != nil {
+			rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			rollbackData = rollbackMgr.PrepareSyncJobRollback(d.job.ID, d.job.Name, OperationDelete)
+		}
+
 		serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
 		timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
 
-		// Stop the service if running
 		_ = d.manager.Stop(serviceName)
-
-		// Stop and disable the timer if running
 		_ = d.manager.StopTimer(timerName)
 		_ = d.manager.DisableTimer(timerName)
-
-		// Disable the service
 		_ = d.manager.Disable(serviceName)
 
-		// Remove the unit files
-		_ = d.generator.RemoveUnit(serviceName + ".service")
-		_ = d.generator.RemoveUnit(timerName + ".timer")
-
-		// Reload daemon
-		_ = d.manager.DaemonReload()
-
-		// Remove from config
-		if d.config != nil {
-			if err := d.config.RemoveSyncJob(d.job.Name); err == nil {
-				_ = d.config.Save()
+		if err := d.generator.RemoveUnit(serviceName + ".service"); err != nil {
+			if d.config != nil {
+				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+				_ = rollbackMgr.RollbackSyncJob(rollbackData, false)
 			}
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to remove service unit: %w", err)}
+		}
+
+		if err := d.generator.RemoveUnit(timerName + ".timer"); err != nil {
+			if d.config != nil {
+				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+				_ = rollbackMgr.RollbackSyncJob(rollbackData, false)
+			}
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to remove timer unit: %w", err)}
+		}
+
+		if err := d.manager.DaemonReload(); err != nil {
+			if d.config != nil {
+				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+				_ = rollbackMgr.RollbackSyncJob(rollbackData, false)
+			}
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to reload daemon: %w", err)}
+		}
+
+		if err := d.config.RemoveSyncJob(d.job.Name); err != nil {
+			if d.config != nil {
+				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+				_ = rollbackMgr.RollbackSyncJob(rollbackData, false)
+			}
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to remove sync job from config: %w", err)}
+		}
+		if err := d.config.Save(); err != nil {
+			if d.config != nil {
+				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+				_ = rollbackMgr.RollbackSyncJob(rollbackData, false)
+			}
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to save config: %w", err)}
 		}
 
 		return SyncJobDeletedMsg{Name: d.job.Name}

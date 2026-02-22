@@ -298,6 +298,35 @@ func TestSyncJobsScreen_DeleteModeNoJobs(t *testing.T) {
 	}
 }
 
+func TestSyncJobsScreen_DeleteModeServicesSetBeforeModeChange(t *testing.T) {
+	screen := NewSyncJobsScreen()
+	screen.SetSize(80, 24)
+	screen.jobs = createTestSyncJobs()
+	cfg := createTestConfigWithSyncJobs()
+	gen := &systemd.Generator{}
+	mgr := &systemd.Manager{}
+	screen.SetServices(cfg, nil, gen, mgr)
+	screen.cursor = 0
+
+	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+
+	if screen.mode != SyncJobsModeDelete {
+		t.Errorf("mode = %d, want %d (SyncJobsModeDelete)", screen.mode, SyncJobsModeDelete)
+	}
+	if screen.delete == nil {
+		t.Fatal("delete should not be nil")
+	}
+	if screen.delete.config == nil {
+		t.Error("delete.config should be set before mode change")
+	}
+	if screen.delete.generator == nil {
+		t.Error("delete.generator should be set before mode change")
+	}
+	if screen.delete.manager == nil {
+		t.Error("delete.manager should be set before mode change")
+	}
+}
+
 func TestSyncJobsScreen_LoadSyncJobs(t *testing.T) {
 	screen := NewSyncJobsScreen()
 	cfg := createTestConfigWithSyncJobs()
