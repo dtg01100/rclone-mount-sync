@@ -23,16 +23,14 @@ func (c *Client) GetConfigPath() (string, error) {
 	defer cancel()
 
 	args := []string{"config", "file"}
-	if c.configPath != "" {
-		args = append([]string{"--config", c.configPath}, args...)
-	}
 
-	output, err := c.runCommand(ctx, args...)
+	output, err := doRetryBytes(ctx, c.retryConfig, func() ([]byte, error) {
+		return c.runCommand(ctx, args...)
+	})
 	if err != nil {
 		return "", fmt.Errorf("failed to get rclone config path: %w", err)
 	}
 
-	// Output format: "Configuration file is stored at:\n/path/to/config/rclone.conf\n"
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
 	for i, line := range lines {
 		line = strings.TrimSpace(line)

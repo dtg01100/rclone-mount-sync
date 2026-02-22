@@ -12,8 +12,9 @@ import (
 
 // Client wraps rclone command execution.
 type Client struct {
-	binaryPath string
-	configPath string
+	binaryPath  string
+	configPath  string
+	retryConfig RetryConfig
 }
 
 // NewClient creates a new rclone client.
@@ -28,17 +29,29 @@ func NewClient() *Client {
 	configPath := os.Getenv("RCLONE_CONFIG")
 
 	return &Client{
-		binaryPath: binaryPath,
-		configPath: configPath,
+		binaryPath:  binaryPath,
+		configPath:  configPath,
+		retryConfig: DefaultRetryConfig(),
 	}
 }
 
 // NewClientWithPath creates a new rclone client with a specific binary path.
 func NewClientWithPath(binaryPath string) *Client {
 	return &Client{
-		binaryPath: binaryPath,
-		configPath: os.Getenv("RCLONE_CONFIG"),
+		binaryPath:  binaryPath,
+		configPath:  os.Getenv("RCLONE_CONFIG"),
+		retryConfig: DefaultRetryConfig(),
 	}
+}
+
+// SetRetryConfig sets a custom retry configuration for the client.
+func (c *Client) SetRetryConfig(config RetryConfig) {
+	c.retryConfig = config
+}
+
+// GetRetryConfig returns the current retry configuration.
+func (c *Client) GetRetryConfig() RetryConfig {
+	return c.retryConfig
 }
 
 // IsInstalled checks if rclone is available in the system PATH.
@@ -90,4 +103,11 @@ func (c *Client) runCommand(ctx context.Context, args ...string) ([]byte, error)
 
 	cmd := exec.CommandContext(ctx, c.binaryPath, args...)
 	return cmd.Output()
+}
+
+// runCommandWithRetry runs a command with retry logic for transient failures.
+func (c *Client) runCommandWithRetry(ctx context.Context, args ...string) ([]byte, error) {
+	return doRetryBytes(ctx, c.retryConfig, func() ([]byte, error) {
+		return c.runCommand(ctx, args...)
+	})
 }

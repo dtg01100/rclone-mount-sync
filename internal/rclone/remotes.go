@@ -31,8 +31,10 @@ func (c *Client) ListRemotes() ([]Remote, error) {
 		args = append([]string{"--config", c.configPath}, args...)
 	}
 
-	cmd := exec.CommandContext(ctx, c.binaryPath, args...)
-	output, err := cmd.Output()
+	output, err := doRetryBytes(ctx, c.retryConfig, func() ([]byte, error) {
+		cmd := exec.CommandContext(ctx, c.binaryPath, args...)
+		return cmd.Output()
+	})
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return nil, fmt.Errorf("failed to list remotes: %s", string(exitErr.Stderr))
@@ -85,8 +87,10 @@ func (c *Client) GetRemoteType(remote string) (string, error) {
 		args = append([]string{"--config", c.configPath}, args...)
 	}
 
-	cmd := exec.CommandContext(ctx, c.binaryPath, args...)
-	output, err := cmd.Output()
+	output, err := doRetryBytes(ctx, c.retryConfig, func() ([]byte, error) {
+		cmd := exec.CommandContext(ctx, c.binaryPath, args...)
+		return cmd.Output()
+	})
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return "", fmt.Errorf("failed to get remote type: %s", string(exitErr.Stderr))
@@ -118,7 +122,6 @@ func (c *Client) ListRemotePath(remote, path string) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	// Build the remote path (e.g., "gdrive:/Photos")
 	remotePath := remote + ":" + path
 
 	args := []string{"lsf", remotePath}
@@ -126,8 +129,10 @@ func (c *Client) ListRemotePath(remote, path string) ([]string, error) {
 		args = append([]string{"--config", c.configPath}, args...)
 	}
 
-	cmd := exec.CommandContext(ctx, c.binaryPath, args...)
-	output, err := cmd.Output()
+	output, err := doRetryBytes(ctx, c.retryConfig, func() ([]byte, error) {
+		cmd := exec.CommandContext(ctx, c.binaryPath, args...)
+		return cmd.Output()
+	})
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return nil, fmt.Errorf("failed to list remote path: %s", string(exitErr.Stderr))
@@ -162,8 +167,10 @@ func (c *Client) ListRemoteDirectories(remote, path string) ([]string, error) {
 		args = append([]string{"--config", c.configPath}, args...)
 	}
 
-	cmd := exec.CommandContext(ctx, c.binaryPath, args...)
-	output, err := cmd.Output()
+	output, err := doRetryBytes(ctx, c.retryConfig, func() ([]byte, error) {
+		cmd := exec.CommandContext(ctx, c.binaryPath, args...)
+		return cmd.Output()
+	})
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return nil, fmt.Errorf("failed to list remote directories: %s", string(exitErr.Stderr))
@@ -211,7 +218,6 @@ func (c *Client) TestRemoteAccess(remote, path string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Build the remote path
 	remotePath := remote + ":" + path
 
 	args := []string{"lsf", remotePath, "--max-depth", "1"}
@@ -219,10 +225,18 @@ func (c *Client) TestRemoteAccess(remote, path string) error {
 		args = append([]string{"--config", c.configPath}, args...)
 	}
 
-	cmd := exec.CommandContext(ctx, c.binaryPath, args...)
-	output, err := cmd.CombinedOutput()
+	_, err := doRetryBytes(ctx, c.retryConfig, func() ([]byte, error) {
+		cmd := exec.CommandContext(ctx, c.binaryPath, args...)
+		output, err := cmd.Output()
+		if err != nil {
+			if exitErr, ok := err.(*exec.ExitError); ok {
+				exitErr.Stderr = []byte(string(exitErr.Stderr) + " " + string(output))
+			}
+		}
+		return output, err
+	})
 	if err != nil {
-		return fmt.Errorf("failed to access remote path %q: %s", remotePath, string(output))
+		return fmt.Errorf("failed to access remote path %q: %w", remotePath, err)
 	}
 
 	return nil
