@@ -29,13 +29,13 @@ const (
 // SyncJobsScreen manages sync job configurations.
 type SyncJobsScreen struct {
 	// State
-	jobs       []models.SyncJobConfig
-	statuses   map[string]*models.ServiceStatus
-	cursor     int
-	width      int
-	height     int
-	mode       SyncJobsScreenMode
-	goBack     bool
+	jobs     []models.SyncJobConfig
+	statuses map[string]*models.ServiceStatus
+	cursor   int
+	width    int
+	height   int
+	mode     SyncJobsScreenMode
+	goBack   bool
 
 	// Sub-screens
 	form    *SyncJobForm
@@ -93,12 +93,14 @@ func (s *SyncJobsScreen) loadSyncJobs() tea.Msg {
 	// Load sync jobs from config
 	s.jobs = s.config.SyncJobs
 
-	// Load statuses for each sync job
-	for _, job := range s.jobs {
-		serviceName := s.generator.ServiceName(job.Name, "sync") + ".service"
-		status, err := s.manager.GetDetailedStatus(serviceName)
-		if err == nil {
-			s.statuses[job.Name] = status
+	// Load statuses for each sync job (only if generator and manager are available)
+	if s.generator != nil && s.manager != nil {
+		for _, job := range s.jobs {
+			serviceName := s.generator.ServiceName(job.Name, "sync") + ".service"
+			status, err := s.manager.GetDetailedStatus(serviceName)
+			if err == nil {
+				s.statuses[job.Name] = status
+			}
 		}
 	}
 
@@ -293,6 +295,18 @@ func (s *SyncJobsScreen) updateDetails(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // startCreateForm starts the create sync job form.
 func (s *SyncJobsScreen) startCreateForm() (tea.Model, tea.Cmd) {
+	// Check if rclone client is available
+	if s.rclone == nil {
+		s.err = fmt.Errorf("rclone client not initialized - please ensure rclone is installed")
+		return s, nil
+	}
+
+	// Check if rclone is installed
+	if !s.rclone.IsInstalled() {
+		s.err = fmt.Errorf("rclone binary not found - please install rclone first")
+		return s, nil
+	}
+
 	// Get available remotes
 	remotes, err := s.rclone.ListRemotes()
 	if err != nil {
@@ -300,7 +314,13 @@ func (s *SyncJobsScreen) startCreateForm() (tea.Model, tea.Cmd) {
 		return s, nil
 	}
 
-	s.form = NewSyncJobForm(nil, remotes, s.config, s.generator, s.manager, false)
+	// Check if any remotes are configured
+	if len(remotes) == 0 {
+		s.err = fmt.Errorf("no rclone remotes configured - run 'rclone config' to set up a remote")
+		return s, nil
+	}
+
+	s.form = NewSyncJobForm(nil, remotes, s.config, s.generator, s.manager, s.rclone, false)
 	s.mode = SyncJobsModeCreate
 	s.err = nil
 	return s, s.form.Init()
@@ -310,10 +330,24 @@ func (s *SyncJobsScreen) startCreateForm() (tea.Model, tea.Cmd) {
 func (s *SyncJobsScreen) startEditForm() (tea.Model, tea.Cmd) {
 	job := s.jobs[s.cursor]
 
-	// Stop timer if running before editing
-	timerName := s.generator.ServiceName(job.Name, "sync") + ".timer"
-	_ = s.manager.StopTimer(timerName)
-	_ = s.manager.DisableTimer(timerName)
+	// Stop timer if running before editing (only if services are available)
+	if s.generator != nil && s.manager != nil {
+		timerName := s.generator.ServiceName(job.Name, "sync") + ".timer"
+		_ = s.manager.StopTimer(timerName)
+		_ = s.manager.DisableTimer(timerName)
+	}
+
+	// Check if rclone client is available
+	if s.rclone == nil {
+		s.err = fmt.Errorf("rclone client not initialized - please ensure rclone is installed")
+		return s, nil
+	}
+
+	// Check if rclone is installed
+	if !s.rclone.IsInstalled() {
+		s.err = fmt.Errorf("rclone binary not found - please install rclone first")
+		return s, nil
+	}
 
 	// Get available remotes
 	remotes, err := s.rclone.ListRemotes()
@@ -322,7 +356,13 @@ func (s *SyncJobsScreen) startEditForm() (tea.Model, tea.Cmd) {
 		return s, nil
 	}
 
-	s.form = NewSyncJobForm(&job, remotes, s.config, s.generator, s.manager, true)
+	// Check if any remotes are configured
+	if len(remotes) == 0 {
+		s.err = fmt.Errorf("no rclone remotes configured - run 'rclone config' to set up a remote")
+		return s, nil
+	}
+
+	s.form = NewSyncJobForm(&job, remotes, s.config, s.generator, s.manager, s.rclone, true)
 	s.mode = SyncJobsModeEdit
 	s.err = nil
 	return s, s.form.Init()
@@ -330,6 +370,12 @@ func (s *SyncJobsScreen) startEditForm() (tea.Model, tea.Cmd) {
 
 // runSyncJobNow runs the selected sync job immediately.
 func (s *SyncJobsScreen) runSyncJobNow() (tea.Model, tea.Cmd) {
+	// Check if generator and manager are available
+	if s.generator == nil || s.manager == nil {
+		s.err = fmt.Errorf("systemd services not initialized")
+		return s, nil
+	}
+
 	job := s.jobs[s.cursor]
 	serviceName := s.generator.ServiceName(job.Name, "sync") + ".service"
 
@@ -343,6 +389,12 @@ func (s *SyncJobsScreen) runSyncJobNow() (tea.Model, tea.Cmd) {
 
 // toggleTimer toggles the sync job timer on/off.
 func (s *SyncJobsScreen) toggleTimer() (tea.Model, tea.Cmd) {
+	// Check if generator and manager are available
+	if s.generator == nil || s.manager == nil {
+		s.err = fmt.Errorf("systemd services not initialized")
+		return s, nil
+	}
+
 	job := s.jobs[s.cursor]
 	timerName := s.generator.ServiceName(job.Name, "sync") + ".timer"
 

@@ -68,6 +68,11 @@ type App struct {
 	height        int
 	loading       bool
 	showHelp      bool
+	initError     error
+
+	// Help screen scroll state
+	helpScrollY    int
+	helpContentLen int
 
 	// Screen models
 	mainMenu   *screens.MainMenuScreen
@@ -129,6 +134,7 @@ func (a *App) initializeServices() tea.Msg {
 	// Pass services to screens
 	a.mounts.SetServices(cfg, a.rclone, gen, a.manager)
 	a.services.SetServices(cfg, a.manager)
+	a.settings.SetConfig(cfg)
 
 	return AppInitDone{}
 }
@@ -151,6 +157,21 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "ctrl+c":
 			return a, tea.Quit
+		case "up", "k":
+			// Handle scrolling in help screen
+			if a.showHelp && a.helpScrollY > 0 {
+				a.helpScrollY--
+				return a, nil
+			}
+		case "down", "j":
+			// Handle scrolling in help screen
+			if a.showHelp {
+				maxScroll := a.helpContentLen - (a.height - 6)
+				if maxScroll > 0 && a.helpScrollY < maxScroll {
+					a.helpScrollY++
+				}
+				return a, nil
+			}
 		case "q":
 			// Q quits from main menu, goes back from other screens
 			if a.currentScreen == ScreenMain {
@@ -181,6 +202,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.previousScreen = a.currentScreen
 				a.currentScreen = ScreenHelp
 				a.showHelp = true
+				a.helpScrollY = 0 // Reset scroll position
 			}
 			return a, nil
 		}
@@ -199,6 +221,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.currentScreen = msg.Screen
 		a.showHelp = false
 		return a, nil
+
+	case AppInitError:
+		// Store the error and show it to the user
+		a.initError = msg.Err
+		a.loading = false
 
 	case AppInitDone:
 		// Services initialized, now initialize the mounts screen
@@ -292,6 +319,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (a *App) View() string {
 	if a.width == 0 || a.height == 0 {
 		return "Loading..."
+	}
+
+	// Show initialization error if present
+	if a.initError != nil {
+		return a.renderInitError()
 	}
 
 	// Calculate layout
@@ -457,11 +489,96 @@ func (a *App) renderHelp() string {
 		b.WriteString(line + "\n")
 	}
 
+	// Get the full content
+	fullContent := b.String()
+	lines := strings.Split(fullContent, "\n")
+	a.helpContentLen = len(lines)
+
+	// Calculate visible area
+	availableHeight := a.height - 6 // Account for border and status
+	if availableHeight < 1 {
+		availableHeight = 1
+	}
+
+	// Apply scroll
+	startLine := a.helpScrollY
+	if startLine < 0 {
+		startLine = 0
+	}
+	endLine := startLine + availableHeight
+	if endLine > len(lines) {
+		endLine = len(lines)
+	}
+
+	// Get visible lines
+	visibleLines := lines[startLine:endLine]
+	visibleContent := strings.Join(visibleLines, "\n")
+
+	// Add scroll indicator if needed
+	maxScroll := len(lines) - availableHeight
+	if maxScroll > 0 {
+		scrollInfo := fmt.Sprintf("\n\n[%d/%d] ↑/↓ to scroll", startLine+1, maxScroll+1)
+		visibleContent += components.Styles.HelpText.Render(scrollInfo)
+	}
+
 	// Wrap in a box
 	return components.Styles.Border.
 		Width(a.width - 4).
-		Height(a.height - 4).
-		Render(b.String())
+		Render(visibleContent)
+}
+
+// renderInitError renders the initialization error screen.
+func (a *App) renderInitError() string {
+	var b strings.Builder
+
+	// Title
+	title := components.Styles.Title.Render("Initialization Error")
+	b.WriteString(lipgloss.NewStyle().
+		Width(a.width).
+		Align(lipgloss.Center).
+		Render(title))
+	b.WriteString("\n\n")
+
+	// Error message
+	errorMsg := fmt.Sprintf("Failed to initialize application:\n\n%v", a.initError)
+	b.WriteString(lipgloss.NewStyle().
+		Width(a.width).
+		Align(lipgloss.Center).
+		Render(components.RenderError(errorMsg)))
+	b.WriteString("\n\n")
+
+	// Suggestions
+	b.WriteString(lipgloss.NewStyle().
+		Width(a.width).
+		Align(lipgloss.Center).
+		Render(components.Styles.Subtitle.Render("Possible solutions:")))
+	b.WriteString("\n\n")
+
+	suggestions := []string{
+		"• Ensure rclone is installed and in your PATH",
+		"• Run 'rclone config' to configure at least one remote",
+		"• Check that systemd user session is available",
+		"• Verify you have proper permissions for the config directory",
+	}
+
+	for _, suggestion := range suggestions {
+		b.WriteString(lipgloss.NewStyle().
+			Width(a.width).
+			Align(lipgloss.Center).
+			Render(suggestion))
+		b.WriteString("\n")
+	}
+
+	b.WriteString("\n")
+
+	// Quit hint
+	quitHint := components.Styles.HelpText.Render("Press q or Ctrl+C to quit")
+	b.WriteString(lipgloss.NewStyle().
+		Width(a.width).
+		Align(lipgloss.Center).
+		Render(quitHint))
+
+	return b.String()
 }
 
 // Run starts the TUI application.

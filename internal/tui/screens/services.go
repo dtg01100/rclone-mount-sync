@@ -591,6 +591,16 @@ func (s *ServicesScreen) handleActionsKeyPress(msg tea.KeyMsg) []tea.Cmd {
 // doServiceAction performs an action on a service.
 func (s *ServicesScreen) doServiceAction(name, action string) tea.Cmd {
 	return func() tea.Msg {
+		// Check if manager is available
+		if s.manager == nil {
+			return ServiceActionResultMsg{
+				Name:    name,
+				Action:  action,
+				Success: false,
+				Error:   "systemd manager not initialized",
+			}
+		}
+
 		var err error
 
 		switch action {
@@ -608,16 +618,16 @@ func (s *ServicesScreen) doServiceAction(name, action string) tea.Cmd {
 
 		if err != nil {
 			return ServiceActionResultMsg{
-				Name:   name,
-				Action: action,
+				Name:    name,
+				Action:  action,
 				Success: false,
-				Error:  err.Error(),
+				Error:   err.Error(),
 			}
 		}
 
 		return ServiceActionResultMsg{
-			Name:   name,
-			Action: action,
+			Name:    name,
+			Action:  action,
 			Success: true,
 		}
 	}
@@ -626,6 +636,14 @@ func (s *ServicesScreen) doServiceAction(name, action string) tea.Cmd {
 // loadServiceLogs loads logs for a service.
 func (s *ServicesScreen) loadServiceLogs(name string) tea.Cmd {
 	return func() tea.Msg {
+		// Check if manager is available
+		if s.manager == nil {
+			return ServiceLogsLoadedMsg{
+				Name: name,
+				Logs: "Error: systemd manager not initialized",
+			}
+		}
+
 		logs, err := s.manager.GetLogs(name, 50)
 		if err != nil {
 			return ServiceLogsLoadedMsg{

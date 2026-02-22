@@ -29,18 +29,18 @@ const (
 // MountsScreen manages mount configurations.
 type MountsScreen struct {
 	// State
-	mounts    []models.MountConfig
-	statuses  map[string]*systemd.ServiceStatus
-	cursor    int
-	width     int
-	height    int
-	mode      MountsScreenMode
-	goBack    bool
+	mounts   []models.MountConfig
+	statuses map[string]*systemd.ServiceStatus
+	cursor   int
+	width    int
+	height   int
+	mode     MountsScreenMode
+	goBack   bool
 
 	// Sub-screens
-	form     *MountForm
-	details  *MountDetails
-	delete   *DeleteConfirm
+	form    *MountForm
+	details *MountDetails
+	delete  *DeleteConfirm
 
 	// Services
 	config    *config.Config
@@ -49,9 +49,9 @@ type MountsScreen struct {
 	manager   *systemd.Manager
 
 	// Messages
-	err       error
-	success   string
-	loading   bool
+	err     error
+	success string
+	loading bool
 }
 
 // NewMountsScreen creates a new mounts screen.
@@ -93,12 +93,14 @@ func (s *MountsScreen) loadMounts() tea.Msg {
 	// Load mounts from config
 	s.mounts = s.config.Mounts
 
-	// Load statuses for each mount
-	for _, mount := range s.mounts {
-		serviceName := s.generator.ServiceName(mount.Name, "mount") + ".service"
-		status, err := s.manager.Status(serviceName)
-		if err == nil {
-			s.statuses[mount.Name] = status
+	// Load statuses for each mount (only if generator and manager are available)
+	if s.generator != nil && s.manager != nil {
+		for _, mount := range s.mounts {
+			serviceName := s.generator.ServiceName(mount.Name, "mount") + ".service"
+			status, err := s.manager.Status(serviceName)
+			if err == nil {
+				s.statuses[mount.Name] = status
+			}
 		}
 	}
 
@@ -173,7 +175,7 @@ func (s *MountsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case MountFormSubmitMsg:
 		// Form submitted, handled by form
 	}
-	
+
 	return s, tea.Batch(cmds...)
 }
 
@@ -298,6 +300,18 @@ func (s *MountsScreen) updateDetails(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // startCreateForm starts the create mount form.
 func (s *MountsScreen) startCreateForm() (tea.Model, tea.Cmd) {
+	// Check if rclone client is available
+	if s.rclone == nil {
+		s.err = fmt.Errorf("rclone client not initialized - please ensure rclone is installed")
+		return s, nil
+	}
+
+	// Check if rclone is installed
+	if !s.rclone.IsInstalled() {
+		s.err = fmt.Errorf("rclone binary not found - please install rclone first")
+		return s, nil
+	}
+
 	// Get available remotes
 	remotes, err := s.rclone.ListRemotes()
 	if err != nil {
@@ -305,7 +319,13 @@ func (s *MountsScreen) startCreateForm() (tea.Model, tea.Cmd) {
 		return s, nil
 	}
 
-	s.form = NewMountForm(nil, remotes, s.config, s.generator, s.manager, false)
+	// Check if any remotes are configured
+	if len(remotes) == 0 {
+		s.err = fmt.Errorf("no rclone remotes configured - run 'rclone config' to set up a remote")
+		return s, nil
+	}
+
+	s.form = NewMountForm(nil, remotes, s.config, s.generator, s.manager, s.rclone, false)
 	s.mode = MountsModeCreate
 	s.err = nil
 	return s, s.form.Init()
@@ -315,6 +335,18 @@ func (s *MountsScreen) startCreateForm() (tea.Model, tea.Cmd) {
 func (s *MountsScreen) startEditForm() (tea.Model, tea.Cmd) {
 	mount := s.mounts[s.cursor]
 
+	// Check if rclone client is available
+	if s.rclone == nil {
+		s.err = fmt.Errorf("rclone client not initialized - please ensure rclone is installed")
+		return s, nil
+	}
+
+	// Check if rclone is installed
+	if !s.rclone.IsInstalled() {
+		s.err = fmt.Errorf("rclone binary not found - please install rclone first")
+		return s, nil
+	}
+
 	// Get available remotes
 	remotes, err := s.rclone.ListRemotes()
 	if err != nil {
@@ -322,7 +354,13 @@ func (s *MountsScreen) startEditForm() (tea.Model, tea.Cmd) {
 		return s, nil
 	}
 
-	s.form = NewMountForm(&mount, remotes, s.config, s.generator, s.manager, true)
+	// Check if any remotes are configured
+	if len(remotes) == 0 {
+		s.err = fmt.Errorf("no rclone remotes configured - run 'rclone config' to set up a remote")
+		return s, nil
+	}
+
+	s.form = NewMountForm(&mount, remotes, s.config, s.generator, s.manager, s.rclone, true)
 	s.mode = MountsModeEdit
 	s.err = nil
 	return s, s.form.Init()
@@ -330,6 +368,12 @@ func (s *MountsScreen) startEditForm() (tea.Model, tea.Cmd) {
 
 // toggleMount toggles the mount service on/off.
 func (s *MountsScreen) toggleMount() (tea.Model, tea.Cmd) {
+	// Check if generator and manager are available
+	if s.generator == nil || s.manager == nil {
+		s.err = fmt.Errorf("systemd services not initialized")
+		return s, nil
+	}
+
 	mount := s.mounts[s.cursor]
 	serviceName := s.generator.ServiceName(mount.Name, "mount") + ".service"
 
@@ -365,6 +409,12 @@ func (s *MountsScreen) toggleMount() (tea.Model, tea.Cmd) {
 
 // startMount starts the mount service.
 func (s *MountsScreen) startMount() (tea.Model, tea.Cmd) {
+	// Check if generator and manager are available
+	if s.generator == nil || s.manager == nil {
+		s.err = fmt.Errorf("systemd services not initialized")
+		return s, nil
+	}
+
 	mount := s.mounts[s.cursor]
 	serviceName := s.generator.ServiceName(mount.Name, "mount") + ".service"
 
@@ -378,6 +428,12 @@ func (s *MountsScreen) startMount() (tea.Model, tea.Cmd) {
 
 // stopMount stops the mount service.
 func (s *MountsScreen) stopMount() (tea.Model, tea.Cmd) {
+	// Check if generator and manager are available
+	if s.generator == nil || s.manager == nil {
+		s.err = fmt.Errorf("systemd services not initialized")
+		return s, nil
+	}
+
 	mount := s.mounts[s.cursor]
 	serviceName := s.generator.ServiceName(mount.Name, "mount") + ".service"
 
@@ -622,14 +678,14 @@ type MountFormSubmitMsg struct {
 
 // DeleteConfirm handles the delete confirmation dialog.
 type DeleteConfirm struct {
-	mount       models.MountConfig
-	cursor      int
-	done        bool
-	deleteType  int // 0: cancel, 1: service only, 2: service and config
-	manager     *systemd.Manager
-	generator   *systemd.Generator
-	config      *config.Config
-	width       int
+	mount      models.MountConfig
+	cursor     int
+	done       bool
+	deleteType int // 0: cancel, 1: service only, 2: service and config
+	manager    *systemd.Manager
+	generator  *systemd.Generator
+	config     *config.Config
+	width      int
 }
 
 // NewDeleteConfirm creates a new delete confirmation dialog.
