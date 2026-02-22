@@ -33,10 +33,12 @@ Description=Rclone sync: {{.Name}}
 Documentation=man:rclone(1)
 After=network-online.target
 Wants=network-online.target
-
+{{if .RequireACPower}}ConditionACPower=true
+{{end}}
 [Service]
 Type=oneshot
-ExecStart={{.RclonePath}} {{.Direction}} \
+{{if .RequireUnmetered}}ExecCondition=/bin/sh -c 'test "$(dbus-send --system --print-reply=literal --dest=org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.DBus.Properties.Get string:org.freedesktop.NetworkManager string:Metered 2>/dev/null | grep -o "\"[0-9]*\"" | tr -d "\"")" != "4" || exit 0; exit 1'
+{{end}}ExecStart={{.RclonePath}} {{.Direction}} \
     {{.Source}} \
     {{.Destination}} \
     {{.SyncOptions}}
@@ -75,15 +77,18 @@ type MountUnitData struct {
 
 // SyncUnitData contains data for sync service unit generation.
 type SyncUnitData struct {
-	Name        string
-	Source      string
-	Destination string
-	Direction   string
-	ConfigPath  string
-	SyncOptions string
-	LogLevel    string
-	LogPath     string
-	RclonePath  string
+	Name             string
+	Source           string
+	Destination      string
+	Direction        string
+	ConfigPath       string
+	SyncOptions      string
+	LogLevel         string
+	LogPath          string
+	RclonePath       string
+	RequireACPower   bool
+	RequireUnmetered bool
+	ExecCondition    string
 }
 
 // TimerUnitData contains data for timer unit generation.

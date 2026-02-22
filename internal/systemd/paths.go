@@ -21,6 +21,10 @@ func GetUserSystemdPath() (string, error) {
 }
 
 // sanitizeName sanitizes a name for use in a systemd unit filename.
+//
+// Deprecated: This function is no longer needed for ID-based unit naming.
+// IDs are already clean 8-character alphanumeric strings (truncated UUIDs).
+// Kept for potential legacy compatibility.
 func sanitizeName(name string) string {
 	// Convert to lowercase
 	name = strings.ToLower(name)

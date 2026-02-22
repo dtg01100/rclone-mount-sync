@@ -399,6 +399,23 @@ func (m *Manager) StopContext(ctx context.Context, name string) error {
 	return nil
 }
 
+// ParseUnitID extracts the ID from a unit name like "rclone-mount-a1b2c3d4.service".
+// Returns the ID and unit type ("mount" or "sync"). Returns empty strings if parsing fails.
+func ParseUnitID(unitName string) (id string, unitType string) {
+	// Remove .service or .timer suffix
+	name := strings.TrimSuffix(unitName, ".service")
+	name = strings.TrimSuffix(name, ".timer")
+
+	// Parse rclone-{type}-{id}
+	if strings.HasPrefix(name, "rclone-mount-") {
+		return strings.TrimPrefix(name, "rclone-mount-"), "mount"
+	}
+	if strings.HasPrefix(name, "rclone-sync-") {
+		return strings.TrimPrefix(name, "rclone-sync-"), "sync"
+	}
+	return "", ""
+}
+
 // parseSystemdTimestamp parses a systemd timestamp string.
 func parseSystemdTimestamp(s string) (time.Time, error) {
 	if s == "" || s == "n/a" {

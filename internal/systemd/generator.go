@@ -14,10 +14,10 @@ import (
 
 // Generator generates systemd unit files.
 type Generator struct {
-	systemdDir  string // Full path to user systemd directory
-	rclonePath  string // Path to rclone binary
-	configPath  string // Path to rclone config file
-	logDir      string // Directory for log files
+	systemdDir string // Full path to user systemd directory
+	rclonePath string // Path to rclone binary
+	configPath string // Path to rclone config file
+	logDir     string // Directory for log files
 }
 
 // NewGenerator creates a new unit file generator.
@@ -59,7 +59,7 @@ func (g *Generator) GetSystemdDir() string {
 func (g *Generator) GenerateMountService(mount *models.MountConfig) (string, error) {
 	mountPoint := expandPath(mount.MountPoint)
 	mountOptions := g.buildMountOptions(&mount.MountOptions)
-	logPath := filepath.Join(g.logDir, fmt.Sprintf("rclone-mount-%s.log", sanitizeName(mount.Name)))
+	logPath := filepath.Join(g.logDir, fmt.Sprintf("rclone-mount-%s.log", mount.ID))
 
 	data := MountUnitData{
 		Name:         mount.Name,
@@ -91,7 +91,7 @@ func (g *Generator) WriteMountService(mount *models.MountConfig) (string, error)
 		return "", err
 	}
 
-	filename := g.ServiceName(mount.Name, "mount") + ".service"
+	filename := g.ServiceName(mount.ID, "mount") + ".service"
 	if err := g.WriteUnitFile(filename, content); err != nil {
 		return "", fmt.Errorf("failed to write mount service file: %w", err)
 	}
@@ -102,21 +102,29 @@ func (g *Generator) WriteMountService(mount *models.MountConfig) (string, error)
 // GenerateSyncService generates a systemd service unit for an rclone sync job.
 func (g *Generator) GenerateSyncService(job *models.SyncJobConfig) (string, error) {
 	syncOptions := g.buildSyncOptions(&job.SyncOptions)
-	logPath := filepath.Join(g.logDir, fmt.Sprintf("rclone-sync-%s.log", sanitizeName(job.Name)))
+	logPath := filepath.Join(g.logDir, fmt.Sprintf("rclone-sync-%s.log", job.ID))
 
 	direction := job.SyncOptions.Direction
 	if direction == "" {
 		direction = "sync"
 	}
 
+	execCondition := ""
+	if job.Schedule.RequireUnmetered {
+		execCondition = `/bin/sh -c 'test "$(dbus-send --system --print-reply=literal --dest=org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.DBus.Properties.Get string:org.freedesktop.NetworkManager string:Metered 2>/dev/null | grep -o "\"[0-9]*\"" | tr -d "\"")" != "4" || exit 0; exit 1'`
+	}
+
 	data := SyncUnitData{
-		Name:        job.Name,
-		Source:      job.Source,
-		Destination: expandPath(job.Destination),
-		Direction:   direction,
-		SyncOptions: syncOptions,
-		LogPath:     logPath,
-		RclonePath:  g.rclonePath,
+		Name:             job.Name,
+		Source:           job.Source,
+		Destination:      expandPath(job.Destination),
+		Direction:        direction,
+		SyncOptions:      syncOptions,
+		LogPath:          logPath,
+		RclonePath:       g.rclonePath,
+		RequireACPower:   job.Schedule.RequireACPower,
+		RequireUnmetered: job.Schedule.RequireUnmetered,
+		ExecCondition:    execCondition,
 	}
 
 	tmpl, err := template.New("sync-service").Parse(SyncServiceTemplate)
@@ -162,7 +170,7 @@ func (g *Generator) WriteSyncUnits(job *models.SyncJobConfig) (servicePath, time
 		return "", "", err
 	}
 
-	serviceFilename := g.ServiceName(job.Name, "sync") + ".service"
+	serviceFilename := g.ServiceName(job.ID, "sync") + ".service"
 	if err := g.WriteUnitFile(serviceFilename, serviceContent); err != nil {
 		return "", "", fmt.Errorf("failed to write sync service file: %w", err)
 	}
@@ -175,7 +183,7 @@ func (g *Generator) WriteSyncUnits(job *models.SyncJobConfig) (servicePath, time
 			return servicePath, "", err
 		}
 
-		timerFilename := g.ServiceName(job.Name, "sync") + ".timer"
+		timerFilename := g.ServiceName(job.ID, "sync") + ".timer"
 		if err := g.WriteUnitFile(timerFilename, timerContent); err != nil {
 			return servicePath, "", fmt.Errorf("failed to write sync timer file: %w", err)
 		}
@@ -185,10 +193,11 @@ func (g *Generator) WriteSyncUnits(job *models.SyncJobConfig) (servicePath, time
 	return servicePath, timerPath, nil
 }
 
-// ServiceName generates a sanitized systemd unit name.
-func (g *Generator) ServiceName(mountOrJobName, unitType string) string {
-	name := sanitizeName(mountOrJobName)
-	return fmt.Sprintf("rclone-%s-%s", unitType, name)
+// ServiceName generates a systemd unit name from the ID.
+// Format: rclone-{type}-{id}
+// IDs are 8-character alphanumeric strings (truncated UUIDs), so no sanitization needed.
+func (g *Generator) ServiceName(id, unitType string) string {
+	return fmt.Sprintf("rclone-%s-%s", unitType, id)
 }
 
 // RemoveUnit removes a unit file from the systemd directory.
