@@ -718,6 +718,9 @@ func TestMountForm_SubmitForm_NoRemoteSelected(t *testing.T) {
 	if !strings.Contains(errMsg.Err.Error(), "no remote selected") {
 		t.Errorf("error = %q, should contain 'no remote selected'", errMsg.Err.Error())
 	}
+	if !strings.Contains(errMsg.Err.Error(), "rclone config") {
+		t.Errorf("error = %q, should contain 'rclone config'", errMsg.Err.Error())
+	}
 }
 
 func TestMountForm_ValidateMountPoint_EdgeCases(t *testing.T) {
@@ -843,6 +846,35 @@ func TestMountForm_NoRemotesAvailable(t *testing.T) {
 	}
 }
 
+func TestMountForm_NoRemotesShowsHelpfulMessage(t *testing.T) {
+	form := NewMountForm(nil, []rclone.Remote{}, nil, nil, nil, nil, false)
+	form.SetSize(80, 24)
+
+	// Verify form was created successfully with empty remotes
+	if form == nil {
+		t.Fatal("form should not be nil")
+	}
+
+	// The placeholder option is added in buildForm - verify form can be initialized
+	cmd := form.Init()
+	if cmd == nil {
+		// Init may return nil, that's fine
+	}
+
+	// Verify submitting with no remote selected gives helpful error
+	form.name = "Test"
+	form.mountPoint = "/mnt/test"
+	form.remote = ""
+	msg := form.submitForm()
+	errMsg, ok := msg.(MountsErrorMsg)
+	if !ok {
+		t.Fatalf("expected MountsErrorMsg, got %T", msg)
+	}
+	if !strings.Contains(errMsg.Err.Error(), "rclone config") {
+		t.Errorf("error should mention 'rclone config', got: %s", errMsg.Err.Error())
+	}
+}
+
 func TestMountForm_ExpandPathWithHomeError(t *testing.T) {
 	// Test expandPath function directly
 	result := expandPath("~/test")
@@ -852,5 +884,21 @@ func TestMountForm_ExpandPathWithHomeError(t *testing.T) {
 		if result != expected {
 			t.Errorf("expandPath('~/test') = %q, want %q", result, expected)
 		}
+	}
+}
+
+func TestMountForm_RollbackPreparationCreatesCopy(t *testing.T) {
+	cfg := createTestConfig()
+	cfg.Mounts = []models.MountConfig{
+		{ID: "abc12345", Name: "Mount1"},
+	}
+
+	mgr := NewRollbackManager(cfg, nil, nil)
+	data := mgr.PrepareMountRollback("new12345", "NewMount", OperationCreate)
+
+	cfg.Mounts[0].Name = "ModifiedMount"
+
+	if data.OriginalMounts[0].Name != "Mount1" {
+		t.Error("OriginalMounts should be independent copy")
 	}
 }

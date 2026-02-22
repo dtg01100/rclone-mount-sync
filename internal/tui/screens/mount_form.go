@@ -132,8 +132,7 @@ func (f *MountForm) buildForm() {
 			remoteOptions = append(remoteOptions, huh.NewOption(r.Name+" ("+r.Type+")", r.Name+":"))
 		}
 	} else {
-		// Add a placeholder option when no remotes are available
-		remoteOptions = append(remoteOptions, huh.NewOption("No remotes available - run 'rclone config'", ""))
+		remoteOptions = append(remoteOptions, huh.NewOption("⚠ No remotes - run 'rclone config' first", ""))
 	}
 
 	// VFS Cache Mode options
@@ -409,7 +408,7 @@ func (f *MountForm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (f *MountForm) submitForm() tea.Msg {
 	// Validate that a remote was selected
 	if f.remote == "" {
-		return MountsErrorMsg{Err: fmt.Errorf("no remote selected - please configure rclone remotes first")}
+		return MountsErrorMsg{Err: fmt.Errorf("no remote selected.\n\nTo add remotes:\n  1. Open a terminal and run: rclone config\n  2. Press 'n' to create a new remote\n  3. Follow the prompts to configure your cloud storage\n  4. Restart this application")}
 	}
 
 	// Build the mount configuration
@@ -448,10 +447,20 @@ func (f *MountForm) submitForm() tea.Msg {
 	}
 	mount.ModifiedAt = now
 
+	op := OperationCreate
+	if f.isEdit {
+		op = OperationUpdate
+	}
+
+	var rollbackData MountRollbackData
+	if f.config != nil {
+		rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+		rollbackData = rollbackMgr.PrepareMountRollback(mount.ID, mount.Name, op)
+	}
+
 	// Save to config
 	if f.config != nil {
 		if f.isEdit {
-			// Remove old mount and add updated one
 			for i, m := range f.config.Mounts {
 				if m.ID == mount.ID {
 					f.config.Mounts[i] = mount
@@ -471,22 +480,45 @@ func (f *MountForm) submitForm() tea.Msg {
 	if f.generator != nil {
 		_, err := f.generator.WriteMountService(&mount)
 		if err != nil {
+			if f.config != nil {
+				rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+				_ = rollbackMgr.RollbackMount(rollbackData, true)
+			}
 			return MountsErrorMsg{Err: fmt.Errorf("failed to generate service file: %w", err)}
 		}
 
 		// Reload systemd daemon
 		if f.manager != nil {
-			_ = f.manager.DaemonReload()
+			if err := f.manager.DaemonReload(); err != nil {
+				if f.config != nil {
+					rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+					_ = rollbackMgr.RollbackMount(rollbackData, true)
+				}
+				return MountsErrorMsg{Err: fmt.Errorf("failed to reload systemd daemon: %w", err)}
+			}
+
+			serviceName := f.generator.ServiceName(mount.ID, "mount") + ".service"
 
 			// Enable service if requested
-			serviceName := f.generator.ServiceName(mount.ID, "mount") + ".service"
 			if mount.Enabled {
-				_ = f.manager.Enable(serviceName)
+				if err := f.manager.Enable(serviceName); err != nil {
+					if f.config != nil {
+						rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+						_ = rollbackMgr.RollbackMount(rollbackData, true)
+					}
+					return MountsErrorMsg{Err: fmt.Errorf("failed to enable service: %w", err)}
+				}
 			}
 
 			// Start service if auto-start is enabled
 			if mount.AutoStart {
-				_ = f.manager.Start(serviceName)
+				if err := f.manager.Start(serviceName); err != nil {
+					if f.config != nil {
+						rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+						_ = rollbackMgr.RollbackMount(rollbackData, true)
+					}
+					return MountsErrorMsg{Err: fmt.Errorf("failed to start service: %w", err)}
+				}
 			}
 		}
 	}

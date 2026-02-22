@@ -778,23 +778,46 @@ func (d *DeleteConfirm) deleteServiceOnly() tea.Cmd {
 // deleteServiceAndConfig deletes both the service and config entry.
 func (d *DeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 	return func() tea.Msg {
+		var rollbackData MountRollbackData
+		if d.config != nil {
+			rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			rollbackData = rollbackMgr.PrepareMountRollback(d.mount.ID, d.mount.Name, OperationDelete)
+		}
+
 		serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 
-		// Stop the service if running
 		_ = d.manager.Stop(serviceName)
-
-		// Disable the service
 		_ = d.manager.Disable(serviceName)
 
-		// Remove the unit file
-		_ = d.generator.RemoveUnit(serviceName)
+		if err := d.generator.RemoveUnit(serviceName); err != nil {
+			if d.config != nil {
+				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+				_ = rollbackMgr.RollbackMount(rollbackData, false)
+			}
+			return MountsErrorMsg{Err: fmt.Errorf("failed to remove unit file: %w", err)}
+		}
 
-		// Reload daemon
-		_ = d.manager.DaemonReload()
+		if err := d.manager.DaemonReload(); err != nil {
+			if d.config != nil {
+				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+				_ = rollbackMgr.RollbackMount(rollbackData, false)
+			}
+			return MountsErrorMsg{Err: fmt.Errorf("failed to reload daemon: %w", err)}
+		}
 
-		// Remove from config
-		if err := d.config.RemoveMount(d.mount.Name); err == nil {
-			_ = d.config.Save()
+		if err := d.config.RemoveMount(d.mount.Name); err != nil {
+			if d.config != nil {
+				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+				_ = rollbackMgr.RollbackMount(rollbackData, false)
+			}
+			return MountsErrorMsg{Err: fmt.Errorf("failed to remove mount from config: %w", err)}
+		}
+		if err := d.config.Save(); err != nil {
+			if d.config != nil {
+				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+				_ = rollbackMgr.RollbackMount(rollbackData, false)
+			}
+			return MountsErrorMsg{Err: fmt.Errorf("failed to save config: %w", err)}
 		}
 
 		return MountDeletedMsg{Name: d.mount.Name}

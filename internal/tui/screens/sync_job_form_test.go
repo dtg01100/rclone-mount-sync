@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
+	"github.com/dtg01100/rclone-mount-sync/internal/rclone"
 )
 
 // Helper function to create a test config for sync jobs
@@ -950,6 +951,9 @@ func TestSyncJobForm_SubmitForm_NoSourceRemote(t *testing.T) {
 	if !strings.Contains(errMsg.Err.Error(), "no source remote selected") {
 		t.Errorf("error = %q, should contain 'no source remote selected'", errMsg.Err.Error())
 	}
+	if !strings.Contains(errMsg.Err.Error(), "rclone config") {
+		t.Errorf("error = %q, should contain 'rclone config'", errMsg.Err.Error())
+	}
 }
 
 func TestSyncJobForm_ValidateDestPath_EdgeCases(t *testing.T) {
@@ -1168,5 +1172,95 @@ func TestSyncJobForm_OnBootParsing(t *testing.T) {
 	}
 	if form.onBootSec != "10min" {
 		t.Errorf("onBootSec = %q, want '10min'", form.onBootSec)
+	}
+}
+
+func TestSyncJobForm_RollbackPreparationCreatesCopy(t *testing.T) {
+	cfg := createSyncTestConfig()
+	cfg.SyncJobs = []models.SyncJobConfig{
+		{ID: "abc12345", Name: "Job1"},
+	}
+
+	mgr := NewRollbackManager(cfg, nil, nil)
+	data := mgr.PrepareSyncJobRollback("new12345", "NewJob", OperationCreate)
+
+	cfg.SyncJobs[0].Name = "ModifiedJob"
+
+	if data.OriginalJobs[0].Name != "Job1" {
+		t.Error("OriginalJobs should be independent copy")
+	}
+}
+
+func TestSyncJobForm_ConfigRestoreAfterFailure(t *testing.T) {
+	cfg := createSyncTestConfig()
+	origJobs := []models.SyncJobConfig{
+		{ID: "abc12345", Name: "Job1"},
+	}
+	cfg.SyncJobs = origJobs
+
+	mgr := NewRollbackManager(cfg, nil, nil)
+	data := SyncJobRollbackData{
+		OriginalJobs: origJobs,
+		Operation:    OperationCreate,
+		JobID:        "new12345",
+		JobName:      "NewJob",
+	}
+
+	cfg.SyncJobs = append(cfg.SyncJobs, models.SyncJobConfig{ID: "new12345", Name: "NewJob"})
+
+	err := mgr.RollbackSyncJob(data, true)
+	if err != nil {
+		t.Logf("RollbackSyncJob returned: %v", err)
+	}
+
+	if len(cfg.SyncJobs) != 1 {
+		t.Errorf("after rollback, SyncJobs length = %d, want 1", len(cfg.SyncJobs))
+	}
+
+	if cfg.SyncJobs[0].ID != "abc12345" {
+		t.Error("original job not restored")
+	}
+}
+
+func TestSyncJobForm_NoRemotesAvailable(t *testing.T) {
+	cfg := createSyncTestConfig()
+	form := NewSyncJobForm(nil, []rclone.Remote{}, cfg, nil, nil, nil, false)
+
+	if form == nil {
+		t.Fatal("NewSyncJobForm() returned nil")
+	}
+
+	// Form should still be created even with no remotes
+	if len(form.remotes) != 0 {
+		t.Errorf("remotes count = %d, want 0", len(form.remotes))
+	}
+}
+
+func TestSyncJobForm_NoRemotesShowsHelpfulMessage(t *testing.T) {
+	form := NewSyncJobForm(nil, []rclone.Remote{}, nil, nil, nil, nil, false)
+	form.SetSize(80, 24)
+
+	// Verify form was created successfully with empty remotes
+	if form == nil {
+		t.Fatal("form should not be nil")
+	}
+
+	// The placeholder option is added in buildForm - verify form can be initialized
+	cmd := form.Init()
+	if cmd == nil {
+		// Init may return nil, that's fine
+	}
+
+	// Verify submitting with no remote selected gives helpful error
+	form.name = "Test"
+	form.destPath = "/backup/test"
+	form.sourceRemote = ""
+	msg := form.submitForm()
+	errMsg, ok := msg.(SyncJobsErrorMsg)
+	if !ok {
+		t.Fatalf("expected SyncJobsErrorMsg, got %T", msg)
+	}
+	if !strings.Contains(errMsg.Err.Error(), "rclone config") {
+		t.Errorf("error should mention 'rclone config', got: %s", errMsg.Err.Error())
 	}
 }

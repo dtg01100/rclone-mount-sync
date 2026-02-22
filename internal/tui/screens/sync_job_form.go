@@ -183,8 +183,7 @@ func (f *SyncJobForm) buildForm() {
 			remoteOptions = append(remoteOptions, huh.NewOption(r.Name+" ("+r.Type+")", r.Name))
 		}
 	} else {
-		// Add a placeholder option when no remotes are available
-		remoteOptions = append(remoteOptions, huh.NewOption("No remotes available - run 'rclone config'", ""))
+		remoteOptions = append(remoteOptions, huh.NewOption("⚠ No remotes - run 'rclone config' first", ""))
 	}
 
 	// Direction options
@@ -292,7 +291,8 @@ func (f *SyncJobForm) buildForm() {
 				Title("Calendar Schedule").
 				Description("Systemd calendar format (e.g., daily, hourly, *-*-* 02:00:00)").
 				Placeholder("daily").
-				Value(&f.onCalendar),
+				Value(&f.onCalendar).
+				Validate(f.validateOnCalendar),
 
 			huh.NewInput().
 				Title("On Boot Delay").
@@ -411,6 +411,11 @@ func (f *SyncJobForm) validateDestPath(path string) error {
 	return nil
 }
 
+// validateOnCalendar validates the OnCalendar timer string.
+func (f *SyncJobForm) validateOnCalendar(calendar string) error {
+	return rclone.ValidateOnCalendar(calendar)
+}
+
 // expandSyncJobPath expands ~ to the user's home directory.
 func expandSyncJobPath(path string) string {
 	if strings.HasPrefix(path, "~/") {
@@ -492,7 +497,7 @@ func (f *SyncJobForm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (f *SyncJobForm) submitForm() tea.Msg {
 	// Validate that a source remote was selected
 	if f.sourceRemote == "" {
-		return SyncJobsErrorMsg{Err: fmt.Errorf("no source remote selected - please configure rclone remotes first")}
+		return SyncJobsErrorMsg{Err: fmt.Errorf("no source remote selected.\n\nTo add remotes:\n  1. Open a terminal and run: rclone config\n  2. Press 'n' to create a new remote\n  3. Follow the prompts to configure your cloud storage\n  4. Restart this application")}
 	}
 
 	// Build the source path
@@ -569,6 +574,17 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 	}
 	job.ModifiedAt = now
 
+	op := OperationCreate
+	if f.isEdit {
+		op = OperationUpdate
+	}
+
+	var rollbackData SyncJobRollbackData
+	if f.config != nil {
+		rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+		rollbackData = rollbackMgr.PrepareSyncJobRollback(job.ID, job.Name, op)
+	}
+
 	// Save to config
 	if f.config != nil {
 		if f.isEdit {
@@ -594,25 +610,53 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 	if f.generator != nil {
 		_, _, err := f.generator.WriteSyncUnits(&job)
 		if err != nil {
+			if f.config != nil {
+				rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+				_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
+			}
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to generate unit files: %w", err)}
 		}
 
 		// Reload systemd daemon
 		if f.manager != nil {
-			_ = f.manager.DaemonReload()
+			if err := f.manager.DaemonReload(); err != nil {
+				if f.config != nil {
+					rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+					_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
+				}
+				return SyncJobsErrorMsg{Err: fmt.Errorf("failed to reload systemd daemon: %w", err)}
+			}
 
 			serviceName := f.generator.ServiceName(job.ID, "sync") + ".service"
 			timerName := f.generator.ServiceName(job.ID, "sync") + ".timer"
 
 			// Enable timer if requested
 			if job.Enabled {
-				_ = f.manager.EnableTimer(timerName)
-				_ = f.manager.StartTimer(timerName)
+				if err := f.manager.EnableTimer(timerName); err != nil {
+					if f.config != nil {
+						rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+						_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
+					}
+					return SyncJobsErrorMsg{Err: fmt.Errorf("failed to enable timer: %w", err)}
+				}
+				if err := f.manager.StartTimer(timerName); err != nil {
+					if f.config != nil {
+						rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+						_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
+					}
+					return SyncJobsErrorMsg{Err: fmt.Errorf("failed to start timer: %w", err)}
+				}
 			}
 
 			// Run immediately if requested
 			if f.runImmediately {
-				_ = f.manager.RunSyncNow(serviceName)
+				if err := f.manager.RunSyncNow(serviceName); err != nil {
+					if f.config != nil {
+						rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+						_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
+					}
+					return SyncJobsErrorMsg{Err: fmt.Errorf("failed to run sync job: %w", err)}
+				}
 			}
 		}
 	}
