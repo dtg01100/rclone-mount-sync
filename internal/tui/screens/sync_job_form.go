@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
@@ -29,57 +29,59 @@ type SyncJobForm struct {
 	height    int
 
 	// Sync job being edited (nil for create)
-	job     *models.SyncJobConfig
-	isEdit  bool
+	job    *models.SyncJobConfig
+	isEdit bool
 
 	// Services
-	config    *config.Config
-	generator *systemd.Generator
-	manager   *systemd.Manager
+	config       *config.Config
+	generator    *systemd.Generator
+	manager      *systemd.Manager
+	rcloneClient *rclone.Client
 
 	// Available remotes
 	remotes []rclone.Remote
 
 	// Form data - Basic Info
-	name           string
-	sourceRemote   string
-	sourcePath     string
-	destRemote     string
-	destPath       string
+	name         string
+	sourceRemote string
+	sourcePath   string
+	destRemote   string
+	destPath     string
 
 	// Form data - Sync Options
-	direction         string
-	deleteMode        string
-	createEmptyDirs   bool
-	dryRun            bool
-	trackRenames      bool
+	direction       string
+	deleteMode      string
+	createEmptyDirs bool
+	dryRun          bool
+	trackRenames    bool
 
 	// Form data - Schedule
-	scheduleType    string
-	onCalendar      string
-	onBootSec       string
-	onBoot          bool
+	scheduleType string
+	onCalendar   string
+	onBootSec    string
+	onBoot       bool
 
 	// Form data - Filters & Performance
-	excludePattern  string
-	maxTransfers    string
-	bandwidthLimit  string
-	logLevel        string
+	excludePattern string
+	maxTransfers   string
+	bandwidthLimit string
+	logLevel       string
 
 	// Form data - Service Options
-	enabled          bool
-	runImmediately   bool
+	enabled        bool
+	runImmediately bool
 }
 
 // NewSyncJobForm creates a new sync job form.
-func NewSyncJobForm(job *models.SyncJobConfig, remotes []rclone.Remote, cfg *config.Config, gen *systemd.Generator, mgr *systemd.Manager, isEdit bool) *SyncJobForm {
+func NewSyncJobForm(job *models.SyncJobConfig, remotes []rclone.Remote, cfg *config.Config, gen *systemd.Generator, mgr *systemd.Manager, rcloneClient *rclone.Client, isEdit bool) *SyncJobForm {
 	f := &SyncJobForm{
-		job:      job,
-		isEdit:   isEdit,
-		config:   cfg,
-		generator: gen,
-		manager:  mgr,
-		remotes:  remotes,
+		job:          job,
+		isEdit:       isEdit,
+		config:       cfg,
+		generator:    gen,
+		manager:      mgr,
+		rcloneClient: rcloneClient,
+		remotes:      remotes,
 	}
 
 	// Set defaults from config
@@ -168,10 +170,17 @@ func parseRemotePath(s string) (remote, path string) {
 
 // buildForm builds the huh form.
 func (f *SyncJobForm) buildForm() {
-	// Build remote options
-	remoteOptions := make([]huh.Option[string], len(f.remotes))
-	for i, r := range f.remotes {
-		remoteOptions[i] = huh.NewOption(r.Name+" ("+r.Type+")", r.Name)
+	homeDir, _ := os.UserHomeDir()
+
+	// Build remote options - handle empty remotes gracefully
+	remoteOptions := make([]huh.Option[string], 0)
+	if len(f.remotes) > 0 {
+		for _, r := range f.remotes {
+			remoteOptions = append(remoteOptions, huh.NewOption(r.Name+" ("+r.Type+")", r.Name))
+		}
+	} else {
+		// Add a placeholder option when no remotes are available
+		remoteOptions = append(remoteOptions, huh.NewOption("No remotes available - run 'rclone config'", ""))
 	}
 
 	// Direction options
@@ -224,12 +233,15 @@ func (f *SyncJobForm) buildForm() {
 				Title("Source Path").
 				Description("Path on the source remote (e.g., /Photos)").
 				Placeholder("/").
-				Value(&f.sourcePath),
+				Value(&f.sourcePath).
+				SuggestionsFunc(f.getRemotePathSuggestions, &f.sourceRemote),
 
-			huh.NewInput().
+			huh.NewFilePicker().
 				Title("Destination Path").
-				Description("Local path or remote:path for destination").
-				Placeholder("~/Backup/Photos or remote:/Backup").
+				Description("Local directory for synced files. Press Enter to browse, Esc to close browser.").
+				DirAllowed(true).
+				FileAllowed(false).
+				CurrentDirectory(homeDir).
 				Value(&f.destPath).
 				Validate(f.validateDestPath),
 		).Title("Step 1: Basic Info"),
@@ -397,6 +409,31 @@ func expandSyncJobPath(path string) string {
 	return path
 }
 
+// getRemotePathSuggestions returns dynamic suggestions for remote paths.
+func (f *SyncJobForm) getRemotePathSuggestions() []string {
+	staticSuggestions := []string{"/", "/Photos", "/Documents", "/Backup", "/Sync"}
+
+	if f.rcloneClient == nil || f.sourceRemote == "" {
+		return staticSuggestions
+	}
+
+	if f.sourceRemote == "" {
+		return staticSuggestions
+	}
+
+	directories, err := f.rcloneClient.ListRootDirectories(f.sourceRemote)
+	if err != nil {
+		return staticSuggestions
+	}
+
+	result := []string{"/"}
+	for _, dir := range directories {
+		result = append(result, "/"+dir)
+	}
+
+	return result
+}
+
 // SetSize sets the form size.
 func (f *SyncJobForm) SetSize(width, height int) {
 	f.width = width
@@ -439,6 +476,11 @@ func (f *SyncJobForm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // submitForm submits the form and creates/updates the sync job.
 func (f *SyncJobForm) submitForm() tea.Msg {
+	// Validate that a source remote was selected
+	if f.sourceRemote == "" {
+		return SyncJobsErrorMsg{Err: fmt.Errorf("no source remote selected - please configure rclone remotes first")}
+	}
+
 	// Build the source path
 	source := f.sourceRemote + ":" + f.sourcePath
 
@@ -493,9 +535,9 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 			LogLevel:         f.logLevel,
 		},
 		Schedule: models.ScheduleConfig{
-			Type:        scheduleType,
+			Type:       scheduleType,
 			OnCalendar: f.onCalendar,
-			OnBootSec:   f.onBootSec,
+			OnBootSec:  f.onBootSec,
 		},
 		Enabled: f.enabled,
 	}
@@ -526,6 +568,9 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 		}
 		if err := f.config.Save(); err != nil {
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to save config: %w", err)}
+		}
+		if !strings.Contains(f.destPath, ":") {
+			f.config.AddRecentPath(f.destPath)
 		}
 	}
 
@@ -598,7 +643,7 @@ func (f *SyncJobForm) View() string {
 		Render(header)
 
 	// Add help text
-	help := components.Styles.HelpText.Render("Tab: next field  Shift+Tab: previous field  Enter: confirm  Esc: cancel")
+	help := components.Styles.HelpText.Render("Tab: next field  Shift+Tab: previous field  Enter: confirm/browse  Esc: cancel  Ctrl+E: accept suggestion")
 	help = lipgloss.NewStyle().
 		Width(f.width).
 		Align(lipgloss.Center).

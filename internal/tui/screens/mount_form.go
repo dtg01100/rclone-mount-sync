@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/huh"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
@@ -22,55 +22,57 @@ import (
 // MountForm handles mount creation and editing using huh.
 type MountForm struct {
 	// Form state
-	form       *huh.Form
-	done       bool
-	cancelled  bool
-	width      int
-	height     int
+	form      *huh.Form
+	done      bool
+	cancelled bool
+	width     int
+	height    int
 
 	// Mount being edited (nil for create)
-	mount      *models.MountConfig
-	isEdit     bool
+	mount  *models.MountConfig
+	isEdit bool
 
 	// Services
-	config     *config.Config
-	generator  *systemd.Generator
-	manager    *systemd.Manager
+	config       *config.Config
+	generator    *systemd.Generator
+	manager      *systemd.Manager
+	rcloneClient *rclone.Client
 
 	// Available remotes
-	remotes    []rclone.Remote
+	remotes []rclone.Remote
 
 	// Form data
-	name           string
-	remote         string
-	remotePath     string
-	mountPoint     string
-	vfsCacheMode   string
-	vfsCacheMaxAge string
+	name            string
+	remote          string
+	remotePath      string
+	mountPoint      string
+	vfsCacheMode    string
+	vfsCacheMaxAge  string
 	vfsCacheMaxSize string
-	vfsWriteBack   string
-	bufferSize     string
-	allowOther     bool
-	allowRoot      bool
-	umask          string
-	readOnly       bool
-	noModtime      bool
-	noChecksum     bool
-	logLevel       string
-	extraArgs      string
-	autoStart      bool
-	enabled        bool
+	vfsWriteBack    string
+	bufferSize      string
+	allowOther      bool
+	allowRoot       bool
+	umask           string
+	readOnly        bool
+	noModtime       bool
+	noChecksum      bool
+	logLevel        string
+	extraArgs       string
+	autoStart       bool
+	enabled         bool
 }
 
 // NewMountForm creates a new mount form.
-func NewMountForm(mount *models.MountConfig, remotes []rclone.Remote, cfg *config.Config, gen *systemd.Generator, mgr *systemd.Manager, isEdit bool) *MountForm {
+func NewMountForm(mount *models.MountConfig, remotes []rclone.Remote, cfg *config.Config, gen *systemd.Generator, mgr *systemd.Manager, rcloneClient *rclone.Client, isEdit bool) *MountForm {
 	f := &MountForm{
-		mount:     mount,
-		isEdit:    isEdit,
-		config:    cfg,
-		generator: gen,
-		manager:   mgr,
-		remotes:   remotes,
+		mount:        mount,
+		isEdit:       isEdit,
+		config:       cfg,
+		generator:    gen,
+		manager:      mgr,
+		rcloneClient: rcloneClient,
+		remotes:      remotes,
 	}
 
 	// Set defaults from config
@@ -123,10 +125,15 @@ func NewMountForm(mount *models.MountConfig, remotes []rclone.Remote, cfg *confi
 
 // buildForm builds the huh form.
 func (f *MountForm) buildForm() {
-	// Build remote options
-	remoteOptions := make([]huh.Option[string], len(f.remotes))
-	for i, r := range f.remotes {
-		remoteOptions[i] = huh.NewOption(r.Name+" ("+r.Type+")", r.Name+":")
+	// Build remote options - handle empty remotes gracefully
+	remoteOptions := make([]huh.Option[string], 0)
+	if len(f.remotes) > 0 {
+		for _, r := range f.remotes {
+			remoteOptions = append(remoteOptions, huh.NewOption(r.Name+" ("+r.Type+")", r.Name+":"))
+		}
+	} else {
+		// Add a placeholder option when no remotes are available
+		remoteOptions = append(remoteOptions, huh.NewOption("No remotes available - run 'rclone config'", ""))
 	}
 
 	// VFS Cache Mode options
@@ -154,23 +161,26 @@ func (f *MountForm) buildForm() {
 				Placeholder("e.g., Google Drive").
 				Value(&f.name).
 				Validate(f.validateName),
-			
+
 			huh.NewSelect[string]().
 				Title("Remote").
 				Description("Select the rclone remote to mount").
 				Options(remoteOptions...).
 				Value(&f.remote),
-			
+
 			huh.NewInput().
 				Title("Remote Path").
 				Description("Path on the remote (e.g., / or /Photos)").
 				Placeholder("/").
+				SuggestionsFunc(f.getRemotePathSuggestions, &f.remote).
 				Value(&f.remotePath),
-			
-			huh.NewInput().
+
+			huh.NewFilePicker().
 				Title("Mount Point").
-				Description("Local directory where the remote will be mounted").
-				Placeholder("~/mnt/remote").
+				Description("Local directory where the remote will be mounted. Press Enter to browse, Esc to close browser.").
+				DirAllowed(true).
+				FileAllowed(false).
+				CurrentDirectory(components.ExpandHome("~/mnt")).
 				Value(&f.mountPoint).
 				Validate(f.validateMountPoint),
 		).Title("Step 1: Basic Configuration"),
@@ -182,25 +192,25 @@ func (f *MountForm) buildForm() {
 				Description("Caching mode for VFS (recommended: full)").
 				Options(vfsCacheOptions...).
 				Value(&f.vfsCacheMode),
-			
+
 			huh.NewInput().
 				Title("VFS Cache Max Size").
 				Description("Maximum size of the cache (e.g., 10G)").
 				Placeholder("10G").
 				Value(&f.vfsCacheMaxSize),
-			
+
 			huh.NewInput().
 				Title("VFS Cache Max Age").
 				Description("Maximum age of cache items (e.g., 24h)").
 				Placeholder("24h").
 				Value(&f.vfsCacheMaxAge),
-			
+
 			huh.NewInput().
 				Title("VFS Write Back").
 				Description("Time to wait before writing files (e.g., 5s)").
 				Placeholder("5s").
 				Value(&f.vfsWriteBack),
-			
+
 			huh.NewInput().
 				Title("Buffer Size").
 				Description("Buffer size for reading (e.g., 16M)").
@@ -214,18 +224,18 @@ func (f *MountForm) buildForm() {
 				Title("Allow Other").
 				Description("Allow other users to access the mount").
 				Value(&f.allowOther),
-			
+
 			huh.NewConfirm().
 				Title("Allow Root").
 				Description("Allow root to access the mount").
 				Value(&f.allowRoot),
-			
+
 			huh.NewInput().
 				Title("Umask").
 				Description("File permission mask (e.g., 002)").
 				Placeholder("002").
 				Value(&f.umask),
-			
+
 			huh.NewConfirm().
 				Title("Read Only").
 				Description("Mount the remote as read-only").
@@ -238,18 +248,18 @@ func (f *MountForm) buildForm() {
 				Title("No ModTime").
 				Description("Don't read/write modification times").
 				Value(&f.noModtime),
-			
+
 			huh.NewConfirm().
 				Title("No Checksum").
 				Description("Don't verify checksums").
 				Value(&f.noChecksum),
-			
+
 			huh.NewSelect[string]().
 				Title("Log Level").
 				Description("Logging verbosity").
 				Options(logLevelOptions...).
 				Value(&f.logLevel),
-			
+
 			huh.NewInput().
 				Title("Extra Arguments").
 				Description("Additional rclone arguments").
@@ -263,7 +273,7 @@ func (f *MountForm) buildForm() {
 				Title("Auto Start").
 				Description("Start the mount automatically on login").
 				Value(&f.autoStart),
-			
+
 			huh.NewConfirm().
 				Title("Enable Service").
 				Description("Enable the systemd service").
@@ -329,6 +339,32 @@ func expandPath(path string) string {
 	return path
 }
 
+// getRemotePathSuggestions returns dynamic suggestions for remote paths.
+func (f *MountForm) getRemotePathSuggestions() []string {
+	staticSuggestions := []string{"/", "/Photos", "/Documents", "/Backup"}
+
+	if f.rcloneClient == nil || f.remote == "" {
+		return staticSuggestions
+	}
+
+	remoteName := strings.TrimSuffix(f.remote, ":")
+	if remoteName == "" {
+		return staticSuggestions
+	}
+
+	directories, err := f.rcloneClient.ListRootDirectories(remoteName)
+	if err != nil {
+		return staticSuggestions
+	}
+
+	result := []string{"/"}
+	for _, dir := range directories {
+		result = append(result, "/"+dir)
+	}
+
+	return result
+}
+
 // SetSize sets the form size.
 func (f *MountForm) SetSize(width, height int) {
 	f.width = width
@@ -371,6 +407,11 @@ func (f *MountForm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // submitForm submits the form and creates/updates the mount.
 func (f *MountForm) submitForm() tea.Msg {
+	// Validate that a remote was selected
+	if f.remote == "" {
+		return MountsErrorMsg{Err: fmt.Errorf("no remote selected - please configure rclone remotes first")}
+	}
+
 	// Build the mount configuration
 	mount := models.MountConfig{
 		Name:       f.name,
@@ -423,6 +464,7 @@ func (f *MountForm) submitForm() tea.Msg {
 		if err := f.config.Save(); err != nil {
 			return MountsErrorMsg{Err: fmt.Errorf("failed to save config: %w", err)}
 		}
+		f.config.AddRecentPath(f.mountPoint)
 	}
 
 	// Generate systemd service file
@@ -484,7 +526,7 @@ func (f *MountForm) View() string {
 		Render(header)
 
 	// Add help text
-	help := components.Styles.HelpText.Render("Tab: next field  Shift+Tab: previous field  Enter: confirm  Esc: cancel")
+	help := components.Styles.HelpText.Render("Tab: next field  Shift+Tab: previous field  Enter: confirm/browse  Esc: cancel  Ctrl+E: accept suggestion")
 	help = lipgloss.NewStyle().
 		Width(f.width).
 		Align(lipgloss.Center).
