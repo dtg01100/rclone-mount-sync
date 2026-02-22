@@ -8,26 +8,27 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/spf13/viper"
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
 	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
+	"github.com/google/uuid"
+	"github.com/spf13/viper"
 )
 
 // Config represents the application configuration.
 type Config struct {
-	Version  string                   `mapstructure:"version"`
-	Mounts   []models.MountConfig     `mapstructure:"mounts"`
-	SyncJobs []models.SyncJobConfig   `mapstructure:"sync_jobs"`
-	Settings Settings                 `mapstructure:"settings"`
-	Defaults DefaultConfig            `mapstructure:"defaults"`
+	Version  string                 `mapstructure:"version"`
+	Mounts   []models.MountConfig   `mapstructure:"mounts"`
+	SyncJobs []models.SyncJobConfig `mapstructure:"sync_jobs"`
+	Settings Settings               `mapstructure:"settings"`
+	Defaults DefaultConfig          `mapstructure:"defaults"`
 }
 
 // Settings holds application-wide settings.
 type Settings struct {
-	RcloneBinaryPath string `mapstructure:"rclone_binary_path"`
-	DefaultMountDir  string `mapstructure:"default_mount_dir"`
-	Editor           string `mapstructure:"editor"`
+	RcloneBinaryPath string   `mapstructure:"rclone_binary_path"`
+	DefaultMountDir  string   `mapstructure:"default_mount_dir"`
+	Editor           string   `mapstructure:"editor"`
+	RecentPaths      []string `mapstructure:"recent_paths"`
 }
 
 // DefaultConfig holds default settings for mounts and sync jobs.
@@ -38,9 +39,9 @@ type DefaultConfig struct {
 
 // MountDefaults holds default mount settings.
 type MountDefaults struct {
-	LogLevel      string `mapstructure:"log_level"`
-	VFSCacheMode  string `mapstructure:"vfs_cache_mode"`
-	BufferSize    string `mapstructure:"buffer_size"`
+	LogLevel     string `mapstructure:"log_level"`
+	VFSCacheMode string `mapstructure:"vfs_cache_mode"`
+	BufferSize   string `mapstructure:"buffer_size"`
 }
 
 // SyncDefaults holds default sync job settings.
@@ -96,7 +97,6 @@ func (c *Config) Save() error {
 		return fmt.Errorf("failed to get config directory: %w", err)
 	}
 
-	// Ensure config directory exists
 	if err := utils.EnsureDir(configDir); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
@@ -109,14 +109,20 @@ func (c *Config) Save() error {
 	configPath := filepath.Join(configDir, "config.yaml")
 	v.SetConfigFile(configPath)
 
-	// Set all config values
 	v.Set("version", c.Version)
 	v.Set("mounts", c.Mounts)
 	v.Set("sync_jobs", c.SyncJobs)
-	v.Set("settings", c.Settings)
-	v.Set("defaults", c.Defaults)
+	v.Set("settings.rclone_binary_path", c.Settings.RcloneBinaryPath)
+	v.Set("settings.default_mount_dir", c.Settings.DefaultMountDir)
+	v.Set("settings.editor", c.Settings.Editor)
+	v.Set("settings.recent_paths", c.Settings.RecentPaths)
+	v.Set("defaults.mount.log_level", c.Defaults.Mount.LogLevel)
+	v.Set("defaults.mount.vfs_cache_mode", c.Defaults.Mount.VFSCacheMode)
+	v.Set("defaults.mount.buffer_size", c.Defaults.Mount.BufferSize)
+	v.Set("defaults.sync.log_level", c.Defaults.Sync.LogLevel)
+	v.Set("defaults.sync.transfers", c.Defaults.Sync.Transfers)
+	v.Set("defaults.sync.checkers", c.Defaults.Sync.Checkers)
 
-	// Write config file
 	if err := v.WriteConfigAs(configPath); err != nil {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
@@ -212,8 +218,24 @@ func (c *Config) GetSyncJob(name string) *models.SyncJobConfig {
 	return nil
 }
 
+// AddRecentPath adds a path to the front of the recent paths list,
+// removes duplicates, and keeps only the 10 most recent paths.
+func (c *Config) AddRecentPath(path string) {
+	var result []string
+	result = append(result, path)
+	for _, p := range c.Settings.RecentPaths {
+		if p != path {
+			result = append(result, p)
+		}
+	}
+	if len(result) > 10 {
+		result = result[:10]
+	}
+	c.Settings.RecentPaths = result
+}
+
 // getConfigDir returns the configuration directory path.
-func getConfigDir() (string, error) {
+var getConfigDir = func() (string, error) {
 	configDir, err := os.UserConfigDir()
 	if err != nil {
 		return "", err
@@ -227,6 +249,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("settings.rclone_binary_path", "")
 	v.SetDefault("settings.default_mount_dir", "~/mnt")
 	v.SetDefault("settings.editor", "")
+	v.SetDefault("settings.recent_paths", []string{})
 	v.SetDefault("defaults.mount.log_level", "INFO")
 	v.SetDefault("defaults.mount.vfs_cache_mode", "full")
 	v.SetDefault("defaults.mount.buffer_size", "16M")
@@ -238,19 +261,20 @@ func setDefaults(v *viper.Viper) {
 // newConfigWithDefaults creates a new Config with default values.
 func newConfigWithDefaults() *Config {
 	return &Config{
-		Version: "1.0",
-		Mounts:  []models.MountConfig{},
+		Version:  "1.0",
+		Mounts:   []models.MountConfig{},
 		SyncJobs: []models.SyncJobConfig{},
 		Settings: Settings{
 			RcloneBinaryPath: "",
 			DefaultMountDir:  "~/mnt",
 			Editor:           "",
+			RecentPaths:      []string{},
 		},
 		Defaults: DefaultConfig{
 			Mount: MountDefaults{
-				LogLevel:      "INFO",
-				VFSCacheMode:  "full",
-				BufferSize:    "16M",
+				LogLevel:     "INFO",
+				VFSCacheMode: "full",
+				BufferSize:   "16M",
 			},
 			Sync: SyncDefaults{
 				LogLevel:  "INFO",
