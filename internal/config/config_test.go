@@ -2001,3 +2001,159 @@ func TestCreateBackupSuccess(t *testing.T) {
 		t.Errorf("Backup mode = %v, want %v", backupInfo.Mode(), srcInfo.Mode())
 	}
 }
+
+func TestReloadConfig(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-reload-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origGetConfigDir := getConfigDir
+	getConfigDir = func() (string, error) { return tmpDir, nil }
+	defer func() { getConfigDir = origGetConfigDir }()
+
+	cfg := newConfigWithDefaults()
+	cfg.Settings.DefaultMountDir = "/original/mnt"
+	cfg.Mounts = []models.MountConfig{
+		{Name: "mount1", Remote: "gdrive:", MountPoint: "/mnt/1"},
+	}
+
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	cfg.Settings.DefaultMountDir = "/modified/mnt"
+	cfg.Mounts = []models.MountConfig{
+		{Name: "mount1", Remote: "gdrive:", MountPoint: "/mnt/1"},
+		{Name: "mount2", Remote: "dropbox:", MountPoint: "/mnt/2"},
+	}
+
+	if err := cfg.Reload(); err != nil {
+		t.Fatalf("Reload() error = %v", err)
+	}
+
+	if cfg.Settings.DefaultMountDir != "/original/mnt" {
+		t.Errorf("DefaultMountDir = %q, want %q", cfg.Settings.DefaultMountDir, "/original/mnt")
+	}
+
+	if len(cfg.Mounts) != 1 {
+		t.Errorf("Mounts count = %d, want 1", len(cfg.Mounts))
+	}
+}
+
+func TestReloadConfigNoConfigFile(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-reload-nofile-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origGetConfigDir := getConfigDir
+	getConfigDir = func() (string, error) { return tmpDir, nil }
+	defer func() { getConfigDir = origGetConfigDir }()
+
+	cfg := newConfigWithDefaults()
+	cfg.Mounts = []models.MountConfig{
+		{Name: "existing-mount", Remote: "gdrive:", MountPoint: "/mnt/existing"},
+	}
+
+	err = cfg.Reload()
+	if err != nil {
+		t.Fatalf("Reload() with no config file error = %v", err)
+	}
+
+	if cfg.Mounts != nil {
+		t.Errorf("Mounts should be nil after reload with no config file, got %v", cfg.Mounts)
+	}
+}
+
+func TestReloadConfigModifiedFile(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-reload-modified-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origGetConfigDir := getConfigDir
+	getConfigDir = func() (string, error) { return tmpDir, nil }
+	defer func() { getConfigDir = origGetConfigDir }()
+
+	cfg := newConfigWithDefaults()
+	cfg.Settings.DefaultMountDir = "/initial/mnt"
+	cfg.Settings.Editor = "vim"
+
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	configPath := filepath.Join(tmpDir, "config.yaml")
+	modifiedContent := `version: "1.0"
+settings:
+  default_mount_dir: /modified/mnt
+  editor: nano
+  rclone_binary_path: ""
+  recent_paths: []
+defaults:
+  mount:
+    log_level: INFO
+    vfs_cache_mode: full
+    buffer_size: 16M
+  sync:
+    log_level: INFO
+    transfers: 4
+    checkers: 8
+mounts: []
+sync_jobs: []
+`
+	if err := os.WriteFile(configPath, []byte(modifiedContent), 0644); err != nil {
+		t.Fatalf("Failed to modify config file: %v", err)
+	}
+
+	if err := cfg.Reload(); err != nil {
+		t.Fatalf("Reload() error = %v", err)
+	}
+
+	if cfg.Settings.DefaultMountDir != "/modified/mnt" {
+		t.Errorf("DefaultMountDir = %q, want %q", cfg.Settings.DefaultMountDir, "/modified/mnt")
+	}
+
+	if cfg.Settings.Editor != "nano" {
+		t.Errorf("Editor = %q, want %q", cfg.Settings.Editor, "nano")
+	}
+}
+
+func TestReloadConfigWithSyncJobs(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-reload-sync-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	origGetConfigDir := getConfigDir
+	getConfigDir = func() (string, error) { return tmpDir, nil }
+	defer func() { getConfigDir = origGetConfigDir }()
+
+	cfg := newConfigWithDefaults()
+	cfg.SyncJobs = []models.SyncJobConfig{
+		{Name: "sync1", Source: "gdrive:/a", Destination: "/backup/a"},
+	}
+
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Save() error = %v", err)
+	}
+
+	cfg.SyncJobs = []models.SyncJobConfig{}
+
+	if err := cfg.Reload(); err != nil {
+		t.Fatalf("Reload() error = %v", err)
+	}
+
+	if len(cfg.SyncJobs) != 1 {
+		t.Errorf("SyncJobs count = %d, want 1", len(cfg.SyncJobs))
+	}
+
+	if cfg.SyncJobs[0].Name != "sync1" {
+		t.Errorf("SyncJob name = %q, want %q", cfg.SyncJobs[0].Name, "sync1")
+	}
+}

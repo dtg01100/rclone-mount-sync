@@ -1263,3 +1263,216 @@ func TestSyncJobForm_NoRemotesShowsHelpfulMessage(t *testing.T) {
 		t.Errorf("error should mention 'rclone config', got: %s", errMsg.Err.Error())
 	}
 }
+
+// Tests for validateOnCalendar function
+func TestSyncJobForm_ValidateOnCalendar(t *testing.T) {
+	tests := []struct {
+		name        string
+		calendar    string
+		expectError bool
+	}{
+		{
+			name:        "Empty string is invalid",
+			calendar:    "",
+			expectError: true,
+		},
+		{
+			name:        "Daily is valid",
+			calendar:    "daily",
+			expectError: false,
+		},
+		{
+			name:        "Weekly is valid",
+			calendar:    "weekly",
+			expectError: false,
+		},
+		{
+			name:        "Monthly is valid",
+			calendar:    "monthly",
+			expectError: false,
+		},
+		{
+			name:        "Hourly is valid",
+			calendar:    "hourly",
+			expectError: false,
+		},
+		{
+			name:        "Specific time daily",
+			calendar:    "*-*-* 00:00:00",
+			expectError: false,
+		},
+		{
+			name:        "Weekday at specific time",
+			calendar:    "Mon *-*-* 09:00:00",
+			expectError: false,
+		},
+		{
+			name:        "Quarter hour",
+			calendar:    "quarterly",
+			expectError: false,
+		},
+		{
+			name:        "Semi-annually",
+			calendar:    "semiannually",
+			expectError: false,
+		},
+		{
+			name:        "Annually",
+			calendar:    "annually",
+			expectError: false,
+		},
+		{
+			name:        "Specific date yearly",
+			calendar:    "*-01-01 00:00:00",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+			err := form.validateOnCalendar(tt.calendar)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// Tests for validateMaxTransfers function
+func TestSyncJobForm_ValidateMaxTransfers(t *testing.T) {
+	tests := []struct {
+		name        string
+		value       string
+		expectError bool
+		errContains string
+	}{
+		{
+			name:        "Empty string is valid",
+			value:       "",
+			expectError: false,
+		},
+		{
+			name:        "Valid positive number",
+			value:       "4",
+			expectError: false,
+		},
+		{
+			name:        "Valid large number",
+			value:       "100",
+			expectError: false,
+		},
+		{
+			name:        "Valid number with whitespace",
+			value:       " 8 ",
+			expectError: false,
+		},
+		{
+			name:        "Zero is invalid",
+			value:       "0",
+			expectError: true,
+			errContains: "greater than 0",
+		},
+		{
+			name:        "Negative number is invalid",
+			value:       "-1",
+			expectError: true,
+			errContains: "greater than 0",
+		},
+		{
+			name:        "Non-numeric is invalid",
+			value:       "abc",
+			expectError: true,
+			errContains: "valid number",
+		},
+		{
+			name:        "Float is invalid",
+			value:       "4.5",
+			expectError: true,
+			errContains: "valid number",
+		},
+		{
+			name:        "Number with spaces only",
+			value:       "   12   ",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+			err := form.validateMaxTransfers(tt.value)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				} else if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error = %q, should contain %q", err.Error(), tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// Test validateOnCalendar with various systemd calendar expressions
+func TestSyncJobForm_ValidateOnCalendar_SystemdFormats(t *testing.T) {
+	tests := []struct {
+		name        string
+		calendar    string
+		expectError bool
+	}{
+		{
+			name:        "Full datetime format",
+			calendar:    "2024-01-01 00:00:00",
+			expectError: false,
+		},
+		{
+			name:        "Time only with wildcard date",
+			calendar:    "*-*-* 12:30:00",
+			expectError: false,
+		},
+		{
+			name:        "Weekday with time",
+			calendar:    "Mon,Fri *-*-* 09:00:00",
+			expectError: false,
+		},
+		{
+			name:        "Monthly on specific day",
+			calendar:    "*-*-15 00:00:00",
+			expectError: false,
+		},
+		{
+			name:        "Yearly on specific date",
+			calendar:    "*-06-01 00:00:00",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+			err := form.validateOnCalendar(tt.calendar)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error for calendar %q: %v", tt.calendar, err)
+				}
+			}
+		})
+	}
+}
