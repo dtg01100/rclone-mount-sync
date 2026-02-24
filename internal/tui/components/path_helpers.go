@@ -118,3 +118,117 @@ func ContractHome(path string) string {
 
 	return path
 }
+
+// GetParentDirectory returns the parent directory of the given path.
+// If the path is already at root, it returns the root path.
+func GetParentDirectory(path string) string {
+	if path == "" {
+		return "/"
+	}
+
+	// Expand the path first
+	expandedPath := ExpandHome(path)
+
+	// Get the parent directory
+	parent := filepath.Dir(expandedPath)
+
+	// filepath.Dir returns "." for empty paths, handle that
+	if parent == "." {
+		return "/"
+	}
+
+	return parent
+}
+
+// GetBreadcrumbSegments splits a path into segments for breadcrumb navigation.
+// It returns a slice of path segment names suitable for display.
+func GetBreadcrumbSegments(path string) []string {
+	if path == "" {
+		return []string{}
+	}
+
+	// Expand the path first
+	expandedPath := ExpandHome(path)
+
+	// Handle home directory specially
+	homeDir, _ := os.UserHomeDir()
+	var segments []string
+	
+	if homeDir != "" && strings.HasPrefix(expandedPath, homeDir) {
+		segments = append(segments, "~")
+		remaining := strings.TrimPrefix(expandedPath, homeDir)
+		remaining = strings.Trim(remaining, string(filepath.Separator))
+		if remaining != "" {
+			parts := strings.Split(remaining, string(filepath.Separator))
+			for _, part := range parts {
+				if part != "" {
+					segments = append(segments, part)
+				}
+			}
+		}
+		return segments
+	}
+
+	// Handle absolute paths
+	if filepath.IsAbs(expandedPath) {
+		// Start with root indicator
+		parts := strings.Split(expandedPath, string(filepath.Separator))
+		for _, part := range parts {
+			if part != "" {
+				segments = append(segments, part)
+			}
+		}
+		// If path is just root, return empty (breadcrumb will show just home icon)
+		if len(segments) == 0 && expandedPath == "/" {
+			return []string{}
+		}
+		return segments
+	}
+
+	// Relative path - just split by separator
+	parts := strings.Split(expandedPath, string(filepath.Separator))
+	for _, part := range parts {
+		if part != "" {
+			segments = append(segments, part)
+		}
+	}
+
+	return segments
+}
+
+// PathExists checks if a path exists on the filesystem.
+func PathExists(path string) bool {
+	_, err := os.Stat(ExpandHome(path))
+	return err == nil
+}
+
+// IsDirectory checks if a path is a directory.
+func IsDirectory(path string) bool {
+	info, err := os.Stat(ExpandHome(path))
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
+}
+
+// GetDisplayPath returns a shortened display-friendly version of a path.
+// It contracts the home directory and truncates if necessary.
+func GetDisplayPath(path string, maxLen int) string {
+	if path == "" {
+		return ""
+	}
+
+	// Contract home directory first
+	displayPath := ContractHome(ExpandHome(path))
+
+	// Truncate if necessary
+	if maxLen > 0 && len(displayPath) > maxLen {
+		// Try to keep the end of the path (more relevant)
+		if maxLen <= 3 {
+			return displayPath[:maxLen]
+		}
+		return "..." + displayPath[len(displayPath)-maxLen+3:]
+	}
+
+	return displayPath
+}

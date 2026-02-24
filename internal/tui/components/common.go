@@ -407,3 +407,97 @@ func RenderWarning(text string) string {
 func RenderInfo(text string) string {
 	return Styles.Info.Render("ℹ " + text)
 }
+
+// FilePickerStyles contains styling for the enhanced file picker.
+var FilePickerStyles = struct {
+	// Breadcrumb styles
+	BreadcrumbBar lipgloss.Style
+	Breadcrumb    lipgloss.Style
+	BreadcrumbSep lipgloss.Style
+
+	// Quick jump bar styles
+	QuickJumpBar   lipgloss.Style
+	QuickJumpKey   lipgloss.Style
+	QuickJumpLabel lipgloss.Style
+
+	// Recent menu styles
+	RecentMenu            lipgloss.Style
+	RecentMenuHeader     lipgloss.Style
+	RecentMenuItem       lipgloss.Style
+	RecentMenuItemSelected lipgloss.Style
+
+	// File entry styles
+	FolderIcon lipgloss.Style
+	FileIcon   lipgloss.Style
+	ParentIcon lipgloss.Style
+
+	// Selection styles
+	SelectedEntry lipgloss.Style
+	Entry         lipgloss.Style
+
+	// Status styles
+	StatusLine lipgloss.Style
+	HelpBar    lipgloss.Style
+}{
+	// Breadcrumb styles
+	BreadcrumbBar: lipgloss.NewStyle().
+		Background(ColorSurface).
+		Padding(0, 1),
+	Breadcrumb: lipgloss.NewStyle().
+		Foreground(ColorPrimaryBright).
+		Bold(true),
+	BreadcrumbSep: lipgloss.NewStyle().
+		Foreground(ColorTextMuted).
+		Padding(0, 1),
+
+	// Quick jump bar styles
+	QuickJumpBar: lipgloss.NewStyle().
+		Background(ColorBackground).
+		Padding(0, 1),
+	QuickJumpKey: lipgloss.NewStyle().
+		Foreground(ColorAccent).
+		Bold(true),
+	QuickJumpLabel: lipgloss.NewStyle().
+		Foreground(ColorTextMuted),
+
+	// Recent menu styles
+	RecentMenu: lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ColorPrimary).
+		Background(ColorSurface).
+		Padding(0, 1),
+	RecentMenuHeader: lipgloss.NewStyle().
+		Foreground(ColorPrimaryBright).
+		Bold(true).
+		Padding(0, 0, 1, 0),
+	RecentMenuItem: lipgloss.NewStyle().
+		Foreground(ColorText),
+	RecentMenuItemSelected: lipgloss.NewStyle().
+		Foreground(ColorAccent).
+		Background(ColorPrimary).
+		Bold(true),
+
+	// File entry styles
+	FolderIcon: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("81")), // Light blue
+	FileIcon: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("248")), // Gray
+	ParentIcon: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("75")), // Blue
+
+	// Selection styles
+	SelectedEntry: lipgloss.NewStyle().
+		Foreground(ColorTextBright).
+		Background(ColorPrimary),
+	Entry: lipgloss.NewStyle().
+		Foreground(ColorText),
+
+	// Status styles
+	StatusLine: lipgloss.NewStyle().
+		Foreground(ColorText).
+		Background(ColorSurface).
+		Padding(0, 1),
+	HelpBar: lipgloss.NewStyle().
+		Foreground(ColorTextMuted).
+		Padding(0, 1),
+}

@@ -2,6 +2,8 @@ package components
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -621,3 +623,268 @@ func TestGetRemotePathSuggestions(t *testing.T) {
 		})
 	}
 }
+
+// Path helper tests
+
+func TestGetParentDirectory(t *testing.T) {
+	// Pre-compute home directory
+	homeDir, _ := os.UserHomeDir()
+	homeParent := filepath.Dir(homeDir)
+
+	tests := []struct {
+		name string
+		path string
+		want string
+	}{
+		{
+			name: "empty path returns root",
+			path: "",
+			want: "/",
+		},
+		{
+			name: "root stays root",
+			path: "/",
+			want: "/",
+		},
+		{
+			name: "simple parent",
+			path: "/tmp",
+			want: "/",
+		},
+		{
+			name: "deeper path",
+			path: "/tmp/test",
+			want: "/tmp",
+		},
+		{
+			name: "home directory",
+			path: "~",
+			want: homeParent,
+		},
+		{
+			name: "path under home",
+			path: "~/Documents",
+			want: homeDir,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetParentDirectory(tt.path)
+			if got != tt.want {
+				t.Errorf("GetParentDirectory(%q) = %q, want %q", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetBreadcrumbSegments(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		want []string
+	}{
+		{
+			name: "empty path",
+			path: "",
+			want: []string{},
+		},
+		{
+			name: "root",
+			path: "/",
+			want: []string{},
+		},
+		{
+			name: "single level",
+			path: "/tmp",
+			want: []string{"tmp"},
+		},
+		{
+			name: "multiple levels",
+			path: "/tmp/test/sub",
+			want: []string{"tmp", "test", "sub"},
+		},
+		{
+			name: "home directory",
+			path: "~",
+			want: []string{"~"},
+		},
+		{
+			name: "path under home",
+			path: "~/Documents",
+			want: []string{"~", "Documents"},
+		},
+		{
+			name: "deep path under home",
+			path: "~/Documents/Work/Project",
+			want: []string{"~", "Documents", "Work", "Project"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetBreadcrumbSegments(tt.path)
+			if len(got) != len(tt.want) {
+				t.Errorf("GetBreadcrumbSegments(%q) len = %d, want %d", tt.path, len(got), len(tt.want))
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("GetBreadcrumbSegments(%q)[%d] = %q, want %q", tt.path, i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestPathExists(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		want    bool
+	}{
+		{
+			name: "empty path",
+			path: "",
+			want: false,
+		},
+		{
+			name: "root exists",
+			path: "/",
+			want: true,
+		},
+		{
+			name: "tmp exists",
+			path: "/tmp",
+			want: true,
+		},
+		{
+			name: "nonexistent path",
+			path: "/nonexistent/path/12345",
+			want: false,
+		},
+		{
+			name: "home directory",
+			path: "~",
+			want: true,
+		},
+		{
+			name: "path under home",
+			path: "~/Documents",
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := PathExists(tt.path)
+			if got != tt.want {
+				t.Errorf("PathExists(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestIsDirectory(t *testing.T) {
+	tests := []struct {
+		name    string
+		path    string
+		want    bool
+	}{
+		{
+			name: "empty path",
+			path: "",
+			want: false,
+		},
+		{
+			name: "root is directory",
+			path: "/",
+			want: true,
+		},
+		{
+			name: "tmp is directory",
+			path: "/tmp",
+			want: true,
+		},
+		{
+			name: "nonexistent path",
+			path: "/nonexistent/path/12345",
+			want: false,
+		},
+		{
+			name: "passwd file is not directory",
+			path: "/etc/passwd",
+			want: false,
+		},
+		{
+			name: "home directory",
+			path: "~",
+			want: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := IsDirectory(tt.path)
+			if got != tt.want {
+				t.Errorf("IsDirectory(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestGetDisplayPath(t *testing.T) {
+	tests := []struct {
+		name   string
+		path   string
+		maxLen int
+		want   string
+	}{
+		{
+			name:   "empty path",
+			path:   "",
+			maxLen: 0,
+			want:   "",
+		},
+		{
+			name:   "no truncation needed",
+			path:   "/tmp",
+			maxLen: 0,
+			want:   "/tmp",
+		},
+		{
+			name:   "truncate long path",
+			path:   "/very/long/path/that/needs/truncation",
+			maxLen: 20,
+			want:   ".../needs/truncation",
+		},
+		{
+			name:   "truncate to very short",
+			path:   "/tmp/test",
+			maxLen: 3,
+			want:   "/tm",
+		},
+		{
+			name:   "home directory contracts",
+			path:   "~",
+			maxLen: 0,
+			want:   "~",
+		},
+		{
+			name:   "path under home contracts",
+			path:   "~/Documents",
+			maxLen: 0,
+			want:   "~/Documents",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := GetDisplayPath(tt.path, tt.maxLen)
+			if got != tt.want {
+				t.Errorf("GetDisplayPath(%q, %d) = %q, want %q", tt.path, tt.maxLen, got, tt.want)
+			}
+		})
+	}
+}
+

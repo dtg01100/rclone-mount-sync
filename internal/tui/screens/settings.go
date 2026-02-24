@@ -438,9 +438,9 @@ func (s *SettingsScreen) startExport() (tea.Model, tea.Cmd) {
 	s.exportPath = ""
 	s.form = huh.NewForm(
 		huh.NewGroup(
-			huh.NewFilePicker().
+			components.NewEnhancedFilePicker().
 				Title("Export Configuration").
-				Description("Select a directory and enter filename with .yaml or .json extension.").
+				Description("Select a directory and enter filename with .yaml or .json extension. Use quick jump keys: ~ (home), / (root), m (mnt), M (media), r (recent), Backspace (parent).").
 				DirAllowed(true).
 				FileAllowed(true).
 				CurrentDirectory(components.ExpandHome("~")).
@@ -457,9 +457,9 @@ func (s *SettingsScreen) startImport() (tea.Model, tea.Cmd) {
 	s.pendingImportPath = ""
 	s.form = huh.NewForm(
 		huh.NewGroup(
-			huh.NewFilePicker().
+			components.NewEnhancedFilePicker().
 				Title("Import Configuration").
-				Description("Select configuration file to import (.yaml or .json)").
+				Description("Select configuration file to import (.yaml or .json). Use quick jump keys: ~ (home), / (root), m (mnt), M (media), r (recent), Backspace (parent).").
 				DirAllowed(false).
 				FileAllowed(true).
 				CurrentDirectory(components.ExpandHome("~")).

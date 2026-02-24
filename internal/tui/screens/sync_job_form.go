@@ -238,9 +238,9 @@ func (f *SyncJobForm) buildForm() {
 				Value(&f.sourcePath).
 				SuggestionsFunc(f.getRemotePathSuggestions, &f.sourceRemote),
 
-			huh.NewFilePicker().
+			components.NewEnhancedFilePicker().
 				Title("Destination Path").
-				Description("Local directory for synced files. Press Enter to browse, Esc to close browser.").
+				Description("Local directory for synced files. Use quick jump keys: ~ (home), / (root), m (mnt), M (media), r (recent), Backspace (parent).").
 				DirAllowed(true).
 				FileAllowed(false).
 				CurrentDirectory(homeDir).

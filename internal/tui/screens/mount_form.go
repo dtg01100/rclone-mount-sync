@@ -174,9 +174,9 @@ func (f *MountForm) buildForm() {
 				SuggestionsFunc(f.getRemotePathSuggestions, &f.remote).
 				Value(&f.remotePath),
 
-			huh.NewFilePicker().
+			components.NewEnhancedFilePicker().
 				Title("Mount Point").
-				Description("Local directory where the remote will be mounted. Press Enter to browse, Esc to close browser.").
+				Description("Local directory where the remote will be mounted. Use quick jump keys: ~ (home), / (root), m (mnt), M (media), r (recent), Backspace (parent).").
 				DirAllowed(true).
 				FileAllowed(false).
 				CurrentDirectory(components.ExpandHome("~/mnt")).
