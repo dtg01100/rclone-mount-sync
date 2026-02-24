@@ -40,7 +40,7 @@ type ServicesScreen struct {
 	filteredServices []ServiceInfo
 
 	// Systemd manager and generator
-	manager   *systemd.Manager
+	manager   systemd.ServiceManager
 	generator *systemd.Generator
 
 	// Config for service types
@@ -163,7 +163,7 @@ func NewServicesScreen() *ServicesScreen {
 }
 
 // SetServices sets the required services for the screen.
-func (s *ServicesScreen) SetServices(cfg *config.Config, manager *systemd.Manager, generator *systemd.Generator) {
+func (s *ServicesScreen) SetServices(cfg *config.Config, manager systemd.ServiceManager, generator *systemd.Generator) {
 	s.cfg = cfg
 	s.manager = manager
 	s.generator = generator
@@ -266,7 +266,7 @@ func (s *ServicesScreen) loadServices() tea.Msg {
 // loadSystemdStatus loads the overall systemd user manager status.
 func (s *ServicesScreen) loadSystemdStatus() SystemdStatus {
 	status := SystemdStatus{
-		Available:   s.manager.IsSystemdAvailable(),
+		Available:   s.manager != nil && s.manager.IsSystemdAvailable(),
 		SessionType: "user@.service",
 	}
 

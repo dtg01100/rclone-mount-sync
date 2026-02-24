@@ -112,6 +112,47 @@ func Load() (*Config, error) {
 	return &cfg, nil
 }
 
+// Reload re-reads the configuration from disk and updates the Config.
+// This allows the application to pick up changes made externally (e.g., via CLI).
+func (c *Config) Reload() error {
+	configDir, err := getConfigDir()
+	if err != nil {
+		return fmt.Errorf("failed to get config directory: %w", err)
+	}
+
+	v := viper.New()
+	v.SetConfigName("config")
+	v.SetConfigType("yaml")
+	v.AddConfigPath(configDir)
+	v.AddConfigPath(".")
+
+	setDefaults(v)
+
+	if err := v.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			// Config file not found, clear the config
+			c.Mounts = nil
+			c.SyncJobs = nil
+			return nil
+		}
+		return fmt.Errorf("failed to read config file: %w", err)
+	}
+
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		return fmt.Errorf("failed to parse config: %w", err)
+	}
+
+	// Update the existing config struct
+	c.Version = cfg.Version
+	c.Mounts = cfg.Mounts
+	c.SyncJobs = cfg.SyncJobs
+	c.Settings = cfg.Settings
+	c.Defaults = cfg.Defaults
+
+	return nil
+}
+
 // Save writes the configuration to the default config file location.
 // It uses an atomic write pattern: writes to a temp file first, then renames.
 // A backup of the existing config is created before overwriting.

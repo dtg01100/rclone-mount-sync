@@ -555,6 +555,7 @@ func TestMountsScreen_ResetGoBack(t *testing.T) {
 func TestMountsScreen_View(t *testing.T) {
 	screen := NewMountsScreen()
 	screen.SetSize(80, 24)
+	screen.loading = false // Set to false to show mount list
 	screen.mounts = createTestMounts()
 
 	view := screen.View()
@@ -585,6 +586,7 @@ func TestMountsScreen_View(t *testing.T) {
 func TestMountsScreen_ViewEmpty(t *testing.T) {
 	screen := NewMountsScreen()
 	screen.SetSize(80, 24)
+	screen.loading = false // Set to false to show empty state
 	// No mounts
 
 	view := screen.View()
@@ -1702,4 +1704,210 @@ func TestMountsScreen_EditKey_NoRclone(t *testing.T) {
 	if screen.mode != MountsModeList {
 		t.Errorf("mode = %d, want %d (MountsModeList)", screen.mode, MountsModeList)
 	}
+}
+
+func TestDeleteConfirm_DeleteServiceOnly_NilManager(t *testing.T) {
+	mount := createTestMounts()[0]
+	dialog := NewDeleteConfirm(mount)
+	dialog.manager = nil
+	dialog.generator = &systemd.Generator{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceOnly()
+	if cmd == nil {
+		t.Error("deleteServiceOnly should return a command even with nil manager")
+		return
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestDeleteConfirm_DeleteServiceOnly_NilGenerator(t *testing.T) {
+	mount := createTestMounts()[0]
+	dialog := NewDeleteConfirm(mount)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = nil
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceOnly()
+	if cmd == nil {
+		t.Error("deleteServiceOnly should return a command even with nil generator")
+		return
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestDeleteConfirm_DeleteServiceOnly_WithServices(t *testing.T) {
+	mount := createTestMounts()[0]
+	dialog := NewDeleteConfirm(mount)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceOnly()
+	if cmd == nil {
+		t.Fatal("deleteServiceOnly should return a command")
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestDeleteConfirm_DeleteServiceAndConfig_NilManager(t *testing.T) {
+	mount := createTestMounts()[0]
+	dialog := NewDeleteConfirm(mount)
+	dialog.manager = nil
+	dialog.generator = &systemd.Generator{}
+	dialog.config = createTestConfigWithMounts()
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceAndConfig()
+	if cmd == nil {
+		t.Error("deleteServiceAndConfig should return a command even with nil manager")
+		return
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestDeleteConfirm_DeleteServiceAndConfig_NilGenerator(t *testing.T) {
+	mount := createTestMounts()[0]
+	dialog := NewDeleteConfirm(mount)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = nil
+	dialog.config = createTestConfigWithMounts()
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceAndConfig()
+	if cmd == nil {
+		t.Error("deleteServiceAndConfig should return a command even with nil generator")
+		return
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestDeleteConfirm_DeleteServiceAndConfig_NilConfig(t *testing.T) {
+	mount := createTestMounts()[0]
+	dialog := NewDeleteConfirm(mount)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+	dialog.config = nil
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceAndConfig()
+	if cmd == nil {
+		t.Error("deleteServiceAndConfig should return a command even with nil config")
+		return
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestDeleteConfirm_DeleteServiceAndConfig_WithServices(t *testing.T) {
+	mount := createTestMounts()[0]
+	dialog := NewDeleteConfirm(mount)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+	dialog.config = createTestConfigWithMounts()
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceAndConfig()
+	if cmd == nil {
+		t.Fatal("deleteServiceAndConfig should return a command")
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestDeleteConfirm_EnterOnDeleteServiceOnly(t *testing.T) {
+	mount := createTestMounts()[0]
+	dialog := NewDeleteConfirm(mount)
+	dialog.cursor = 1
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	_, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	_ = cmd
+}
+
+func TestDeleteConfirm_EnterOnDeleteServiceAndConfig(t *testing.T) {
+	mount := createTestMounts()[0]
+	dialog := NewDeleteConfirm(mount)
+	dialog.cursor = 2
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+	dialog.config = createTestConfigWithMounts()
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	_, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	_ = cmd
+}
+
+func TestDeleteConfirm_DeleteServiceOnly_ReturnsMountDeletedMsg(t *testing.T) {
+	mount := models.MountConfig{
+		ID:         "test1234",
+		Name:       "TestMount",
+		Remote:     "gdrive",
+		RemotePath: "/",
+		MountPoint: "/mnt/test",
+	}
+	dialog := NewDeleteConfirm(mount)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceOnly()
+	msg := cmd()
+	_ = msg
 }

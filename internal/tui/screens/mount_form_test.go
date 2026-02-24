@@ -11,6 +11,8 @@ import (
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
 	"github.com/dtg01100/rclone-mount-sync/internal/rclone"
+	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
+	"github.com/dtg01100/rclone-mount-sync/internal/tui/components"
 )
 
 // Helper function to create a test config
@@ -44,6 +46,18 @@ func createTestRemotes() []rclone.Remote {
 		{Name: "dropbox", Type: "dropbox", RootPath: "dropbox:"},
 		{Name: "s3", Type: "s3", RootPath: "s3:"},
 	}
+}
+
+// Helper function to create a test generator
+func createTestGenerator(t *testing.T) *systemd.Generator {
+	t.Helper()
+	tmpDir := t.TempDir()
+	return systemd.NewTestGenerator(tmpDir)
+}
+
+// Helper function to create a mock manager for testing
+func createTestManager() *systemd.MockManager {
+	return &systemd.MockManager{}
 }
 
 func TestNewMountForm_Create(t *testing.T) {
@@ -316,7 +330,7 @@ func TestExpandPath(t *testing.T) {
 		{
 			name:     "Just tilde",
 			input:    "~",
-			expected: "~", // Not expanded since it doesn't have /
+			expected: home, // ExpandHome expands ~ to home directory
 		},
 		{
 			name:     "Empty path",
@@ -327,9 +341,9 @@ func TestExpandPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := expandPath(tt.input)
+			result := components.ExpandHome(tt.input)
 			if result != tt.expected {
-				t.Errorf("expandPath(%q) = %q, want %q", tt.input, result, tt.expected)
+				t.Errorf("components.ExpandHome(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}
@@ -498,7 +512,9 @@ func TestMountForm_RemoteOptions(t *testing.T) {
 
 func TestMountForm_SubmitFormCreatesMountConfig(t *testing.T) {
 	cfg := createTestConfig()
-	form := NewMountForm(nil, createTestRemotes(), cfg, nil, nil, nil, false)
+	gen := createTestGenerator(t)
+	mgr := createTestManager()
+	form := NewMountForm(nil, createTestRemotes(), cfg, gen, mgr, nil, false)
 
 	// Set form values
 	form.name = "Test Mount"
@@ -581,7 +597,9 @@ func TestMountForm_SubmitFormEditMode(t *testing.T) {
 		ModifiedAt: time.Now().Add(-24 * time.Hour),
 	}
 
-	form := NewMountForm(existingMount, createTestRemotes(), cfg, nil, nil, nil, true)
+	gen := createTestGenerator(t)
+	mgr := createTestManager()
+	form := NewMountForm(existingMount, createTestRemotes(), cfg, gen, mgr, nil, true)
 
 	// Modify some values
 	form.mountPoint = "/mnt/new"
@@ -630,7 +648,9 @@ func TestMountForm_SubmitFormEditMode(t *testing.T) {
 
 func TestMountForm_ConfigIsUpdated(t *testing.T) {
 	cfg := createTestConfig()
-	form := NewMountForm(nil, createTestRemotes(), cfg, nil, nil, nil, false)
+	gen := createTestGenerator(t)
+	mgr := createTestManager()
+	form := NewMountForm(nil, createTestRemotes(), cfg, gen, mgr, nil, false)
 
 	// Set form values
 	form.name = "New Mount"
@@ -653,7 +673,9 @@ func TestMountForm_ConfigIsUpdated(t *testing.T) {
 
 func TestMountForm_NilConfigNoPanic(t *testing.T) {
 	// Test that form doesn't panic with nil config
-	form := NewMountForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+	gen := createTestGenerator(t)
+	mgr := createTestManager()
+	form := NewMountForm(nil, createTestRemotes(), nil, gen, mgr, nil, false)
 
 	// This should not panic
 	msg := form.submitForm()
@@ -703,7 +725,9 @@ func TestMountForm_GetRemotePathSuggestions_RemoteOnlyColon(t *testing.T) {
 }
 
 func TestMountForm_SubmitForm_NoRemoteSelected(t *testing.T) {
-	form := NewMountForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+	gen := createTestGenerator(t)
+	mgr := createTestManager()
+	form := NewMountForm(nil, createTestRemotes(), nil, gen, mgr, nil, false)
 	form.remote = ""
 	form.name = "Test"
 	form.mountPoint = "/mnt/test"
@@ -847,7 +871,9 @@ func TestMountForm_NoRemotesAvailable(t *testing.T) {
 }
 
 func TestMountForm_NoRemotesShowsHelpfulMessage(t *testing.T) {
-	form := NewMountForm(nil, []rclone.Remote{}, nil, nil, nil, nil, false)
+	gen := createTestGenerator(t)
+	mgr := createTestManager()
+	form := NewMountForm(nil, []rclone.Remote{}, nil, gen, mgr, nil, false)
 	form.SetSize(80, 24)
 
 	// Verify form was created successfully with empty remotes
@@ -876,13 +902,13 @@ func TestMountForm_NoRemotesShowsHelpfulMessage(t *testing.T) {
 }
 
 func TestMountForm_ExpandPathWithHomeError(t *testing.T) {
-	// Test expandPath function directly
-	result := expandPath("~/test")
+	// Test components.ExpandHome function directly
+	result := components.ExpandHome("~/test")
 	home, err := os.UserHomeDir()
 	if err == nil {
 		expected := filepath.Join(home, "test")
 		if result != expected {
-			t.Errorf("expandPath('~/test') = %q, want %q", result, expected)
+			t.Errorf("components.ExpandHome('~/test') = %q, want %q", result, expected)
 		}
 	}
 }

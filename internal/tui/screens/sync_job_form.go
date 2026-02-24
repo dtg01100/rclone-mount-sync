@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -35,7 +36,7 @@ type SyncJobForm struct {
 	// Services
 	config       *config.Config
 	generator    *systemd.Generator
-	manager      *systemd.Manager
+	manager      systemd.ServiceManager
 	rcloneClient *rclone.Client
 
 	// Available remotes
@@ -59,7 +60,6 @@ type SyncJobForm struct {
 	scheduleType     string
 	onCalendar       string
 	onBootSec        string
-	onBoot           bool
 	requireACPower   bool
 	requireUnmetered bool
 
@@ -75,7 +75,7 @@ type SyncJobForm struct {
 }
 
 // NewSyncJobForm creates a new sync job form.
-func NewSyncJobForm(job *models.SyncJobConfig, remotes []rclone.Remote, cfg *config.Config, gen *systemd.Generator, mgr *systemd.Manager, rcloneClient *rclone.Client, isEdit bool) *SyncJobForm {
+func NewSyncJobForm(job *models.SyncJobConfig, remotes []rclone.Remote, cfg *config.Config, gen *systemd.Generator, mgr systemd.ServiceManager, rcloneClient *rclone.Client, isEdit bool) *SyncJobForm {
 	f := &SyncJobForm{
 		job:          job,
 		isEdit:       isEdit,
@@ -126,7 +126,6 @@ func NewSyncJobForm(job *models.SyncJobConfig, remotes []rclone.Remote, cfg *con
 		f.scheduleType = job.Schedule.Type
 		f.onCalendar = job.Schedule.OnCalendar
 		f.onBootSec = job.Schedule.OnBootSec
-		f.onBoot = job.Schedule.Type == "onboot"
 		f.requireACPower = job.Schedule.RequireACPower
 		f.requireUnmetered = job.Schedule.RequireUnmetered
 
@@ -289,14 +288,14 @@ func (f *SyncJobForm) buildForm() {
 
 			huh.NewInput().
 				Title("Calendar Schedule").
-				Description("Systemd calendar format (e.g., daily, hourly, *-*-* 02:00:00)").
+				Description("Systemd calendar format (only used when Schedule Type is 'Timer')").
 				Placeholder("daily").
 				Value(&f.onCalendar).
 				Validate(f.validateOnCalendar),
 
 			huh.NewInput().
 				Title("On Boot Delay").
-				Description("Delay after boot before running (e.g., 5min, 1h)").
+				Description("Delay after boot before running (only used when Schedule Type is 'On Boot')").
 				Placeholder("5min").
 				Value(&f.onBootSec),
 
@@ -323,13 +322,15 @@ func (f *SyncJobForm) buildForm() {
 				Title("Max Transfers").
 				Description("Maximum number of parallel transfers").
 				Placeholder("4").
-				Value(&f.maxTransfers),
+				Value(&f.maxTransfers).
+				Validate(f.validateMaxTransfers),
 
 			huh.NewInput().
 				Title("Bandwidth Limit").
 				Description("Limit bandwidth (e.g., 10M, 1G)").
 				Placeholder("10M").
-				Value(&f.bandwidthLimit),
+				Value(&f.bandwidthLimit).
+				Validate(components.ValidateBandwidthLimit),
 
 			huh.NewSelect[string]().
 				Title("Log Level").
@@ -394,7 +395,7 @@ func (f *SyncJobForm) validateDestPath(path string) error {
 	// Check if it's a local path (doesn't contain colon)
 	if !strings.Contains(path, ":") {
 		// Expand ~ to home directory
-		expandedPath := expandSyncJobPath(path)
+		expandedPath := components.ExpandHome(path)
 
 		// Check if path is absolute or starts with ~
 		if !filepath.IsAbs(expandedPath) && !strings.HasPrefix(path, "~/") {
@@ -416,47 +417,37 @@ func (f *SyncJobForm) validateOnCalendar(calendar string) error {
 	return rclone.ValidateOnCalendar(calendar)
 }
 
-// expandSyncJobPath expands ~ to the user's home directory.
-func expandSyncJobPath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return filepath.Join(home, path[2:])
+// validateMaxTransfers validates the max transfers field.
+func (f *SyncJobForm) validateMaxTransfers(value string) error {
+	if value == "" {
+		return nil
 	}
-	return path
+	num, err := strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return fmt.Errorf("must be a valid number")
+	}
+	if num <= 0 {
+		return fmt.Errorf("must be greater than 0")
+	}
+	return nil
 }
 
 // getRemotePathSuggestions returns dynamic suggestions for remote paths.
 func (f *SyncJobForm) getRemotePathSuggestions() []string {
 	staticSuggestions := []string{"/", "/Photos", "/Documents", "/Backup", "/Sync"}
-
-	if f.rcloneClient == nil || f.sourceRemote == "" {
+	if f.rcloneClient == nil {
 		return staticSuggestions
 	}
-
-	if f.sourceRemote == "" {
-		return staticSuggestions
-	}
-
-	directories, err := f.rcloneClient.ListRootDirectories(f.sourceRemote)
-	if err != nil {
-		return staticSuggestions
-	}
-
-	result := []string{"/"}
-	for _, dir := range directories {
-		result = append(result, "/"+dir)
-	}
-
-	return result
+	return components.GetRemotePathSuggestions(f.rcloneClient, f.sourceRemote, staticSuggestions)
 }
 
 // SetSize sets the form size.
 func (f *SyncJobForm) SetSize(width, height int) {
 	f.width = width
 	f.height = height
+	if f.form != nil {
+		f.form.WithWidth(width)
+	}
 }
 
 // Init initializes the form.
@@ -508,7 +499,7 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 	if f.destRemote != "" {
 		destination = f.destRemote + ":" + f.destPath
 	} else {
-		destination = expandSyncJobPath(f.destPath)
+		destination = components.ExpandHome(f.destPath)
 	}
 
 	// Parse max transfers
@@ -516,7 +507,7 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 	if f.maxTransfers != "" {
 		if t := strings.TrimSpace(f.maxTransfers); t != "" {
 			var err error
-			if transfers, err = strconvAtoi(t); err != nil {
+			if transfers, err = strconv.Atoi(t); err != nil {
 				transfers = 4
 			}
 		}
@@ -532,10 +523,19 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 		deleteExtraneous = true
 	}
 
-	// Determine schedule type
+	// Determine schedule type and clear irrelevant schedule fields
 	scheduleType := f.scheduleType
-	if f.onBoot {
-		scheduleType = "onboot"
+	onCalendar := f.onCalendar
+	onBootSec := f.onBootSec
+
+	switch scheduleType {
+	case "timer":
+		onBootSec = ""
+	case "onboot":
+		onCalendar = ""
+	case "manual":
+		onCalendar = ""
+		onBootSec = ""
 	}
 
 	// Build the sync job configuration
@@ -555,8 +555,8 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 		},
 		Schedule: models.ScheduleConfig{
 			Type:             scheduleType,
-			OnCalendar:       f.onCalendar,
-			OnBootSec:        f.onBootSec,
+			OnCalendar:       onCalendar,
+			OnBootSec:        onBootSec,
 			RequireACPower:   f.requireACPower,
 			RequireUnmetered: f.requireUnmetered,
 		},
@@ -607,57 +607,71 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 	}
 
 	// Generate systemd service and timer files
-	if f.generator != nil {
-		_, _, err := f.generator.WriteSyncUnits(&job)
-		if err != nil {
+	if f.generator == nil {
+		return SyncJobsErrorMsg{Err: fmt.Errorf("systemd generator not initialized - cannot create unit files")}
+	}
+
+	_, _, err := f.generator.WriteSyncUnits(&job)
+	if err != nil {
+		if f.config != nil {
+			// Attempt rollback on failure; errors are ignored since we're already
+			// in an error path and the primary error is more important to report
+			rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+			_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
+		}
+		return SyncJobsErrorMsg{Err: fmt.Errorf("failed to write unit files: %w", err)}
+	}
+
+	// Reload systemd daemon
+	if f.manager == nil {
+		return SyncJobsErrorMsg{Err: fmt.Errorf("systemd manager not initialized - cannot reload daemon")}
+	}
+
+	if err := f.manager.DaemonReload(); err != nil {
+		if f.config != nil {
+			// Attempt rollback on failure; errors are ignored since we're already
+			// in an error path and the primary error is more important to report
+			rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+			_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
+		}
+		return SyncJobsErrorMsg{Err: fmt.Errorf("failed to reload systemd daemon: %w", err)}
+	}
+
+	serviceName := f.generator.ServiceName(job.ID, "sync") + ".service"
+	timerName := f.generator.ServiceName(job.ID, "sync") + ".timer"
+
+	// Enable timer if requested
+	if job.Enabled {
+		if err := f.manager.EnableTimer(timerName); err != nil {
 			if f.config != nil {
+				// Attempt rollback on failure; errors are ignored since we're already
+				// in an error path and the primary error is more important to report
 				rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
 				_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
 			}
-			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to generate unit files: %w", err)}
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to enable timer: %w", err)}
 		}
-
-		// Reload systemd daemon
-		if f.manager != nil {
-			if err := f.manager.DaemonReload(); err != nil {
-				if f.config != nil {
-					rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
-					_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
-				}
-				return SyncJobsErrorMsg{Err: fmt.Errorf("failed to reload systemd daemon: %w", err)}
+		if err := f.manager.StartTimer(timerName); err != nil {
+			if f.config != nil {
+				// Attempt rollback on failure; errors are ignored since we're already
+				// in an error path and the primary error is more important to report
+				rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+				_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
 			}
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to start timer: %w", err)}
+		}
+	}
 
-			serviceName := f.generator.ServiceName(job.ID, "sync") + ".service"
-			timerName := f.generator.ServiceName(job.ID, "sync") + ".timer"
-
-			// Enable timer if requested
-			if job.Enabled {
-				if err := f.manager.EnableTimer(timerName); err != nil {
-					if f.config != nil {
-						rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
-						_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
-					}
-					return SyncJobsErrorMsg{Err: fmt.Errorf("failed to enable timer: %w", err)}
-				}
-				if err := f.manager.StartTimer(timerName); err != nil {
-					if f.config != nil {
-						rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
-						_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
-					}
-					return SyncJobsErrorMsg{Err: fmt.Errorf("failed to start timer: %w", err)}
-				}
+	// Run immediately if requested
+	if f.runImmediately {
+		if err := f.manager.RunSyncNow(serviceName); err != nil {
+			if f.config != nil {
+				// Attempt rollback on failure; errors are ignored since we're already
+				// in an error path and the primary error is more important to report
+				rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+				_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
 			}
-
-			// Run immediately if requested
-			if f.runImmediately {
-				if err := f.manager.RunSyncNow(serviceName); err != nil {
-					if f.config != nil {
-						rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
-						_ = rollbackMgr.RollbackSyncJob(rollbackData, true)
-					}
-					return SyncJobsErrorMsg{Err: fmt.Errorf("failed to run sync job: %w", err)}
-				}
-			}
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to run sync job: %w", err)}
 		}
 	}
 
@@ -667,13 +681,6 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 		return SyncJobUpdatedMsg{Job: job}
 	}
 	return SyncJobCreatedMsg{Job: job}
-}
-
-// strconvAtoi is a simple wrapper for strconv.Atoi
-func strconvAtoi(s string) (int, error) {
-	var result int
-	_, err := fmt.Sscanf(s, "%d", &result)
-	return result, err
 }
 
 // IsDone returns true if the form is done.

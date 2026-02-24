@@ -13,7 +13,18 @@ import (
 func TestSyncCreateAndDeleteFlow(t *testing.T) {
 	tmp := t.TempDir()
 	cfg := &config.Config{
-		Defaults: config.DefaultConfig(),
+		Defaults: config.DefaultConfig{
+			Mount: config.MountDefaults{
+				LogLevel:     "INFO",
+				VFSCacheMode: "full",
+				BufferSize:   "16M",
+			},
+			Sync: config.SyncDefaults{
+				LogLevel:  "INFO",
+				Transfers: 4,
+				Checkers:  8,
+			},
+		},
 	}
 
 	oldLoadConfig := loadConfig
@@ -69,7 +80,18 @@ func TestSyncCreateAndDeleteFlow(t *testing.T) {
 
 func TestSyncList(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.DefaultConfig(),
+		Defaults: config.DefaultConfig{
+			Mount: config.MountDefaults{
+				LogLevel:     "INFO",
+				VFSCacheMode: "full",
+				BufferSize:   "16M",
+			},
+			Sync: config.SyncDefaults{
+				LogLevel:  "INFO",
+				Transfers: 4,
+				Checkers:  8,
+			},
+		},
 		SyncJobs: []models.SyncJobConfig{
 			{
 				ID:          "12345",
@@ -89,14 +111,26 @@ func TestSyncList(t *testing.T) {
 	defer func() { loadConfig = oldLoadConfig }()
 	loadConfig = func() (*config.Config, error) { return cfg, nil }
 
-	if _, _, err := runCmd(t, syncListCmd); err != nil {
-		t.Fatalf("sync list failed: %v", err)
+	err := runSyncList(nil, nil)
+	if err != nil {
+		t.Fatalf("runSyncList failed: %v", err)
 	}
 }
 
 func TestSyncRun(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.DefaultConfig(),
+		Defaults: config.DefaultConfig{
+			Mount: config.MountDefaults{
+				LogLevel:     "INFO",
+				VFSCacheMode: "full",
+				BufferSize:   "16M",
+			},
+			Sync: config.SyncDefaults{
+				LogLevel:  "INFO",
+				Transfers: 4,
+				Checkers:  8,
+			},
+		},
 		SyncJobs: []models.SyncJobConfig{
 			{
 				ID:          "abc123",
@@ -125,7 +159,7 @@ func TestSyncRun(t *testing.T) {
 	loadGenerator = func() (*systemd.Generator, error) { return systemd.NewTestGenerator(t.TempDir()), nil }
 
 	mock := &systemd.MockManager{
-		RunSyncNowResult: nil,
+		RunSyncNowErr: nil,
 	}
 	loadManager = func() systemd.ServiceManager { return mock }
 
@@ -136,7 +170,18 @@ func TestSyncRun(t *testing.T) {
 
 func TestSyncDeleteNotFound(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.DefaultConfig(),
+		Defaults: config.DefaultConfig{
+			Mount: config.MountDefaults{
+				LogLevel:     "INFO",
+				VFSCacheMode: "full",
+				BufferSize:   "16M",
+			},
+			Sync: config.SyncDefaults{
+				LogLevel:  "INFO",
+				Transfers: 4,
+				Checkers:  8,
+			},
+		},
 	}
 
 	oldLoadConfig := loadConfig
@@ -151,7 +196,18 @@ func TestSyncDeleteNotFound(t *testing.T) {
 
 func TestSyncRunNotFound(t *testing.T) {
 	cfg := &config.Config{
-		Defaults: config.DefaultConfig(),
+		Defaults: config.DefaultConfig{
+			Mount: config.MountDefaults{
+				LogLevel:     "INFO",
+				VFSCacheMode: "full",
+				BufferSize:   "16M",
+			},
+			Sync: config.SyncDefaults{
+				LogLevel:  "INFO",
+				Transfers: 4,
+				Checkers:  8,
+			},
+		},
 	}
 
 	oldLoadConfig := loadConfig

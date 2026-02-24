@@ -1511,3 +1511,393 @@ func TestManager_ListServicesInvalidPath(t *testing.T) {
 		t.Error("ListServices() should return non-nil slice")
 	}
 }
+
+// TestParseServiceListLine tests parsing of systemctl list-unit-lines output.
+func TestParseServiceListLine(t *testing.T) {
+	tests := []struct {
+		name        string
+		line        string
+		wantName    string
+		wantEnabled bool
+		wantOk      bool
+	}{
+		{
+			name:        "enabled mount service",
+			line:        "rclone-mount-gdrive.service enabled",
+			wantName:    "rclone-mount-gdrive",
+			wantEnabled: true,
+			wantOk:      true,
+		},
+		{
+			name:        "disabled mount service",
+			line:        "rclone-mount-dropbox.service disabled",
+			wantName:    "rclone-mount-dropbox",
+			wantEnabled: false,
+			wantOk:      true,
+		},
+		{
+			name:        "enabled sync service",
+			line:        "rclone-sync-photos.service enabled",
+			wantName:    "rclone-sync-photos",
+			wantEnabled: true,
+			wantOk:      true,
+		},
+		{
+			name:        "disabled sync service",
+			line:        "rclone-sync-docs.service disabled",
+			wantName:    "rclone-sync-docs",
+			wantEnabled: false,
+			wantOk:      true,
+		},
+		{
+			name:        "service with static state",
+			line:        "rclone-mount-static.service static",
+			wantName:    "rclone-mount-static",
+			wantEnabled: false,
+			wantOk:      true,
+		},
+		{
+			name:        "service with linked state",
+			line:        "rclone-sync-linked.service linked",
+			wantName:    "rclone-sync-linked",
+			wantEnabled: false,
+			wantOk:      true,
+		},
+		{
+			name:        "empty line",
+			line:        "",
+			wantName:    "",
+			wantEnabled: false,
+			wantOk:      false,
+		},
+		{
+			name:        "whitespace only",
+			line:        "   ",
+			wantName:    "",
+			wantEnabled: false,
+			wantOk:      false,
+		},
+		{
+			name:        "line with leading whitespace",
+			line:        "  rclone-mount-spaced.service enabled",
+			wantName:    "rclone-mount-spaced",
+			wantEnabled: true,
+			wantOk:      true,
+		},
+		{
+			name:        "line with trailing whitespace",
+			line:        "rclone-mount-trail.service enabled  ",
+			wantName:    "rclone-mount-trail",
+			wantEnabled: true,
+			wantOk:      true,
+		},
+		{
+			name:        "line with multiple spaces between fields",
+			line:        "rclone-mount-multi.service    enabled",
+			wantName:    "rclone-mount-multi",
+			wantEnabled: true,
+			wantOk:      true,
+		},
+		{
+			name:        "line with tabs",
+			line:        "rclone-mount-tabs.service\tenabled",
+			wantName:    "rclone-mount-tabs",
+			wantEnabled: true,
+			wantOk:      true,
+		},
+		{
+			name:        "service with no state field",
+			line:        "rclone-mount-nostate.service",
+			wantName:    "rclone-mount-nostate",
+			wantEnabled: false,
+			wantOk:      true,
+		},
+		{
+			name:        "service with ID-style name",
+			line:        "rclone-mount-a1b2c3d4e5f6.service enabled",
+			wantName:    "rclone-mount-a1b2c3d4e5f6",
+			wantEnabled: true,
+			wantOk:      true,
+		},
+		{
+			name:        "sync service with ID-style name",
+			line:        "rclone-sync-xyz987.service disabled",
+			wantName:    "rclone-sync-xyz987",
+			wantEnabled: false,
+			wantOk:      true,
+		},
+		{
+			name:        "service with dashes in name",
+			line:        "rclone-mount-my-gdrive-backup.service enabled",
+			wantName:    "rclone-mount-my-gdrive-backup",
+			wantEnabled: true,
+			wantOk:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			name, enabled, ok := parseServiceListLine(tt.line)
+			if name != tt.wantName {
+				t.Errorf("parseServiceListLine() name = %q, want %q", name, tt.wantName)
+			}
+			if enabled != tt.wantEnabled {
+				t.Errorf("parseServiceListLine() enabled = %v, want %v", enabled, tt.wantEnabled)
+			}
+			if ok != tt.wantOk {
+				t.Errorf("parseServiceListLine() ok = %v, want %v", ok, tt.wantOk)
+			}
+		})
+	}
+}
+
+// TestParseServiceListLine_MultipleLines simulates parsing multiple lines.
+func TestParseServiceListLine_MultipleLines(t *testing.T) {
+	output := `rclone-mount-gdrive.service enabled
+rclone-mount-dropbox.service disabled
+rclone-sync-photos.service enabled
+rclone-sync-docs.service disabled
+`
+
+	lines := strings.Split(output, "\n")
+	var services []struct {
+		name    string
+		enabled bool
+	}
+
+	for _, line := range lines {
+		if name, enabled, ok := parseServiceListLine(line); ok {
+			services = append(services, struct {
+				name    string
+				enabled bool
+			}{name, enabled})
+		}
+	}
+
+	if len(services) != 4 {
+		t.Fatalf("expected 4 services, got %d", len(services))
+	}
+
+	expectedServices := []struct {
+		name    string
+		enabled bool
+	}{
+		{"rclone-mount-gdrive", true},
+		{"rclone-mount-dropbox", false},
+		{"rclone-sync-photos", true},
+		{"rclone-sync-docs", false},
+	}
+
+	for i, exp := range expectedServices {
+		if services[i].name != exp.name {
+			t.Errorf("service[%d].name = %q, want %q", i, services[i].name, exp.name)
+		}
+		if services[i].enabled != exp.enabled {
+			t.Errorf("service[%d].enabled = %v, want %v", i, services[i].enabled, exp.enabled)
+		}
+	}
+}
+
+// TestParseServiceListLine_SingleService tests parsing single service.
+func TestParseServiceListLine_SingleService(t *testing.T) {
+	output := "rclone-mount-oneservice.service enabled\n"
+
+	lines := strings.Split(output, "\n")
+	var count int
+	for _, line := range lines {
+		if _, _, ok := parseServiceListLine(line); ok {
+			count++
+		}
+	}
+
+	if count != 1 {
+		t.Errorf("expected 1 service, got %d", count)
+	}
+}
+
+// TestParseServiceListLine_EmptyOutput tests parsing empty output.
+func TestParseServiceListLine_EmptyOutput(t *testing.T) {
+	output := ""
+
+	lines := strings.Split(output, "\n")
+	var count int
+	for _, line := range lines {
+		if _, _, ok := parseServiceListLine(line); ok {
+			count++
+		}
+	}
+
+	if count != 0 {
+		t.Errorf("expected 0 services from empty output, got %d", count)
+	}
+}
+
+// TestParseServiceListLine_OnlyNewlines tests parsing output with only newlines.
+func TestParseServiceListLine_OnlyNewlines(t *testing.T) {
+	output := "\n\n\n"
+
+	lines := strings.Split(output, "\n")
+	var count int
+	for _, line := range lines {
+		if _, _, ok := parseServiceListLine(line); ok {
+			count++
+		}
+	}
+
+	if count != 0 {
+		t.Errorf("expected 0 services from newlines only, got %d", count)
+	}
+}
+
+// TestParseServiceListLine_MixedValidInvalid tests parsing mixed valid and invalid lines.
+func TestParseServiceListLine_MixedValidInvalid(t *testing.T) {
+	output := `rclone-mount-valid.service enabled
+
+   
+rclone-mount-another.service disabled
+invalid line without .service suffix
+rclone-sync-last.service enabled
+`
+
+	lines := strings.Split(output, "\n")
+	var services []string
+	for _, line := range lines {
+		if name, _, ok := parseServiceListLine(line); ok {
+			services = append(services, name)
+		}
+	}
+
+	expected := []string{"rclone-mount-valid", "rclone-mount-another", "invalid", "rclone-sync-last"}
+	if len(services) != 4 {
+		t.Errorf("expected 4 services, got %d: %v", len(services), services)
+	}
+	for i, exp := range expected {
+		if i < len(services) && services[i] != exp {
+			t.Errorf("services[%d] = %q, want %q", i, services[i], exp)
+		}
+	}
+}
+
+// TestListServices_ReturnsEmptySliceOnError tests ListServices returns empty slice on error.
+func TestListServices_ReturnsEmptySliceOnError(t *testing.T) {
+	m := &Manager{systemctlPath: "/nonexistent/systemctl/path"}
+
+	services, err := m.ListServices()
+	if err != nil {
+		t.Errorf("ListServices() should not return error on command failure, got: %v", err)
+	}
+	if services == nil {
+		t.Error("ListServices() should return non-nil slice")
+	}
+	if len(services) != 0 {
+		t.Errorf("ListServices() should return empty slice on error, got %d services", len(services))
+	}
+}
+
+// TestListServices_ServiceStatusFields tests that ServiceStatus has correct fields.
+func TestListServices_ServiceStatusFields(t *testing.T) {
+	status := ServiceStatus{
+		Name:    "rclone-mount-test",
+		Active:  true,
+		State:   "active",
+		Enabled: true,
+	}
+
+	if status.Name != "rclone-mount-test" {
+		t.Errorf("ServiceStatus.Name = %q, want %q", status.Name, "rclone-mount-test")
+	}
+	if !status.Active {
+		t.Error("ServiceStatus.Active should be true")
+	}
+	if status.State != "active" {
+		t.Errorf("ServiceStatus.State = %q, want %q", status.State, "active")
+	}
+	if !status.Enabled {
+		t.Error("ServiceStatus.Enabled should be true")
+	}
+}
+
+// TestParseServiceListLine_VariousStates tests parsing with various systemd states.
+func TestParseServiceListLine_VariousStates(t *testing.T) {
+	states := []string{
+		"enabled",
+		"disabled",
+		"static",
+		"linked",
+		"linked-runtime",
+		"indirect",
+		"generated",
+		"transient",
+	}
+
+	for _, state := range states {
+		t.Run(state, func(t *testing.T) {
+			line := "rclone-mount-test.service " + state
+			name, enabled, ok := parseServiceListLine(line)
+
+			if !ok {
+				t.Errorf("parseServiceListLine() should parse line with state %q", state)
+			}
+			if name != "rclone-mount-test" {
+				t.Errorf("parseServiceListLine() name = %q, want %q", name, "rclone-mount-test")
+			}
+			wantEnabled := state == "enabled"
+			if enabled != wantEnabled {
+				t.Errorf("parseServiceListLine() enabled = %v for state %q, want %v", enabled, state, wantEnabled)
+			}
+		})
+	}
+}
+
+// TestParseServiceListLine_EnabledCaseInsensitive tests that enabled check is case-sensitive.
+func TestParseServiceListLine_EnabledCaseInsensitive(t *testing.T) {
+	tests := []struct {
+		state       string
+		wantEnabled bool
+	}{
+		{"enabled", true},
+		{"ENABLED", false},
+		{"Enabled", false},
+		{"EnAbLeD", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.state, func(t *testing.T) {
+			line := "rclone-mount-test.service " + tt.state
+			_, enabled, ok := parseServiceListLine(line)
+
+			if !ok {
+				t.Errorf("parseServiceListLine() should parse line with state %q", tt.state)
+			}
+			if enabled != tt.wantEnabled {
+				t.Errorf("parseServiceListLine() enabled = %v for state %q, want %v", enabled, tt.state, tt.wantEnabled)
+			}
+		})
+	}
+}
+
+// TestParseServiceListLine_SpecialCharactersInName tests service names with special chars.
+func TestParseServiceListLine_SpecialCharactersInName(t *testing.T) {
+	tests := []struct {
+		line     string
+		wantName string
+	}{
+		{"rclone-mount-test_underscore.service enabled", "rclone-mount-test_underscore"},
+		{"rclone-mount-test-dash.service enabled", "rclone-mount-test-dash"},
+		{"rclone-mount-test123.service enabled", "rclone-mount-test123"},
+		{"rclone-sync-abc-def-ghi.service enabled", "rclone-sync-abc-def-ghi"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.wantName, func(t *testing.T) {
+			name, _, ok := parseServiceListLine(tt.line)
+
+			if !ok {
+				t.Errorf("parseServiceListLine() should parse line %q", tt.line)
+			}
+			if name != tt.wantName {
+				t.Errorf("parseServiceListLine() name = %q, want %q", name, tt.wantName)
+			}
+		})
+	}
+}

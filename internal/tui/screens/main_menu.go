@@ -69,7 +69,8 @@ func (s *MainMenuScreen) Init() tea.Cmd {
 func (s *MainMenuScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		key := strings.ToLower(msg.String())
+		switch key {
 		case "up", "k":
 			s.menu.Up()
 		case "down", "j":

@@ -144,6 +144,7 @@ func (a *App) initializeServices() tea.Msg {
 
 	// Pass services to screens
 	a.mounts.SetServices(cfg, a.rclone, gen, a.manager)
+	a.syncJobs.SetServices(cfg, a.rclone, gen, a.manager)
 	a.services.SetServices(cfg, a.manager, gen)
 	a.settings.SetConfig(cfg)
 
@@ -266,10 +267,10 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ReconciliationMsg:
 		a.orphans = msg.Result
 		a.showOrphanPrompt = len(msg.Result.OrphanedUnits) > 0
-		cmds = append(cmds, a.mounts.Init())
+		cmds = append(cmds, a.mounts.Init(), a.syncJobs.Init(), a.services.Init())
 
 	case AppInitDone:
-		cmds = append(cmds, a.mounts.Init())
+		cmds = append(cmds, a.mounts.Init(), a.syncJobs.Init(), a.services.Init())
 	}
 
 	// Update the current screen
@@ -668,7 +669,9 @@ func (a *App) importSelectedOrphan() (tea.Model, tea.Cmd) {
 	reconciler := systemd.NewReconciler(a.generator, a.manager)
 	imported, err := reconciler.Import(orphan)
 	if err != nil {
-		return a, nil
+		return a, func() tea.Msg {
+			return screens.MountsErrorMsg{Err: fmt.Errorf("failed to import orphan: %w", err)}
+		}
 	}
 
 	if imported.Mount != nil {
@@ -678,18 +681,41 @@ func (a *App) importSelectedOrphan() (tea.Model, tea.Cmd) {
 	}
 
 	if err := a.config.Save(); err != nil {
-		return a, nil
+		return a, func() tea.Msg {
+			return screens.MountsErrorMsg{Err: fmt.Errorf("failed to save config: %w", err)}
+		}
 	}
 
+	var writeErr error
 	if imported.Mount != nil {
-		a.generator.WriteMountService(imported.Mount)
+		_, writeErr = a.generator.WriteMountService(imported.Mount)
 	} else if imported.SyncJob != nil {
-		a.generator.WriteSyncUnits(imported.SyncJob)
+		_, _, writeErr = a.generator.WriteSyncUnits(imported.SyncJob)
 	}
 
-	reconciler.RemoveOrphan(orphan)
+	if writeErr != nil {
+		if imported.Mount != nil {
+			for i := len(a.config.Mounts) - 1; i >= 0; i-- {
+				if a.config.Mounts[i].Name == imported.Mount.Name {
+					a.config.Mounts = append(a.config.Mounts[:i], a.config.Mounts[i+1:]...)
+					break
+				}
+			}
+		} else if imported.SyncJob != nil {
+			for i := len(a.config.SyncJobs) - 1; i >= 0; i-- {
+				if a.config.SyncJobs[i].Name == imported.SyncJob.Name {
+					a.config.SyncJobs = append(a.config.SyncJobs[:i], a.config.SyncJobs[i+1:]...)
+					break
+				}
+			}
+		}
+		a.config.Save()
+		return a, func() tea.Msg {
+			return screens.MountsErrorMsg{Err: fmt.Errorf("failed to write service file: %w", writeErr)}
+		}
+	}
 
-	a.manager.DaemonReload()
+	_ = reconciler.RemoveOrphan(orphan)
 
 	a.orphans.OrphanedUnits = append(
 		a.orphans.OrphanedUnits[:a.orphanSelected],

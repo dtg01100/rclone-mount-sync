@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
 )
 
@@ -1618,4 +1619,405 @@ func TestApp_Update_EnterInActionModeWithOrphans(t *testing.T) {
 	}()
 
 	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+}
+
+func TestApp_importSelectedOrphan_NilGenerator(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = nil
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.importSelectedOrphan()
+}
+
+func TestApp_importSelectedOrphan_NilConfig(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+	app.config = nil
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.importSelectedOrphan()
+}
+
+func TestApp_importSelectedOrphan_MountType(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+	app.config = &config.Config{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.importSelectedOrphan()
+}
+
+func TestApp_importSelectedOrphan_SyncType(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "sync", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+	app.config = &config.Config{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.importSelectedOrphan()
+}
+
+func TestApp_importSelectedOrphan_EmptyOrphanList(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+	app.config = &config.Config{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.importSelectedOrphan()
+}
+
+func TestApp_importSelectedOrphan_IndexOutOfBounds(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 5
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+	app.config = &config.Config{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.importSelectedOrphan()
+}
+
+func TestApp_importSelectedOrphan_UpdatesOrphanList(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+			{Name: "unit2.service", Type: "sync", ID: "id2"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+	app.config = &config.Config{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.importSelectedOrphan()
+}
+
+func TestApp_importSelectedOrphan_LastOrphan(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+	app.config = &config.Config{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.importSelectedOrphan()
+}
+
+func TestApp_cleanupSelectedOrphan_NilGenerator(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = nil
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.cleanupSelectedOrphan()
+}
+
+func TestApp_cleanupSelectedOrphan_NilManager(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = nil
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.cleanupSelectedOrphan()
+}
+
+func TestApp_cleanupSelectedOrphan_MountType(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.cleanupSelectedOrphan()
+}
+
+func TestApp_cleanupSelectedOrphan_SyncType(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "sync", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.cleanupSelectedOrphan()
+}
+
+func TestApp_cleanupSelectedOrphan_UpdatesList(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+			{Name: "unit2.service", Type: "sync", ID: "id2"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.cleanupSelectedOrphan()
+}
+
+func TestApp_cleanupSelectedOrphan_LastOrphanClosesPrompt(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.cleanupSelectedOrphan()
+}
+
+func TestApp_cleanupSelectedOrphan_EmptyOrphanList(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.cleanupSelectedOrphan()
+}
+
+func TestApp_cleanupSelectedOrphan_IndexOutOfBounds(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 10
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.cleanupSelectedOrphan()
+}
+
+func TestApp_cleanupSelectedOrphan_ResetsOrphanMode(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 0
+	app.orphanMode = 1
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.cleanupSelectedOrphan()
+}
+
+func TestApp_cleanupSelectedOrphan_AdjustsSelectedIndex(t *testing.T) {
+	app := NewApp()
+	app.width = 80
+	app.height = 24
+	app.orphanSelected = 1
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "unit1.service", Type: "mount", ID: "id1"},
+			{Name: "unit2.service", Type: "sync", ID: "id2"},
+		},
+	}
+	app.showOrphanPrompt = true
+	app.generator = &systemd.Generator{}
+	app.manager = &systemd.Manager{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	app.cleanupSelectedOrphan()
 }

@@ -1894,3 +1894,110 @@ exported: "2024-01-01T00:00:00Z"
 		t.Error("SyncJob ID should be generated when missing")
 	}
 }
+
+func TestCreateBackupSourceNotExist(t *testing.T) {
+	err := createBackup("/nonexistent/path/to/config.yaml", "/tmp/backup.yaml")
+	if err == nil {
+		t.Error("createBackup() should return error when source file doesn't exist")
+	}
+	if !strings.Contains(err.Error(), "failed to open config file") {
+		t.Errorf("createBackup() error = %v, want error containing 'failed to open config file'", err)
+	}
+}
+
+func TestCreateBackupSourcePermissionDenied(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("Test requires non-root user to test permission denied")
+	}
+
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	srcPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(srcPath, []byte("test content"), 0644); err != nil {
+		t.Fatalf("Failed to write source file: %v", err)
+	}
+
+	if err := os.Chmod(srcPath, 0000); err != nil {
+		t.Fatalf("Failed to chmod source file: %v", err)
+	}
+	defer os.Chmod(srcPath, 0644)
+
+	backupPath := filepath.Join(tmpDir, "config.yaml.bak")
+	err = createBackup(srcPath, backupPath)
+	if err == nil {
+		t.Error("createBackup() should return error when source file can't be read")
+	}
+	if !strings.Contains(err.Error(), "failed to open config file") {
+		t.Errorf("createBackup() error = %v, want error containing 'failed to open config file'", err)
+	}
+}
+
+func TestCreateBackupDestPermissionDenied(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("Test requires non-root user to test permission denied")
+	}
+
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	srcPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(srcPath, []byte("test content"), 0644); err != nil {
+		t.Fatalf("Failed to write source file: %v", err)
+	}
+
+	destDir := filepath.Join(tmpDir, "readonly")
+	if err := os.Mkdir(destDir, 0555); err != nil {
+		t.Fatalf("Failed to create readonly dir: %v", err)
+	}
+	defer os.Chmod(destDir, 0755)
+
+	backupPath := filepath.Join(destDir, "config.yaml.bak")
+	err = createBackup(srcPath, backupPath)
+	if err == nil {
+		t.Error("createBackup() should return error when destination can't be created")
+	}
+	if !strings.Contains(err.Error(), "failed to create backup file") {
+		t.Errorf("createBackup() error = %v, want error containing 'failed to create backup file'", err)
+	}
+}
+
+func TestCreateBackupSuccess(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "config-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	srcContent := "test config content\nwith multiple lines\n"
+	srcPath := filepath.Join(tmpDir, "config.yaml")
+	if err := os.WriteFile(srcPath, []byte(srcContent), 0644); err != nil {
+		t.Fatalf("Failed to write source file: %v", err)
+	}
+
+	backupPath := filepath.Join(tmpDir, "config.yaml.bak")
+	if err := createBackup(srcPath, backupPath); err != nil {
+		t.Fatalf("createBackup() error = %v", err)
+	}
+
+	backupContent, err := os.ReadFile(backupPath)
+	if err != nil {
+		t.Fatalf("Failed to read backup file: %v", err)
+	}
+
+	if string(backupContent) != srcContent {
+		t.Errorf("Backup content = %q, want %q", string(backupContent), srcContent)
+	}
+
+	srcInfo, _ := os.Stat(srcPath)
+	backupInfo, _ := os.Stat(backupPath)
+	if srcInfo.Mode() != backupInfo.Mode() {
+		t.Errorf("Backup mode = %v, want %v", backupInfo.Mode(), srcInfo.Mode())
+	}
+}

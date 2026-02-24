@@ -929,3 +929,402 @@ func TestReconciliationResult_Struct(t *testing.T) {
 		t.Errorf("ReconciliationResult.OrphanedUnits length = %d, want 2", len(result.OrphanedUnits))
 	}
 }
+
+func TestReconciler_RemoveOrphan_StopError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	mockSystemctl := filepath.Join(tmpDir, "mock-systemctl")
+	mockScript := `#!/bin/bash
+if [ "$1" = "--user" ]; then
+    if [ "$2" = "is-active" ]; then
+        echo "active"
+        exit 0
+    fi
+    if [ "$2" = "stop" ]; then
+        echo "stop failed" >&2
+        exit 1
+    fi
+fi
+exit 0
+`
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+		t.Fatalf("Failed to create mock systemctl: %v", err)
+	}
+
+	serviceFile := filepath.Join(tmpDir, "rclone-mount-test1234.service")
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	g := &Generator{
+		systemdDir: tmpDir,
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     tmpDir,
+	}
+	m := &Manager{systemctlPath: mockSystemctl}
+	r := NewReconciler(g, m)
+
+	orphan := OrphanedUnit{
+		Name:     "rclone-mount-test1234.service",
+		Type:     "mount",
+		ID:       "test1234",
+		IsLegacy: false,
+		Path:     serviceFile,
+	}
+
+	err := r.RemoveOrphan(orphan)
+	if err == nil {
+		t.Error("RemoveOrphan() should return error when stop fails")
+	}
+	if err != nil && !strings.Contains(err.Error(), "failed to stop orphan service") {
+		t.Errorf("RemoveOrphan() error should contain 'failed to stop orphan service', got: %v", err)
+	}
+}
+
+func TestReconciler_RemoveOrphan_DisableError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	mockSystemctl := filepath.Join(tmpDir, "mock-systemctl")
+	mockScript := `#!/bin/bash
+if [ "$1" = "--user" ]; then
+    if [ "$2" = "is-active" ]; then
+        echo "inactive"
+        exit 3
+    fi
+    if [ "$2" = "is-enabled" ]; then
+        echo "enabled"
+        exit 0
+    fi
+    if [ "$2" = "disable" ]; then
+        echo "disable failed" >&2
+        exit 1
+    fi
+fi
+exit 0
+`
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+		t.Fatalf("Failed to create mock systemctl: %v", err)
+	}
+
+	serviceFile := filepath.Join(tmpDir, "rclone-mount-test1234.service")
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	g := &Generator{
+		systemdDir: tmpDir,
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     tmpDir,
+	}
+	m := &Manager{systemctlPath: mockSystemctl}
+	r := NewReconciler(g, m)
+
+	orphan := OrphanedUnit{
+		Name:     "rclone-mount-test1234.service",
+		Type:     "mount",
+		ID:       "test1234",
+		IsLegacy: false,
+		Path:     serviceFile,
+	}
+
+	err := r.RemoveOrphan(orphan)
+	if err == nil {
+		t.Error("RemoveOrphan() should return error when disable fails")
+	}
+	if err != nil && !strings.Contains(err.Error(), "failed to disable orphan service") {
+		t.Errorf("RemoveOrphan() error should contain 'failed to disable orphan service', got: %v", err)
+	}
+}
+
+func TestReconciler_RemoveOrphan_RemoveUnitFileError(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("Skipping test when running as root (permission tests won't work)")
+	}
+
+	tmpDir := t.TempDir()
+
+	roDir := filepath.Join(tmpDir, "readonly")
+	if err := os.MkdirAll(roDir, 0755); err != nil {
+		t.Fatalf("Failed to create readonly dir: %v", err)
+	}
+
+	serviceFile := filepath.Join(roDir, "rclone-mount-test1234.service")
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	if err := os.Chmod(roDir, 0555); err != nil {
+		t.Fatalf("Failed to make directory read-only: %v", err)
+	}
+	defer os.Chmod(roDir, 0755)
+
+	mockSystemctl := filepath.Join(tmpDir, "mock-systemctl")
+	mockScript := `#!/bin/bash
+exit 0
+`
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+		t.Fatalf("Failed to create mock systemctl: %v", err)
+	}
+
+	g := &Generator{
+		systemdDir: roDir,
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     tmpDir,
+	}
+	m := &Manager{systemctlPath: mockSystemctl}
+	r := NewReconciler(g, m)
+
+	orphan := OrphanedUnit{
+		Name:     "rclone-mount-test1234.service",
+		Type:     "mount",
+		ID:       "test1234",
+		IsLegacy: false,
+		Path:     serviceFile,
+	}
+
+	err := r.RemoveOrphan(orphan)
+	if err == nil {
+		t.Error("RemoveOrphan() should return error when removing unit file fails")
+	}
+	if err != nil && !strings.Contains(err.Error(), "failed to remove orphan unit file") {
+		t.Errorf("RemoveOrphan() error should contain 'failed to remove orphan unit file', got: %v", err)
+	}
+}
+
+func TestReconciler_RemoveOrphan_DaemonReloadError(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	mockSystemctl := filepath.Join(tmpDir, "mock-systemctl")
+	mockScript := `#!/bin/bash
+if [ "$1" = "--user" ] && [ "$2" = "daemon-reload" ]; then
+    echo "daemon-reload failed" >&2
+    exit 1
+fi
+exit 0
+`
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+		t.Fatalf("Failed to create mock systemctl: %v", err)
+	}
+
+	serviceFile := filepath.Join(tmpDir, "rclone-mount-test1234.service")
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	g := &Generator{
+		systemdDir: tmpDir,
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     tmpDir,
+	}
+	m := &Manager{systemctlPath: mockSystemctl}
+	r := NewReconciler(g, m)
+
+	orphan := OrphanedUnit{
+		Name:     "rclone-mount-test1234.service",
+		Type:     "mount",
+		ID:       "test1234",
+		IsLegacy: false,
+		Path:     serviceFile,
+	}
+
+	err := r.RemoveOrphan(orphan)
+	if err == nil {
+		t.Error("RemoveOrphan() should return error when daemon-reload fails")
+	}
+	if err != nil && !strings.Contains(err.Error(), "daemon-reload failed") {
+		t.Errorf("RemoveOrphan() error should contain 'daemon-reload failed', got: %v", err)
+	}
+}
+
+func TestReconciler_RemoveOrphan_SyncTypeWithTimer(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	mockSystemctl := filepath.Join(tmpDir, "mock-systemctl")
+	mockScript := `#!/bin/bash
+exit 0
+`
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+		t.Fatalf("Failed to create mock systemctl: %v", err)
+	}
+
+	serviceFile := filepath.Join(tmpDir, "rclone-sync-test1234.service")
+	timerFile := filepath.Join(tmpDir, "rclone-sync-test1234.timer")
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+		t.Fatalf("Failed to create test service file: %v", err)
+	}
+	if err := os.WriteFile(timerFile, []byte("[Unit]\nDescription=Test Timer\n[Timer]\nOnCalendar=daily"), 0644); err != nil {
+		t.Fatalf("Failed to create test timer file: %v", err)
+	}
+
+	g := &Generator{
+		systemdDir: tmpDir,
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     tmpDir,
+	}
+	m := &Manager{systemctlPath: mockSystemctl}
+	r := NewReconciler(g, m)
+
+	orphan := OrphanedUnit{
+		Name:     "rclone-sync-test1234.service",
+		Type:     "sync",
+		ID:       "test1234",
+		IsLegacy: false,
+		Path:     serviceFile,
+	}
+
+	err := r.RemoveOrphan(orphan)
+	if err != nil {
+		t.Errorf("RemoveOrphan() error = %v", err)
+	}
+
+	if _, err := os.Stat(serviceFile); !os.IsNotExist(err) {
+		t.Error("RemoveOrphan() did not remove service file")
+	}
+	if _, err := os.Stat(timerFile); !os.IsNotExist(err) {
+		t.Error("RemoveOrphan() did not remove timer file for sync type")
+	}
+}
+
+func TestReconciler_RemoveOrphan_MountTypeNoTimer(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	mockSystemctl := filepath.Join(tmpDir, "mock-systemctl")
+	mockScript := `#!/bin/bash
+exit 0
+`
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+		t.Fatalf("Failed to create mock systemctl: %v", err)
+	}
+
+	serviceFile := filepath.Join(tmpDir, "rclone-mount-test1234.service")
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	g := &Generator{
+		systemdDir: tmpDir,
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     tmpDir,
+	}
+	m := &Manager{systemctlPath: mockSystemctl}
+	r := NewReconciler(g, m)
+
+	orphan := OrphanedUnit{
+		Name:     "rclone-mount-test1234.service",
+		Type:     "mount",
+		ID:       "test1234",
+		IsLegacy: false,
+		Path:     serviceFile,
+	}
+
+	err := r.RemoveOrphan(orphan)
+	if err != nil {
+		t.Errorf("RemoveOrphan() error = %v", err)
+	}
+
+	if _, err := os.Stat(serviceFile); !os.IsNotExist(err) {
+		t.Error("RemoveOrphan() did not remove service file")
+	}
+}
+
+func TestReconciler_RemoveOrphan_SyncTypeNoTimerFile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	mockSystemctl := filepath.Join(tmpDir, "mock-systemctl")
+	mockScript := `#!/bin/bash
+exit 0
+`
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+		t.Fatalf("Failed to create mock systemctl: %v", err)
+	}
+
+	serviceFile := filepath.Join(tmpDir, "rclone-sync-test1234.service")
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+		t.Fatalf("Failed to create test service file: %v", err)
+	}
+
+	g := &Generator{
+		systemdDir: tmpDir,
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     tmpDir,
+	}
+	m := &Manager{systemctlPath: mockSystemctl}
+	r := NewReconciler(g, m)
+
+	orphan := OrphanedUnit{
+		Name:     "rclone-sync-test1234.service",
+		Type:     "sync",
+		ID:       "test1234",
+		IsLegacy: false,
+		Path:     serviceFile,
+	}
+
+	err := r.RemoveOrphan(orphan)
+	if err != nil {
+		t.Errorf("RemoveOrphan() error = %v", err)
+	}
+
+	if _, err := os.Stat(serviceFile); !os.IsNotExist(err) {
+		t.Error("RemoveOrphan() did not remove service file")
+	}
+}
+
+func TestReconciler_RemoveOrphan_ActiveAndEnabledService(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	mockSystemctl := filepath.Join(tmpDir, "mock-systemctl")
+	mockScript := `#!/bin/bash
+if [ "$1" = "--user" ]; then
+    if [ "$2" = "is-active" ]; then
+        echo "active"
+        exit 0
+    fi
+    if [ "$2" = "is-enabled" ]; then
+        echo "enabled"
+        exit 0
+    fi
+fi
+exit 0
+`
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+		t.Fatalf("Failed to create mock systemctl: %v", err)
+	}
+
+	serviceFile := filepath.Join(tmpDir, "rclone-mount-test1234.service")
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	g := &Generator{
+		systemdDir: tmpDir,
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     tmpDir,
+	}
+	m := &Manager{systemctlPath: mockSystemctl}
+	r := NewReconciler(g, m)
+
+	orphan := OrphanedUnit{
+		Name:     "rclone-mount-test1234.service",
+		Type:     "mount",
+		ID:       "test1234",
+		IsLegacy: false,
+		Path:     serviceFile,
+	}
+
+	err := r.RemoveOrphan(orphan)
+	if err != nil {
+		t.Errorf("RemoveOrphan() error = %v", err)
+	}
+
+	if _, err := os.Stat(serviceFile); !os.IsNotExist(err) {
+		t.Error("RemoveOrphan() did not remove service file")
+	}
+}

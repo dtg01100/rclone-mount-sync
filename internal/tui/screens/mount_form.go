@@ -35,7 +35,7 @@ type MountForm struct {
 	// Services
 	config       *config.Config
 	generator    *systemd.Generator
-	manager      *systemd.Manager
+	manager      systemd.ServiceManager
 	rcloneClient *rclone.Client
 
 	// Available remotes
@@ -64,7 +64,7 @@ type MountForm struct {
 }
 
 // NewMountForm creates a new mount form.
-func NewMountForm(mount *models.MountConfig, remotes []rclone.Remote, cfg *config.Config, gen *systemd.Generator, mgr *systemd.Manager, rcloneClient *rclone.Client, isEdit bool) *MountForm {
+func NewMountForm(mount *models.MountConfig, remotes []rclone.Remote, cfg *config.Config, gen *systemd.Generator, mgr systemd.ServiceManager, rcloneClient *rclone.Client, isEdit bool) *MountForm {
 	f := &MountForm{
 		mount:        mount,
 		isEdit:       isEdit,
@@ -196,25 +196,49 @@ func (f *MountForm) buildForm() {
 				Title("VFS Cache Max Size").
 				Description("Maximum size of the cache (e.g., 10G)").
 				Placeholder("10G").
-				Value(&f.vfsCacheMaxSize),
+				Value(&f.vfsCacheMaxSize).
+				Validate(func(v string) error {
+					if v == "" {
+						return nil
+					}
+					return components.ValidateBufferSize(v)
+				}),
 
 			huh.NewInput().
 				Title("VFS Cache Max Age").
 				Description("Maximum age of cache items (e.g., 24h)").
 				Placeholder("24h").
-				Value(&f.vfsCacheMaxAge),
+				Value(&f.vfsCacheMaxAge).
+				Validate(func(v string) error {
+					if v == "" {
+						return nil
+					}
+					return components.ValidateDuration(v)
+				}),
 
 			huh.NewInput().
 				Title("VFS Write Back").
 				Description("Time to wait before writing files (e.g., 5s)").
 				Placeholder("5s").
-				Value(&f.vfsWriteBack),
+				Value(&f.vfsWriteBack).
+				Validate(func(v string) error {
+					if v == "" {
+						return nil
+					}
+					return components.ValidateDuration(v)
+				}),
 
 			huh.NewInput().
 				Title("Buffer Size").
 				Description("Buffer size for reading (e.g., 16M)").
 				Placeholder("16M").
-				Value(&f.bufferSize),
+				Value(&f.bufferSize).
+				Validate(func(v string) error {
+					if v == "" {
+						return nil
+					}
+					return components.ValidateBufferSize(v)
+				}),
 		).Title("Step 2: VFS Options"),
 
 		// Step 3: FUSE Options
@@ -233,7 +257,13 @@ func (f *MountForm) buildForm() {
 				Title("Umask").
 				Description("File permission mask (e.g., 002)").
 				Placeholder("002").
-				Value(&f.umask),
+				Value(&f.umask).
+				Validate(func(v string) error {
+					if v == "" {
+						return nil
+					}
+					return components.ValidateUmask(v)
+				}),
 
 			huh.NewConfirm().
 				Title("Read Only").
@@ -310,7 +340,7 @@ func (f *MountForm) validateMountPoint(path string) error {
 	}
 
 	// Expand ~ to home directory
-	expandedPath := expandPath(path)
+	expandedPath := components.ExpandHome(path)
 
 	// Check if path is absolute
 	if !filepath.IsAbs(expandedPath) {
@@ -326,48 +356,23 @@ func (f *MountForm) validateMountPoint(path string) error {
 	return nil
 }
 
-// expandPath expands ~ to the user's home directory.
-func expandPath(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return filepath.Join(home, path[2:])
-	}
-	return path
-}
-
 // getRemotePathSuggestions returns dynamic suggestions for remote paths.
 func (f *MountForm) getRemotePathSuggestions() []string {
 	staticSuggestions := []string{"/", "/Photos", "/Documents", "/Backup"}
-
-	if f.rcloneClient == nil || f.remote == "" {
-		return staticSuggestions
-	}
-
 	remoteName := strings.TrimSuffix(f.remote, ":")
-	if remoteName == "" {
+	if f.rcloneClient == nil {
 		return staticSuggestions
 	}
-
-	directories, err := f.rcloneClient.ListRootDirectories(remoteName)
-	if err != nil {
-		return staticSuggestions
-	}
-
-	result := []string{"/"}
-	for _, dir := range directories {
-		result = append(result, "/"+dir)
-	}
-
-	return result
+	return components.GetRemotePathSuggestions(f.rcloneClient, remoteName, staticSuggestions)
 }
 
 // SetSize sets the form size.
 func (f *MountForm) SetSize(width, height int) {
 	f.width = width
 	f.height = height
+	if f.form != nil {
+		f.form.WithWidth(width)
+	}
 }
 
 // Init initializes the form.
@@ -477,49 +482,65 @@ func (f *MountForm) submitForm() tea.Msg {
 	}
 
 	// Generate systemd service file
-	if f.generator != nil {
-		_, err := f.generator.WriteMountService(&mount)
-		if err != nil {
+	if f.generator == nil {
+		return MountsErrorMsg{Err: fmt.Errorf("systemd generator not initialized - cannot create service file")}
+	}
+
+	_, err := f.generator.WriteMountService(&mount)
+	if err != nil {
+		if f.config != nil {
+			rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+			if rollbackErr := rollbackMgr.RollbackMount(rollbackData, true); rollbackErr != nil {
+				// Log rollback failure but don't mask the original error
+				// Rollback is best-effort cleanup
+			}
+		}
+		return MountsErrorMsg{Err: fmt.Errorf("failed to write service file: %w", err)}
+	}
+
+	// Reload systemd daemon
+	if f.manager == nil {
+		return MountsErrorMsg{Err: fmt.Errorf("systemd manager not initialized - cannot reload daemon")}
+	}
+
+	if err := f.manager.DaemonReload(); err != nil {
+		if f.config != nil {
+			rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+			if rollbackErr := rollbackMgr.RollbackMount(rollbackData, true); rollbackErr != nil {
+				// Log rollback failure but don't mask the original error
+				// Rollback is best-effort cleanup
+			}
+		}
+		return MountsErrorMsg{Err: fmt.Errorf("failed to reload systemd daemon: %w", err)}
+	}
+
+	serviceName := f.generator.ServiceName(mount.ID, "mount") + ".service"
+
+	// Enable service if requested
+	if mount.Enabled {
+		if err := f.manager.Enable(serviceName); err != nil {
 			if f.config != nil {
 				rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
-				_ = rollbackMgr.RollbackMount(rollbackData, true)
+				if rollbackErr := rollbackMgr.RollbackMount(rollbackData, true); rollbackErr != nil {
+					// Log rollback failure but don't mask the original error
+					// Rollback is best-effort cleanup
+				}
 			}
-			return MountsErrorMsg{Err: fmt.Errorf("failed to generate service file: %w", err)}
+			return MountsErrorMsg{Err: fmt.Errorf("failed to enable service: %w", err)}
 		}
+	}
 
-		// Reload systemd daemon
-		if f.manager != nil {
-			if err := f.manager.DaemonReload(); err != nil {
-				if f.config != nil {
-					rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
-					_ = rollbackMgr.RollbackMount(rollbackData, true)
-				}
-				return MountsErrorMsg{Err: fmt.Errorf("failed to reload systemd daemon: %w", err)}
-			}
-
-			serviceName := f.generator.ServiceName(mount.ID, "mount") + ".service"
-
-			// Enable service if requested
-			if mount.Enabled {
-				if err := f.manager.Enable(serviceName); err != nil {
-					if f.config != nil {
-						rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
-						_ = rollbackMgr.RollbackMount(rollbackData, true)
-					}
-					return MountsErrorMsg{Err: fmt.Errorf("failed to enable service: %w", err)}
+	// Start service if auto-start is enabled
+	if mount.AutoStart {
+		if err := f.manager.Start(serviceName); err != nil {
+			if f.config != nil {
+				rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
+				if rollbackErr := rollbackMgr.RollbackMount(rollbackData, true); rollbackErr != nil {
+					// Log rollback failure but don't mask the original error
+					// Rollback is best-effort cleanup
 				}
 			}
-
-			// Start service if auto-start is enabled
-			if mount.AutoStart {
-				if err := f.manager.Start(serviceName); err != nil {
-					if f.config != nil {
-						rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
-						_ = rollbackMgr.RollbackMount(rollbackData, true)
-					}
-					return MountsErrorMsg{Err: fmt.Errorf("failed to start service: %w", err)}
-				}
-			}
+			return MountsErrorMsg{Err: fmt.Errorf("failed to start service: %w", err)}
 		}
 	}
 

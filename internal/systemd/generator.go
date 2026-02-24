@@ -413,3 +413,14 @@ func (g *Generator) buildTimerDirectives(schedule *models.ScheduleConfig) string
 
 	return strings.Join(directives, "\n")
 }
+
+// NewTestGenerator creates a generator for use in tests.
+// It uses the provided temp directory for all output.
+func NewTestGenerator(tmpDir string) *Generator {
+	return &Generator{
+		systemdDir: tmpDir,
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/tmp/rclone.conf",
+		logDir:     tmpDir,
+	}
+}

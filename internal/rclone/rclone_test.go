@@ -2,6 +2,7 @@ package rclone
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -761,5 +762,181 @@ echo ""
 
 	if len(dirs) != 2 {
 		t.Errorf("ListRemoteDirectories() returned %d dirs, want 2", len(dirs))
+	}
+}
+
+func TestRunCommandWithRetrySuccessOnFirstTry(t *testing.T) {
+	mockScript := `#!/bin/sh
+echo "output: $*"
+`
+	mockPath := createMockRclone(t, mockScript)
+	c := NewClientWithPath(mockPath)
+	c.SetRetryConfig(RetryConfig{
+		MaxRetries:      3,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        100 * time.Millisecond,
+		RetryMultiplier: 2.0,
+	})
+
+	ctx := context.Background()
+	output, err := c.runCommandWithRetry(ctx, "listremotes")
+	if err != nil {
+		t.Fatalf("runCommandWithRetry() error = %v", err)
+	}
+
+	if !strings.Contains(string(output), "listremotes") {
+		t.Errorf("runCommandWithRetry() output should contain 'listremotes', got: %s", output)
+	}
+}
+
+func TestRunCommandWithRetrySuccessAfterRetry(t *testing.T) {
+	attemptFile := filepath.Join(t.TempDir(), "attempts")
+
+	mockScript := fmt.Sprintf(`#!/bin/sh
+attempt=$(cat %s 2>/dev/null || echo 0)
+attempt=$((attempt + 1))
+echo $attempt > %s
+
+if [ "$attempt" -lt 2 ]; then
+    echo "connection timeout" >&2
+    exit 1
+fi
+
+echo "success: $*"
+`, attemptFile, attemptFile)
+
+	mockPath := createMockRclone(t, mockScript)
+	c := NewClientWithPath(mockPath)
+	c.SetRetryConfig(RetryConfig{
+		MaxRetries:      3,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        100 * time.Millisecond,
+		RetryMultiplier: 2.0,
+	})
+
+	ctx := context.Background()
+	output, err := c.runCommandWithRetry(ctx, "listremotes")
+	if err != nil {
+		t.Fatalf("runCommandWithRetry() error = %v", err)
+	}
+
+	if !strings.Contains(string(output), "success") {
+		t.Errorf("runCommandWithRetry() output should contain 'success', got: %s", output)
+	}
+
+	attemptCount, _ := os.ReadFile(attemptFile)
+	if strings.TrimSpace(string(attemptCount)) != "2" {
+		t.Errorf("expected 2 attempts, got %s", string(attemptCount))
+	}
+}
+
+func TestRunCommandWithRetryFailureAfterMaxRetries(t *testing.T) {
+	mockScript := `#!/bin/sh
+echo "connection timeout" >&2
+exit 1
+`
+
+	mockPath := createMockRclone(t, mockScript)
+	c := NewClientWithPath(mockPath)
+	c.SetRetryConfig(RetryConfig{
+		MaxRetries:      2,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        100 * time.Millisecond,
+		RetryMultiplier: 2.0,
+	})
+
+	ctx := context.Background()
+	_, err := c.runCommandWithRetry(ctx, "listremotes")
+	if err == nil {
+		t.Fatal("runCommandWithRetry() should return error after max retries")
+	}
+
+	if !strings.Contains(err.Error(), "failed after") {
+		t.Errorf("error should mention failed attempts, got: %v", err)
+	}
+}
+
+func TestRunCommandWithRetryContextCancellation(t *testing.T) {
+	mockScript := `#!/bin/sh
+echo "connection timeout" >&2
+exit 1
+`
+
+	mockPath := createMockRclone(t, mockScript)
+	c := NewClientWithPath(mockPath)
+	c.SetRetryConfig(RetryConfig{
+		MaxRetries:      5,
+		InitialDelay:    100 * time.Millisecond,
+		MaxDelay:        1 * time.Second,
+		RetryMultiplier: 2.0,
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	_, err := c.runCommandWithRetry(ctx, "listremotes")
+	if err != context.Canceled {
+		t.Errorf("runCommandWithRetry() should return context.Canceled, got %v", err)
+	}
+}
+
+func TestRunCommandWithRetryPermanentError(t *testing.T) {
+	mockScript := `#!/bin/sh
+echo "config file not found" >&2
+exit 1
+`
+
+	mockPath := createMockRclone(t, mockScript)
+	c := NewClientWithPath(mockPath)
+	c.SetRetryConfig(RetryConfig{
+		MaxRetries:      3,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        100 * time.Millisecond,
+		RetryMultiplier: 2.0,
+	})
+
+	ctx := context.Background()
+	_, err := c.runCommandWithRetry(ctx, "listremotes")
+	if err == nil {
+		t.Fatal("runCommandWithRetry() should return error for permanent error")
+	}
+
+	if !IsPermanentError(err) {
+		t.Errorf("error should be permanent, got: %v", err)
+	}
+}
+
+func TestRunCommandWithRetryUsesClientConfig(t *testing.T) {
+	mockScript := `#!/bin/sh
+echo "success"
+`
+
+	mockPath := createMockRclone(t, mockScript)
+
+	customConfig := RetryConfig{
+		MaxRetries:      7,
+		InitialDelay:    123 * time.Millisecond,
+		MaxDelay:        5 * time.Second,
+		RetryMultiplier: 1.5,
+	}
+
+	c := NewClientWithPath(mockPath)
+	c.SetRetryConfig(customConfig)
+
+	retrievedConfig := c.GetRetryConfig()
+	if retrievedConfig.MaxRetries != customConfig.MaxRetries {
+		t.Errorf("GetRetryConfig().MaxRetries = %d, want %d", retrievedConfig.MaxRetries, customConfig.MaxRetries)
+	}
+	if retrievedConfig.InitialDelay != customConfig.InitialDelay {
+		t.Errorf("GetRetryConfig().InitialDelay = %v, want %v", retrievedConfig.InitialDelay, customConfig.InitialDelay)
+	}
+	if retrievedConfig.MaxDelay != customConfig.MaxDelay {
+		t.Errorf("GetRetryConfig().MaxDelay = %v, want %v", retrievedConfig.MaxDelay, customConfig.MaxDelay)
+	}
+	if retrievedConfig.RetryMultiplier != customConfig.RetryMultiplier {
+		t.Errorf("GetRetryConfig().RetryMultiplier = %v, want %v", retrievedConfig.RetryMultiplier, customConfig.RetryMultiplier)
 	}
 }

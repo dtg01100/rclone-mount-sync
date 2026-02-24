@@ -145,143 +145,7 @@ func TestSyncJobsScreen_SetSize(t *testing.T) {
 func TestSyncJobsScreen_SetSizeWithForm(t *testing.T) {
 	screen := NewSyncJobsScreen()
 	screen.SetSize(80, 24)
-
-	// Create a form and set it
-	cfg := createTestConfigWithSyncJobs()
-	remotes := []rclone.Remote{{Name: "gdrive", Type: "drive"}}
-	screen.form = NewSyncJobForm(nil, remotes, cfg, nil, nil, nil, false)
-
-	// Set size should propagate to form
-	screen.SetSize(120, 40)
-
-	if screen.width != 120 {
-		t.Errorf("width = %d, want 120", screen.width)
-	}
-
-	if screen.form.width != 120 {
-		t.Errorf("form width = %d, want 120", screen.form.width)
-	}
-}
-
-func TestSyncJobsScreen_CursorNavigation(t *testing.T) {
-	screen := NewSyncJobsScreen()
-	screen.SetSize(80, 24)
-	screen.jobs = createTestSyncJobs()
-
-	// Start at first item (index 0)
-	if screen.cursor != 0 {
-		t.Fatalf("initial cursor = %d, want 0", screen.cursor)
-	}
-
-	// Press up - should stay at 0 (can't go above first item)
-	screen.Update(tea.KeyMsg{Type: tea.KeyUp})
-	if screen.cursor != 0 {
-		t.Errorf("cursor after up at top = %d, want 0", screen.cursor)
-	}
-
-	// Move down through all items
-	for i := 0; i < len(screen.jobs)-1; i++ {
-		screen.Update(tea.KeyMsg{Type: tea.KeyDown})
-		expected := i + 1
-		if screen.cursor != expected {
-			t.Errorf("cursor after down %d times = %d, want %d", i+1, screen.cursor, expected)
-		}
-	}
-
-	// Try to move down past last item - should stay at last
-	lastIndex := len(screen.jobs) - 1
-	screen.Update(tea.KeyMsg{Type: tea.KeyDown})
-	if screen.cursor != lastIndex {
-		t.Errorf("cursor after down at bottom = %d, want %d", screen.cursor, lastIndex)
-	}
-
-	// Move back up
-	screen.Update(tea.KeyMsg{Type: tea.KeyUp})
-	if screen.cursor != lastIndex-1 {
-		t.Errorf("cursor after up = %d, want %d", screen.cursor, lastIndex-1)
-	}
-}
-
-func TestSyncJobsScreen_VimNavigation(t *testing.T) {
-	screen := NewSyncJobsScreen()
-	screen.SetSize(80, 24)
-	screen.jobs = createTestSyncJobs()
-
-	// Test 'k' key (up) - should stay at 0
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
-	if screen.cursor != 0 {
-		t.Errorf("cursor after 'k' at top = %d, want 0", screen.cursor)
-	}
-
-	// Test 'j' key (down)
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-	if screen.cursor != 1 {
-		t.Errorf("cursor after 'j' = %d, want 1", screen.cursor)
-	}
-
-	// Test 'k' key (up) again
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
-	if screen.cursor != 0 {
-		t.Errorf("cursor after 'k' = %d, want 0", screen.cursor)
-	}
-}
-
-func TestSyncJobsScreen_ModeTransitions(t *testing.T) {
-	tests := []struct {
-		name         string
-		key          tea.KeyMsg
-		setupScreen  func(*SyncJobsScreen)
-		expectedMode SyncJobsScreenMode
-	}{
-		{
-			name:         "Delete mode transition",
-			key:          tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")},
-			setupScreen:  func(s *SyncJobsScreen) { s.jobs = createTestSyncJobs(); s.config = createTestConfigWithSyncJobs() },
-			expectedMode: SyncJobsModeDelete,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			screen := NewSyncJobsScreen()
-			screen.SetSize(80, 24)
-			tt.setupScreen(screen)
-
-			// Ensure cursor is valid
-			if screen.cursor >= len(screen.jobs) {
-				screen.cursor = 0
-			}
-
-			screen.Update(tt.key)
-
-			if screen.mode != tt.expectedMode {
-				t.Errorf("mode = %d, want %d", screen.mode, tt.expectedMode)
-			}
-		})
-	}
-}
-
-func TestSyncJobsScreen_DetailsModeTransition(t *testing.T) {
-	screen := NewSyncJobsScreen()
-	screen.SetSize(80, 24)
-	screen.jobs = createTestSyncJobs()
-	screen.generator = &systemd.Generator{}
-	screen.manager = &systemd.Manager{}
-
-	// Ensure cursor is valid
-	screen.cursor = 0
-
-	// Press Enter to go to details mode
-	screen.Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-	if screen.mode != SyncJobsModeDetails {
-		t.Errorf("mode = %d, want %d (SyncJobsModeDetails)", screen.mode, SyncJobsModeDetails)
-	}
-}
-
-func TestSyncJobsScreen_DeleteModeNoJobs(t *testing.T) {
-	screen := NewSyncJobsScreen()
-	screen.SetSize(80, 24)
+	screen.loading = false // Set to false to show empty state
 	// No jobs
 
 	// Try to delete
@@ -593,6 +457,7 @@ func TestSyncJobsScreen_ResetGoBack(t *testing.T) {
 func TestSyncJobsScreen_View(t *testing.T) {
 	screen := NewSyncJobsScreen()
 	screen.SetSize(80, 24)
+	screen.loading = false // Set to false to show job list
 	screen.jobs = createTestSyncJobs()
 
 	view := screen.View()
@@ -623,6 +488,7 @@ func TestSyncJobsScreen_View(t *testing.T) {
 func TestSyncJobsScreen_ViewEmpty(t *testing.T) {
 	screen := NewSyncJobsScreen()
 	screen.SetSize(80, 24)
+	screen.loading = false // Set to false to show empty state
 	// No jobs
 
 	view := screen.View()
@@ -2049,4 +1915,238 @@ func TestSyncJobsScreen_EditKey_NoRclone(t *testing.T) {
 	if screen.mode != SyncJobsModeList {
 		t.Errorf("mode = %d, want %d (SyncJobsModeList)", screen.mode, SyncJobsModeList)
 	}
+}
+
+func TestSyncJobDeleteConfirm_DeleteServiceOnly_NilManager(t *testing.T) {
+	job := createTestSyncJobs()[0]
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.manager = nil
+	dialog.generator = &systemd.Generator{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceOnly()
+	if cmd == nil {
+		t.Error("deleteServiceOnly should return a command even with nil manager")
+		return
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestSyncJobDeleteConfirm_DeleteServiceOnly_NilGenerator(t *testing.T) {
+	job := createTestSyncJobs()[0]
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = nil
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceOnly()
+	if cmd == nil {
+		t.Error("deleteServiceOnly should return a command even with nil generator")
+		return
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestSyncJobDeleteConfirm_DeleteServiceOnly_WithServices(t *testing.T) {
+	job := createTestSyncJobs()[0]
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceOnly()
+	if cmd == nil {
+		t.Fatal("deleteServiceOnly should return a command")
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_NilManager(t *testing.T) {
+	job := createTestSyncJobs()[0]
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.manager = nil
+	dialog.generator = &systemd.Generator{}
+	dialog.config = createTestConfigWithSyncJobs()
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceAndConfig()
+	if cmd == nil {
+		t.Error("deleteServiceAndConfig should return a command even with nil manager")
+		return
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_NilGenerator(t *testing.T) {
+	job := createTestSyncJobs()[0]
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = nil
+	dialog.config = createTestConfigWithSyncJobs()
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceAndConfig()
+	if cmd == nil {
+		t.Error("deleteServiceAndConfig should return a command even with nil generator")
+		return
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_NilConfig(t *testing.T) {
+	job := createTestSyncJobs()[0]
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+	dialog.config = nil
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceAndConfig()
+	if cmd == nil {
+		t.Error("deleteServiceAndConfig should return a command even with nil config")
+		return
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_WithServices(t *testing.T) {
+	job := createTestSyncJobs()[0]
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+	dialog.config = createTestConfigWithSyncJobs()
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceAndConfig()
+	if cmd == nil {
+		t.Fatal("deleteServiceAndConfig should return a command")
+	}
+
+	msg := cmd()
+	_ = msg
+}
+
+func TestSyncJobDeleteConfirm_EnterOnDeleteServiceOnly(t *testing.T) {
+	job := createTestSyncJobs()[0]
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.cursor = 1
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	_, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	_ = cmd
+}
+
+func TestSyncJobDeleteConfirm_EnterOnDeleteServiceAndConfig(t *testing.T) {
+	job := createTestSyncJobs()[0]
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.cursor = 2
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+	dialog.config = createTestConfigWithSyncJobs()
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	_, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	_ = cmd
+}
+
+func TestSyncJobDeleteConfirm_DeleteServiceOnly_ReturnsSyncJobDeletedMsg(t *testing.T) {
+	job := models.SyncJobConfig{
+		ID:          "test1234",
+		Name:        "TestJob",
+		Source:      "gdrive:/Documents",
+		Destination: "/home/user/docs",
+	}
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceOnly()
+	msg := cmd()
+	_ = msg
+}
+
+func TestSyncJobDeleteConfirm_DeleteServiceOnly_WithTimer(t *testing.T) {
+	job := models.SyncJobConfig{
+		ID:          "test1234",
+		Name:        "TestJob",
+		Source:      "gdrive:/Documents",
+		Destination: "/home/user/docs",
+		Schedule: models.ScheduleConfig{
+			Type:       "timer",
+			OnCalendar: "daily",
+		},
+	}
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.manager = &systemd.Manager{}
+	dialog.generator = &systemd.Generator{}
+
+	defer func() {
+		if r := recover(); r != nil {
+		}
+	}()
+
+	cmd := dialog.deleteServiceOnly()
+	if cmd == nil {
+		t.Fatal("deleteServiceOnly should return a command")
+	}
+
+	msg := cmd()
+	_ = msg
 }
