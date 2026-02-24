@@ -320,11 +320,10 @@ func (g *Generator) buildSyncOptions(opts *models.SyncOptions) string {
 
 	// Deletion handling
 	if opts.DeleteExtraneous {
-		if opts.DeleteAfter {
-			args = append(args, "--delete-after")
-		} else {
-			args = append(args, "--delete-after")
-		}
+		args = append(args, "--delete-extraneous")
+	}
+	if opts.DeleteAfter {
+		args = append(args, "--delete-after")
 	}
 
 	// Filtering

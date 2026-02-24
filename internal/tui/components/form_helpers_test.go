@@ -739,9 +739,9 @@ func TestGetBreadcrumbSegments(t *testing.T) {
 
 func TestPathExists(t *testing.T) {
 	tests := []struct {
-		name    string
-		path    string
-		want    bool
+		name string
+		path string
+		want bool
 	}{
 		{
 			name: "empty path",
@@ -787,9 +787,9 @@ func TestPathExists(t *testing.T) {
 
 func TestIsDirectory(t *testing.T) {
 	tests := []struct {
-		name    string
-		path    string
-		want    bool
+		name string
+		path string
+		want bool
 	}{
 		{
 			name: "empty path",
@@ -887,4 +887,3 @@ func TestGetDisplayPath(t *testing.T) {
 		})
 	}
 }
-

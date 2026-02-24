@@ -37,13 +37,13 @@ var (
 // - Recent locations tracking
 type EnhancedFilePicker struct {
 	// Configuration
-	title          string
-	description    string
-	dirAllowed     bool
-	fileAllowed    bool
-	currentDir     string
-	showHidden     bool
-	validate       func(string) error
+	title       string
+	description string
+	dirAllowed  bool
+	fileAllowed bool
+	currentDir  string
+	showHidden  bool
+	validate    func(string) error
 
 	// Internal state
 	entries      []FileEntry

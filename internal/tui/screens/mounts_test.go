@@ -2154,11 +2154,11 @@ func TestMountsScreen_RenderMountList_LongPaths(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = []models.MountConfig{
 		{
-			ID:          "test1234",
-			Name:        "TestMount",
-			Remote:      "gdrive",
-			RemotePath:  "/very/long/path/that/should/be/truncated",
-			MountPoint:  "/mnt/very/long/path/that/should/be/truncated",
+			ID:         "test1234",
+			Name:       "TestMount",
+			Remote:     "gdrive",
+			RemotePath: "/very/long/path/that/should/be/truncated",
+			MountPoint: "/mnt/very/long/path/that/should/be/truncated",
 		},
 	}
 	screen.cursor = 0
@@ -2327,13 +2327,13 @@ func TestMountsScreen_RenderMountDetails_UnknownStatus(t *testing.T) {
 
 func TestMountDetails_RenderDetails_WithMountOptions(t *testing.T) {
 	mount := models.MountConfig{
-		ID:          "test1234",
-		Name:        "TestMount",
-		Remote:      "gdrive",
-		RemotePath:  "/",
-		MountPoint:  "/mnt/test",
-		AutoStart:   true,
-		Enabled:     true,
+		ID:         "test1234",
+		Name:       "TestMount",
+		Remote:     "gdrive",
+		RemotePath: "/",
+		MountPoint: "/mnt/test",
+		AutoStart:  true,
+		Enabled:    true,
 		MountOptions: models.MountOptions{
 			VFSCacheMode: "full",
 			BufferSize:   "16M",

@@ -37,9 +37,9 @@ func TestNewEnhancedFilePicker(t *testing.T) {
 // TestEnhancedFilePicker_Options tests the builder pattern for setting options.
 func TestEnhancedFilePicker_Options(t *testing.T) {
 	tests := []struct {
-		name     string
-		opts     func(*EnhancedFilePicker) *EnhancedFilePicker
-		check    func(*EnhancedFilePicker) bool
+		name  string
+		opts  func(*EnhancedFilePicker) *EnhancedFilePicker
+		check func(*EnhancedFilePicker) bool
 	}{
 		{
 			name: "Title option",

@@ -342,8 +342,15 @@ func TestGenerator_BuildSyncOptions(t *testing.T) {
 				"--checkers=8",
 				"--bwlimit=10M",
 				"--log-level=DEBUG",
-				"--delete-after",
+				"--delete-extraneous",
 			},
+		},
+		{
+			name: "with delete after",
+			opts: models.SyncOptions{
+				DeleteAfter: true,
+			},
+			contains: []string{"--delete-after"},
 		},
 		{
 			name: "with max age",
@@ -1713,7 +1720,7 @@ func TestGenerator_BuildSyncOptions_AllOptions(t *testing.T) {
 	opts := &models.SyncOptions{
 		Direction:        "sync",
 		DeleteExtraneous: true,
-		DeleteAfter:      false,
+		DeleteAfter:      true,
 		IncludePattern:   "*.jpg,*.png",
 		ExcludePattern:   "*.tmp",
 		MaxAge:           "30d",
@@ -1731,6 +1738,7 @@ func TestGenerator_BuildSyncOptions_AllOptions(t *testing.T) {
 	result := g.buildSyncOptions(opts)
 
 	expectedContains := []string{
+		"--delete-extraneous",
 		"--delete-after",
 		"--include=*.jpg,*.png",
 		"--exclude=*.tmp",

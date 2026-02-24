@@ -54,6 +54,8 @@ func ExecuteWithVersion(version string) error {
 	return rootCmd.Execute()
 }
 
+// loadConfig returns the application configuration, using the --config flag
+// if provided. This function is injectable for testing purposes.
 var loadConfig = func() (*config.Config, error) {
 	if cfgFile != "" {
 		if err := os.Setenv("XDG_CONFIG_HOME", cfgFile); err != nil {
@@ -63,14 +65,20 @@ var loadConfig = func() (*config.Config, error) {
 	return config.Load()
 }
 
+// loadGenerator returns a new systemd generator instance.
+// This function is injectable for testing purposes.
 var loadGenerator = func() (*systemd.Generator, error) {
 	return systemd.NewGenerator()
 }
 
+// loadManager returns a new systemd manager instance.
+// This function is injectable for testing purposes.
 var loadManager = func() systemd.ServiceManager {
 	return systemd.NewManager()
 }
 
+// loadRcloneClient returns a new rclone client instance.
+// This function is injectable for testing purposes.
 var loadRcloneClient = func() *rclone.Client {
 	return rclone.NewClient()
 }
@@ -85,6 +93,8 @@ func printError(err error) {
 	fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 }
 
+// findMountByIDOrName searches for a mount by ID or name in the config.
+// Returns nil if not found.
 func findMountByIDOrName(cfg *config.Config, idOrName string) *models.MountConfig {
 	for i := range cfg.Mounts {
 		if cfg.Mounts[i].ID == idOrName || cfg.Mounts[i].Name == idOrName {
@@ -94,6 +104,8 @@ func findMountByIDOrName(cfg *config.Config, idOrName string) *models.MountConfi
 	return nil
 }
 
+// findSyncJobByIDOrName searches for a sync job by ID or name in the config.
+// Returns nil if not found.
 func findSyncJobByIDOrName(cfg *config.Config, idOrName string) *models.SyncJobConfig {
 	for i := range cfg.SyncJobs {
 		if cfg.SyncJobs[i].ID == idOrName || cfg.SyncJobs[i].Name == idOrName {

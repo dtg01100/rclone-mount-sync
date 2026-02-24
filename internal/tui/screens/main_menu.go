@@ -153,7 +153,7 @@ func (s *MainMenuScreen) View() string {
 
 	// Render menu
 	menuContent := s.menu.Render()
-	
+
 	// Center the menu
 	menuBox := lipgloss.NewStyle().
 		Width(s.width).

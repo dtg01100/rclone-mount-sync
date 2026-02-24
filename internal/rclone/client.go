@@ -67,10 +67,12 @@ func (c *Client) IsInstalled() bool {
 }
 
 // IsInstalled checks if rclone is available in the system PATH.
-// This is a package-level convenience function.
+// This is a package-level convenience function that uses the default client
+// configuration (honoring RCLONE_BINARY_PATH). Keeping this wrapper ensures
+// the behaviour matches the Client method while still providing a simple
+// helper for callers that don't need a full Client instance.
 func IsInstalled() bool {
-	_, err := exec.LookPath("rclone")
-	return err == nil
+	return NewClient().IsInstalled()
 }
 
 // GetVersion returns the installed rclone version.

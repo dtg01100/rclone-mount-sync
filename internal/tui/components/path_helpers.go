@@ -153,7 +153,7 @@ func GetBreadcrumbSegments(path string) []string {
 	// Handle home directory specially
 	homeDir, _ := os.UserHomeDir()
 	var segments []string
-	
+
 	if homeDir != "" && strings.HasPrefix(expandedPath, homeDir) {
 		segments = append(segments, "~")
 		remaining := strings.TrimPrefix(expandedPath, homeDir)
