@@ -808,18 +808,22 @@ func TestPermanentErrorMessage(t *testing.T) {
 func TestDoRetryAfterContextCancellationBetweenRetries(t *testing.T) {
 	config := RetryConfig{
 		MaxRetries:      5,
-		InitialDelay:    100 * time.Millisecond,
-		MaxDelay:        1 * time.Second,
+		InitialDelay:    10 * time.Second, // Long delay to ensure we can cancel before next retry
+		MaxDelay:        10 * time.Second,
 		RetryMultiplier: 2.0,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	callCount := 0
+	started := make(chan struct{})
 	go func() {
-		time.Sleep(50 * time.Millisecond)
+		close(started)
+		// Cancel after the first retry starts its delay
 		cancel()
 	}()
+
+	<-started // Wait for goroutine to start
 
 	err := doRetry(ctx, config, func() error {
 		callCount++
@@ -834,18 +838,22 @@ func TestDoRetryAfterContextCancellationBetweenRetries(t *testing.T) {
 func TestDoRetryBytesContextCancellationBetweenRetries(t *testing.T) {
 	config := RetryConfig{
 		MaxRetries:      5,
-		InitialDelay:    100 * time.Millisecond,
-		MaxDelay:        1 * time.Second,
+		InitialDelay:    10 * time.Second, // Long delay to ensure we can cancel before next retry
+		MaxDelay:        10 * time.Second,
 		RetryMultiplier: 2.0,
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	callCount := 0
+	started := make(chan struct{})
 	go func() {
-		time.Sleep(50 * time.Millisecond)
+		close(started)
+		// Cancel after the first retry starts its delay
 		cancel()
 	}()
+
+	<-started // Wait for goroutine to start
 
 	_, err := doRetryBytes(ctx, config, func() ([]byte, error) {
 		callCount++

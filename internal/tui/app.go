@@ -630,6 +630,9 @@ func (a *App) renderInitError() string {
 }
 
 func (a *App) updateOrphanPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if a.orphans == nil {
+		return a, nil
+	}
 	orphans := a.orphans.OrphanedUnits
 
 	switch msg.String() {
@@ -664,6 +667,16 @@ func (a *App) updateOrphanPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (a *App) importSelectedOrphan() (tea.Model, tea.Cmd) {
+	if a.orphans == nil || a.orphanSelected < 0 || a.orphanSelected >= len(a.orphans.OrphanedUnits) {
+		return a, func() tea.Msg {
+			return screens.MountsErrorMsg{Err: fmt.Errorf("invalid orphan selection")}
+		}
+	}
+	if a.generator == nil || a.manager == nil {
+		return a, func() tea.Msg {
+			return screens.MountsErrorMsg{Err: fmt.Errorf("services not initialized")}
+		}
+	}
 	orphan := a.orphans.OrphanedUnits[a.orphanSelected]
 
 	reconciler := systemd.NewReconciler(a.generator, a.manager)
@@ -735,6 +748,16 @@ func (a *App) importSelectedOrphan() (tea.Model, tea.Cmd) {
 }
 
 func (a *App) cleanupSelectedOrphan() (tea.Model, tea.Cmd) {
+	if a.orphans == nil || a.orphanSelected < 0 || a.orphanSelected >= len(a.orphans.OrphanedUnits) {
+		return a, func() tea.Msg {
+			return screens.MountsErrorMsg{Err: fmt.Errorf("invalid orphan selection")}
+		}
+	}
+	if a.generator == nil || a.manager == nil {
+		return a, func() tea.Msg {
+			return screens.MountsErrorMsg{Err: fmt.Errorf("services not initialized")}
+		}
+	}
 	orphan := a.orphans.OrphanedUnits[a.orphanSelected]
 
 	reconciler := systemd.NewReconciler(a.generator, a.manager)

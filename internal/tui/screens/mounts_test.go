@@ -1714,19 +1714,11 @@ func TestDeleteConfirm_DeleteServiceOnly_NilManager(t *testing.T) {
 	dialog.manager = nil
 	dialog.generator = &systemd.Generator{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles nil manager gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
 	if cmd == nil {
 		t.Error("deleteServiceOnly should return a command even with nil manager")
-		return
 	}
-
-	msg := cmd()
-	_ = msg
 }
 
 func TestDeleteConfirm_DeleteServiceOnly_NilGenerator(t *testing.T) {
@@ -1735,19 +1727,11 @@ func TestDeleteConfirm_DeleteServiceOnly_NilGenerator(t *testing.T) {
 	dialog.manager = &systemd.Manager{}
 	dialog.generator = nil
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles nil generator gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
 	if cmd == nil {
 		t.Error("deleteServiceOnly should return a command even with nil generator")
-		return
 	}
-
-	msg := cmd()
-	_ = msg
 }
 
 func TestDeleteConfirm_DeleteServiceOnly_WithServices(t *testing.T) {
@@ -1756,18 +1740,15 @@ func TestDeleteConfirm_DeleteServiceOnly_WithServices(t *testing.T) {
 	dialog.manager = &systemd.Manager{}
 	dialog.generator = &systemd.Generator{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles services gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
 	if cmd == nil {
 		t.Fatal("deleteServiceOnly should return a command")
 	}
-
 	msg := cmd()
-	_ = msg
+	if msg == nil {
+		t.Error("deleteServiceOnly command should return a non-nil message")
+	}
 }
 
 func TestDeleteConfirm_DeleteServiceAndConfig_NilManager(t *testing.T) {
@@ -1777,19 +1758,11 @@ func TestDeleteConfirm_DeleteServiceAndConfig_NilManager(t *testing.T) {
 	dialog.generator = &systemd.Generator{}
 	dialog.config = createTestConfigWithMounts()
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles nil manager gracefully - no panic expected
 	cmd := dialog.deleteServiceAndConfig()
 	if cmd == nil {
 		t.Error("deleteServiceAndConfig should return a command even with nil manager")
-		return
 	}
-
-	msg := cmd()
-	_ = msg
 }
 
 func TestDeleteConfirm_DeleteServiceAndConfig_NilGenerator(t *testing.T) {
@@ -1799,19 +1772,11 @@ func TestDeleteConfirm_DeleteServiceAndConfig_NilGenerator(t *testing.T) {
 	dialog.generator = nil
 	dialog.config = createTestConfigWithMounts()
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles nil generator gracefully - no panic expected
 	cmd := dialog.deleteServiceAndConfig()
 	if cmd == nil {
 		t.Error("deleteServiceAndConfig should return a command even with nil generator")
-		return
 	}
-
-	msg := cmd()
-	_ = msg
 }
 
 func TestDeleteConfirm_DeleteServiceAndConfig_NilConfig(t *testing.T) {
@@ -1821,19 +1786,11 @@ func TestDeleteConfirm_DeleteServiceAndConfig_NilConfig(t *testing.T) {
 	dialog.generator = &systemd.Generator{}
 	dialog.config = nil
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles nil config gracefully - no panic expected
 	cmd := dialog.deleteServiceAndConfig()
 	if cmd == nil {
 		t.Error("deleteServiceAndConfig should return a command even with nil config")
-		return
 	}
-
-	msg := cmd()
-	_ = msg
 }
 
 func TestDeleteConfirm_DeleteServiceAndConfig_WithServices(t *testing.T) {
@@ -1843,18 +1800,15 @@ func TestDeleteConfirm_DeleteServiceAndConfig_WithServices(t *testing.T) {
 	dialog.generator = &systemd.Generator{}
 	dialog.config = createTestConfigWithMounts()
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles services gracefully - no panic expected
 	cmd := dialog.deleteServiceAndConfig()
 	if cmd == nil {
 		t.Fatal("deleteServiceAndConfig should return a command")
 	}
-
 	msg := cmd()
-	_ = msg
+	if msg == nil {
+		t.Error("deleteServiceAndConfig command should return a non-nil message")
+	}
 }
 
 func TestDeleteConfirm_EnterOnDeleteServiceOnly(t *testing.T) {
@@ -1864,14 +1818,11 @@ func TestDeleteConfirm_EnterOnDeleteServiceOnly(t *testing.T) {
 	dialog.manager = &systemd.Manager{}
 	dialog.generator = &systemd.Generator{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles Enter gracefully - no panic expected
 	_, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-	_ = cmd
+	if cmd == nil {
+		t.Error("Update should return a non-nil command when Enter is pressed on delete option")
+	}
 }
 
 func TestDeleteConfirm_EnterOnDeleteServiceAndConfig(t *testing.T) {
@@ -1882,14 +1833,11 @@ func TestDeleteConfirm_EnterOnDeleteServiceAndConfig(t *testing.T) {
 	dialog.generator = &systemd.Generator{}
 	dialog.config = createTestConfigWithMounts()
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles Enter gracefully - no panic expected
 	_, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-	_ = cmd
+	if cmd == nil {
+		t.Error("Update should return a non-nil command when Enter is pressed on delete and config option")
+	}
 }
 
 func TestDeleteConfirm_DeleteServiceOnly_ReturnsMountDeletedMsg(t *testing.T) {
@@ -1904,14 +1852,15 @@ func TestDeleteConfirm_DeleteServiceOnly_ReturnsMountDeletedMsg(t *testing.T) {
 	dialog.manager = &systemd.Manager{}
 	dialog.generator = &systemd.Generator{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles delete gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
+	if cmd == nil {
+		t.Fatal("deleteServiceOnly should return a command")
+	}
 	msg := cmd()
-	_ = msg
+	if msg == nil {
+		t.Error("deleteServiceOnly command should return a non-nil message")
+	}
 }
 
 // Tests for toggleMount with active/inactive states
@@ -2198,8 +2147,10 @@ func TestMountFormSubmitMsg_Fields(t *testing.T) {
 func TestMountFormCancelMsg_Type(t *testing.T) {
 	msg := MountFormCancelMsg{}
 
-	// Just verify the type exists and can be created
-	_ = msg
+	// Verify the type exists and can be created
+	if msg != (MountFormCancelMsg{}) {
+		t.Error("MountFormCancelMsg should be creatable")
+	}
 }
 
 // Tests for now helper

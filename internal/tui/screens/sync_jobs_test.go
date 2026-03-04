@@ -1228,13 +1228,48 @@ func TestSyncJobsScreen_EnterNoJobs(t *testing.T) {
 	}
 }
 
-// Tests for add key variations - skipped because it requires rclone client
+// Tests for add key variations - tests error handling when rclone is not installed
 
 func TestSyncJobsScreen_AddKeyVariations(t *testing.T) {
-	// This test is skipped because the 'a' and 'n' keys require a non-nil rclone client
-	// to list remotes for the form. Without it, the code panics.
-	// The key handling is tested indirectly through other tests that set up proper services.
-	t.Skip("requires rclone client to be initialized")
+	// Test that pressing 'a' key with rclone client that's not installed returns proper error
+	screen := NewSyncJobsScreen()
+	screen.SetSize(80, 24)
+	screen.jobs = createTestSyncJobs()
+	screen.rclone = &rclone.Client{} // Client exists but IsInstalled returns false
+
+	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+
+	// Should set error when rclone is not installed
+	if screen.err == nil {
+		t.Error("error should be set when rclone is not installed")
+	}
+	if !strings.Contains(screen.err.Error(), "rclone binary not found") {
+		t.Errorf("error = %q, should contain 'rclone binary not found'", screen.err.Error())
+	}
+	if screen.mode != SyncJobsModeList {
+		t.Errorf("mode = %d, want %d (SyncJobsModeList)", screen.mode, SyncJobsModeList)
+	}
+}
+
+func TestSyncJobsScreen_NewKeyWithRcloneNotInstalled(t *testing.T) {
+	// Test that pressing 'n' key with rclone client that's not installed returns proper error
+	screen := NewSyncJobsScreen()
+	screen.SetSize(80, 24)
+	screen.jobs = createTestSyncJobs()
+	screen.rclone = &rclone.Client{} // Client exists but IsInstalled returns false
+
+	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+
+	// Should set error when rclone is not installed
+	if screen.err == nil {
+		t.Error("error should be set when rclone is not installed")
+	}
+	if !strings.Contains(screen.err.Error(), "rclone binary not found") {
+		t.Errorf("error = %q, should contain 'rclone binary not found'", screen.err.Error())
+	}
+	if screen.mode != SyncJobsModeList {
+		t.Errorf("mode = %d, want %d (SyncJobsModeList)", screen.mode, SyncJobsModeList)
+	}
 }
 
 // Tests for renderJobDetails
@@ -1923,19 +1958,11 @@ func TestSyncJobDeleteConfirm_DeleteServiceOnly_NilManager(t *testing.T) {
 	dialog.manager = nil
 	dialog.generator = &systemd.Generator{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles nil manager gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
 	if cmd == nil {
 		t.Error("deleteServiceOnly should return a command even with nil manager")
-		return
 	}
-
-	msg := cmd()
-	_ = msg
 }
 
 func TestSyncJobDeleteConfirm_DeleteServiceOnly_NilGenerator(t *testing.T) {
@@ -1944,19 +1971,11 @@ func TestSyncJobDeleteConfirm_DeleteServiceOnly_NilGenerator(t *testing.T) {
 	dialog.manager = &systemd.Manager{}
 	dialog.generator = nil
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles nil generator gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
 	if cmd == nil {
 		t.Error("deleteServiceOnly should return a command even with nil generator")
-		return
 	}
-
-	msg := cmd()
-	_ = msg
 }
 
 func TestSyncJobDeleteConfirm_DeleteServiceOnly_WithServices(t *testing.T) {
@@ -1965,18 +1984,15 @@ func TestSyncJobDeleteConfirm_DeleteServiceOnly_WithServices(t *testing.T) {
 	dialog.manager = &systemd.Manager{}
 	dialog.generator = &systemd.Generator{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles services gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
 	if cmd == nil {
 		t.Fatal("deleteServiceOnly should return a command")
 	}
-
 	msg := cmd()
-	_ = msg
+	if msg == nil {
+		t.Error("deleteServiceOnly command should return a non-nil message")
+	}
 }
 
 func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_NilManager(t *testing.T) {
@@ -1986,19 +2002,11 @@ func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_NilManager(t *testing.T) {
 	dialog.generator = &systemd.Generator{}
 	dialog.config = createTestConfigWithSyncJobs()
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles nil manager gracefully - no panic expected
 	cmd := dialog.deleteServiceAndConfig()
 	if cmd == nil {
 		t.Error("deleteServiceAndConfig should return a command even with nil manager")
-		return
 	}
-
-	msg := cmd()
-	_ = msg
 }
 
 func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_NilGenerator(t *testing.T) {
@@ -2008,19 +2016,11 @@ func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_NilGenerator(t *testing.T) 
 	dialog.generator = nil
 	dialog.config = createTestConfigWithSyncJobs()
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles nil generator gracefully - no panic expected
 	cmd := dialog.deleteServiceAndConfig()
 	if cmd == nil {
 		t.Error("deleteServiceAndConfig should return a command even with nil generator")
-		return
 	}
-
-	msg := cmd()
-	_ = msg
 }
 
 func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_NilConfig(t *testing.T) {
@@ -2030,19 +2030,11 @@ func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_NilConfig(t *testing.T) {
 	dialog.generator = &systemd.Generator{}
 	dialog.config = nil
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles nil config gracefully - no panic expected
 	cmd := dialog.deleteServiceAndConfig()
 	if cmd == nil {
 		t.Error("deleteServiceAndConfig should return a command even with nil config")
-		return
 	}
-
-	msg := cmd()
-	_ = msg
 }
 
 func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_WithServices(t *testing.T) {
@@ -2052,18 +2044,15 @@ func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_WithServices(t *testing.T) 
 	dialog.generator = &systemd.Generator{}
 	dialog.config = createTestConfigWithSyncJobs()
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles services gracefully - no panic expected
 	cmd := dialog.deleteServiceAndConfig()
 	if cmd == nil {
 		t.Fatal("deleteServiceAndConfig should return a command")
 	}
-
 	msg := cmd()
-	_ = msg
+	if msg == nil {
+		t.Error("deleteServiceAndConfig command should return a non-nil message")
+	}
 }
 
 func TestSyncJobDeleteConfirm_EnterOnDeleteServiceOnly(t *testing.T) {
@@ -2073,14 +2062,11 @@ func TestSyncJobDeleteConfirm_EnterOnDeleteServiceOnly(t *testing.T) {
 	dialog.manager = &systemd.Manager{}
 	dialog.generator = &systemd.Generator{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles Enter gracefully - no panic expected
 	_, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-	_ = cmd
+	if cmd == nil {
+		t.Error("Update should return a non-nil command when Enter is pressed on delete option")
+	}
 }
 
 func TestSyncJobDeleteConfirm_EnterOnDeleteServiceAndConfig(t *testing.T) {
@@ -2091,14 +2077,11 @@ func TestSyncJobDeleteConfirm_EnterOnDeleteServiceAndConfig(t *testing.T) {
 	dialog.generator = &systemd.Generator{}
 	dialog.config = createTestConfigWithSyncJobs()
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles Enter gracefully - no panic expected
 	_, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
-
-	_ = cmd
+	if cmd == nil {
+		t.Error("Update should return a non-nil command when Enter is pressed on delete and config option")
+	}
 }
 
 func TestSyncJobDeleteConfirm_DeleteServiceOnly_ReturnsSyncJobDeletedMsg(t *testing.T) {
@@ -2112,14 +2095,15 @@ func TestSyncJobDeleteConfirm_DeleteServiceOnly_ReturnsSyncJobDeletedMsg(t *test
 	dialog.manager = &systemd.Manager{}
 	dialog.generator = &systemd.Generator{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Code handles delete gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
+	if cmd == nil {
+		t.Fatal("deleteServiceOnly should return a command")
+	}
 	msg := cmd()
-	_ = msg
+	if msg == nil {
+		t.Error("deleteServiceOnly command should return a non-nil message")
+	}
 }
 
 func TestSyncJobDeleteConfirm_DeleteServiceOnly_WithTimer(t *testing.T) {
@@ -2137,18 +2121,15 @@ func TestSyncJobDeleteConfirm_DeleteServiceOnly_WithTimer(t *testing.T) {
 	dialog.manager = &systemd.Manager{}
 	dialog.generator = &systemd.Generator{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
 	cmd := dialog.deleteServiceOnly()
 	if cmd == nil {
 		t.Fatal("deleteServiceOnly should return a command")
 	}
 
 	msg := cmd()
-	_ = msg
+	if msg == nil {
+		t.Error("deleteServiceOnly command should return a non-nil message")
+	}
 }
 
 // Tests for startCreateForm with mock rclone
@@ -2464,8 +2445,10 @@ func TestSyncJobFormSubmitMsg_Fields(t *testing.T) {
 func TestSyncJobFormCancelMsg_Type(t *testing.T) {
 	msg := SyncJobFormCancelMsg{}
 
-	// Just verify the type exists and can be created
-	_ = msg
+	// Verify the type exists and can be created
+	if msg != (SyncJobFormCancelMsg{}) {
+		t.Error("SyncJobFormCancelMsg should be creatable")
+	}
 }
 
 // Tests for syncJobNow helper

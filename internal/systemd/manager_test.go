@@ -659,12 +659,9 @@ func TestManager_ContextCancellation(t *testing.T) {
 func TestManager_Timeout(t *testing.T) {
 	m := NewManager()
 
-	// Create a context with very short timeout
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+	// Create an already-expired context by using zero timeout
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 	defer cancel()
-
-	// Wait for context to expire
-	time.Sleep(1 * time.Millisecond)
 
 	// This should fail due to timeout
 	err := m.StartContext(ctx, "test-service")
@@ -1038,10 +1035,9 @@ func TestManager_StopContext_WithCancelledContext(t *testing.T) {
 func TestManager_StartContext_WithTimeout(t *testing.T) {
 	m := NewManager()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+	// Use an already-expired context instead of sleeping
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 	defer cancel()
-
-	time.Sleep(1 * time.Millisecond)
 
 	err := m.StartContext(ctx, "test-service")
 	if err == nil {
@@ -1053,10 +1049,9 @@ func TestManager_StartContext_WithTimeout(t *testing.T) {
 func TestManager_StopContext_WithTimeout(t *testing.T) {
 	m := NewManager()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Nanosecond)
+	// Use an already-expired context instead of sleeping
+	ctx, cancel := context.WithDeadline(context.Background(), time.Now().Add(-1*time.Second))
 	defer cancel()
-
-	time.Sleep(1 * time.Millisecond)
 
 	err := m.StopContext(ctx, "test-service")
 	if err == nil {

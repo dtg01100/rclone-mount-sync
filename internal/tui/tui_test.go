@@ -1124,12 +1124,18 @@ func TestApp_Messages(t *testing.T) {
 
 	t.Run("LoadingMsg", func(t *testing.T) {
 		msg := LoadingMsg{}
-		_ = msg
+		// LoadingMsg is a signal message with no fields, just verify it can be created
+		if msg != (LoadingMsg{}) {
+			t.Error("LoadingMsg should be creatable")
+		}
 	})
 
 	t.Run("LoadingDoneMsg", func(t *testing.T) {
 		msg := LoadingDoneMsg{}
-		_ = msg
+		// LoadingDoneMsg is a signal message with no fields, just verify it can be created
+		if msg != (LoadingDoneMsg{}) {
+			t.Error("LoadingDoneMsg should be creatable")
+		}
 	})
 
 	t.Run("AppInitError", func(t *testing.T) {
@@ -1142,7 +1148,10 @@ func TestApp_Messages(t *testing.T) {
 
 	t.Run("AppInitDone", func(t *testing.T) {
 		msg := AppInitDone{}
-		_ = msg
+		// AppInitDone is a signal message with no fields, just verify it can be created
+		if msg != (AppInitDone{}) {
+			t.Error("AppInitDone should be creatable")
+		}
 	})
 }
 
@@ -1461,19 +1470,13 @@ func TestApp_updateOrphanPrompt_EnterInActionModeWithNilOrphans(t *testing.T) {
 	app.orphanSelected = 0
 	app.orphanMode = 1
 	app.orphans = nil
-	app.showOrphanPrompt = false
+	app.showOrphanPrompt = true
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
-	updatedApp, cmd := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyEnter})
-
+	// Should not panic with nil orphans, should handle gracefully
+	_, cmd := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyEnter})
 	if cmd != nil {
-		t.Error("enter with nil orphans should return nil command")
+		t.Error("updateOrphanPrompt with nil orphans should return nil command")
 	}
-	_ = updatedApp
 }
 
 func TestApp_updateOrphanPrompt_CleanupKeyInActionMode(t *testing.T) {
@@ -1489,12 +1492,11 @@ func TestApp_updateOrphanPrompt_CleanupKeyInActionMode(t *testing.T) {
 	}
 	app.showOrphanPrompt = true
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
-	app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	// Should not panic with valid orphans, should handle gracefully
+	_, cmd := app.updateOrphanPrompt(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+	if cmd == nil {
+		t.Error("updateOrphanPrompt with 'c' key should return a command")
+	}
 }
 
 func TestApp_Update_HelpNotShown_KeysDontAffectScroll(t *testing.T) {
@@ -1613,11 +1615,7 @@ func TestApp_Update_EnterInActionModeWithOrphans(t *testing.T) {
 	}
 	app.showOrphanPrompt = true
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic when pressing Enter in action mode with orphans, should handle gracefully
 	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
 }
 
@@ -1634,11 +1632,7 @@ func TestApp_importSelectedOrphan_NilGenerator(t *testing.T) {
 	app.showOrphanPrompt = true
 	app.generator = nil
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic with nil generator, should handle gracefully
 	app.importSelectedOrphan()
 }
 
@@ -1657,11 +1651,7 @@ func TestApp_importSelectedOrphan_NilConfig(t *testing.T) {
 	app.manager = &systemd.Manager{}
 	app.config = nil
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic with nil config, should handle gracefully
 	app.importSelectedOrphan()
 }
 
@@ -1680,11 +1670,7 @@ func TestApp_importSelectedOrphan_MountType(t *testing.T) {
 	app.manager = &systemd.Manager{}
 	app.config = &config.Config{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic with mount type, should handle gracefully
 	app.importSelectedOrphan()
 }
 
@@ -1703,11 +1689,7 @@ func TestApp_importSelectedOrphan_SyncType(t *testing.T) {
 	app.manager = &systemd.Manager{}
 	app.config = &config.Config{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic with sync type, should handle gracefully
 	app.importSelectedOrphan()
 }
 
@@ -1724,12 +1706,11 @@ func TestApp_importSelectedOrphan_EmptyOrphanList(t *testing.T) {
 	app.manager = &systemd.Manager{}
 	app.config = &config.Config{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
-	app.importSelectedOrphan()
+	// Should not panic with empty orphan list, should return error command
+	_, cmd := app.importSelectedOrphan()
+	if cmd == nil {
+		t.Error("importSelectedOrphan with empty list should return error command")
+	}
 }
 
 func TestApp_importSelectedOrphan_IndexOutOfBounds(t *testing.T) {
@@ -1747,12 +1728,11 @@ func TestApp_importSelectedOrphan_IndexOutOfBounds(t *testing.T) {
 	app.manager = &systemd.Manager{}
 	app.config = &config.Config{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
-	app.importSelectedOrphan()
+	// Should not panic with index out of bounds, should return error command
+	_, cmd := app.importSelectedOrphan()
+	if cmd == nil {
+		t.Error("importSelectedOrphan with out of bounds index should return error command")
+	}
 }
 
 func TestApp_importSelectedOrphan_UpdatesOrphanList(t *testing.T) {
@@ -1771,11 +1751,7 @@ func TestApp_importSelectedOrphan_UpdatesOrphanList(t *testing.T) {
 	app.manager = &systemd.Manager{}
 	app.config = &config.Config{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic when updating orphan list, should handle gracefully
 	app.importSelectedOrphan()
 }
 
@@ -1794,11 +1770,7 @@ func TestApp_importSelectedOrphan_LastOrphan(t *testing.T) {
 	app.manager = &systemd.Manager{}
 	app.config = &config.Config{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic with last orphan, should handle gracefully
 	app.importSelectedOrphan()
 }
 
@@ -1815,12 +1787,11 @@ func TestApp_cleanupSelectedOrphan_NilGenerator(t *testing.T) {
 	app.showOrphanPrompt = true
 	app.generator = nil
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
-	app.cleanupSelectedOrphan()
+	// Should not panic with nil generator, should return error command
+	_, cmd := app.cleanupSelectedOrphan()
+	if cmd == nil {
+		t.Error("cleanupSelectedOrphan with nil generator should return error command")
+	}
 }
 
 func TestApp_cleanupSelectedOrphan_NilManager(t *testing.T) {
@@ -1837,12 +1808,11 @@ func TestApp_cleanupSelectedOrphan_NilManager(t *testing.T) {
 	app.generator = &systemd.Generator{}
 	app.manager = nil
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
-	app.cleanupSelectedOrphan()
+	// Should not panic with nil manager, should return error command
+	_, cmd := app.cleanupSelectedOrphan()
+	if cmd == nil {
+		t.Error("cleanupSelectedOrphan with nil manager should return error command")
+	}
 }
 
 func TestApp_cleanupSelectedOrphan_MountType(t *testing.T) {
@@ -1859,11 +1829,7 @@ func TestApp_cleanupSelectedOrphan_MountType(t *testing.T) {
 	app.generator = &systemd.Generator{}
 	app.manager = &systemd.Manager{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic with mount type, should handle gracefully
 	app.cleanupSelectedOrphan()
 }
 
@@ -1881,11 +1847,7 @@ func TestApp_cleanupSelectedOrphan_SyncType(t *testing.T) {
 	app.generator = &systemd.Generator{}
 	app.manager = &systemd.Manager{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic with sync type, should handle gracefully
 	app.cleanupSelectedOrphan()
 }
 
@@ -1904,11 +1866,7 @@ func TestApp_cleanupSelectedOrphan_UpdatesList(t *testing.T) {
 	app.generator = &systemd.Generator{}
 	app.manager = &systemd.Manager{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic when updating orphan list, should handle gracefully
 	app.cleanupSelectedOrphan()
 }
 
@@ -1926,11 +1884,7 @@ func TestApp_cleanupSelectedOrphan_LastOrphanClosesPrompt(t *testing.T) {
 	app.generator = &systemd.Generator{}
 	app.manager = &systemd.Manager{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic with last orphan, should handle gracefully and close prompt
 	app.cleanupSelectedOrphan()
 }
 
@@ -1946,12 +1900,11 @@ func TestApp_cleanupSelectedOrphan_EmptyOrphanList(t *testing.T) {
 	app.generator = &systemd.Generator{}
 	app.manager = &systemd.Manager{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
-	app.cleanupSelectedOrphan()
+	// Should not panic with empty orphan list, should return error command
+	_, cmd := app.cleanupSelectedOrphan()
+	if cmd == nil {
+		t.Error("cleanupSelectedOrphan with empty list should return error command")
+	}
 }
 
 func TestApp_cleanupSelectedOrphan_IndexOutOfBounds(t *testing.T) {
@@ -1968,12 +1921,11 @@ func TestApp_cleanupSelectedOrphan_IndexOutOfBounds(t *testing.T) {
 	app.generator = &systemd.Generator{}
 	app.manager = &systemd.Manager{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
-	app.cleanupSelectedOrphan()
+	// Should not panic with index out of bounds, should return error command
+	_, cmd := app.cleanupSelectedOrphan()
+	if cmd == nil {
+		t.Error("cleanupSelectedOrphan with out of bounds index should return error command")
+	}
 }
 
 func TestApp_cleanupSelectedOrphan_ResetsOrphanMode(t *testing.T) {
@@ -1991,11 +1943,7 @@ func TestApp_cleanupSelectedOrphan_ResetsOrphanMode(t *testing.T) {
 	app.generator = &systemd.Generator{}
 	app.manager = &systemd.Manager{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic when resetting orphan mode, should handle gracefully
 	app.cleanupSelectedOrphan()
 }
 
@@ -2014,10 +1962,6 @@ func TestApp_cleanupSelectedOrphan_AdjustsSelectedIndex(t *testing.T) {
 	app.generator = &systemd.Generator{}
 	app.manager = &systemd.Manager{}
 
-	defer func() {
-		if r := recover(); r != nil {
-		}
-	}()
-
+	// Should not panic when adjusting selected index, should handle gracefully
 	app.cleanupSelectedOrphan()
 }

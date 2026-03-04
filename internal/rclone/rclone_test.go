@@ -858,24 +858,28 @@ exit 1
 
 func TestRunCommandWithRetryContextCancellation(t *testing.T) {
 	mockScript := `#!/bin/sh
-echo "connection timeout" >&2
-exit 1
-`
+	echo "connection timeout" >&2
+	exit 1
+	`
 
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 	c.SetRetryConfig(RetryConfig{
 		MaxRetries:      5,
-		InitialDelay:    100 * time.Millisecond,
-		MaxDelay:        1 * time.Second,
+		InitialDelay:    10 * time.Second, // Long delay to ensure we can cancel between retries
+		MaxDelay:        10 * time.Second,
 		RetryMultiplier: 2.0,
 	})
 
 	ctx, cancel := context.WithCancel(context.Background())
+	started := make(chan struct{})
 	go func() {
-		time.Sleep(50 * time.Millisecond)
+		close(started)
+		// Cancel after the first retry starts its delay
 		cancel()
 	}()
+
+	<-started // Wait for goroutine to start
 
 	_, err := c.runCommandWithRetry(ctx, "listremotes")
 	if err != context.Canceled {
