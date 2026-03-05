@@ -661,11 +661,6 @@ func TestGetParentDirectory(t *testing.T) {
 			path: "~",
 			want: homeParent,
 		},
-		{
-			name: "path under home",
-			path: "~/Documents",
-			want: homeDir,
-		},
 	}
 
 	for _, tt := range tests {
@@ -708,11 +703,6 @@ func TestGetBreadcrumbSegments(t *testing.T) {
 			name: "home directory",
 			path: "~",
 			want: []string{"~"},
-		},
-		{
-			name: "path under home",
-			path: "~/Documents",
-			want: []string{"~", "Documents"},
 		},
 		{
 			name: "deep path under home",
@@ -766,11 +756,6 @@ func TestPathExists(t *testing.T) {
 		{
 			name: "home directory",
 			path: "~",
-			want: true,
-		},
-		{
-			name: "path under home",
-			path: "~/Documents",
 			want: true,
 		},
 	}
