@@ -21,7 +21,6 @@ ExecStopPost=/bin/rmdir {{.MountPoint}}
 Restart=on-failure
 RestartSec=5s
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-NoNewPrivileges=true
 
 [Install]
 WantedBy=default.target

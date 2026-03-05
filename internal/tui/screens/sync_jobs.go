@@ -46,7 +46,7 @@ type SyncJobsScreen struct {
 	config    *config.Config
 	rclone    *rclone.Client
 	generator *systemd.Generator
-	manager   *systemd.Manager
+	manager   systemd.ServiceManager
 
 	// Messages
 	err     error
@@ -58,12 +58,13 @@ type SyncJobsScreen struct {
 func NewSyncJobsScreen() *SyncJobsScreen {
 	return &SyncJobsScreen{
 		mode:     SyncJobsModeList,
+		loading:  true,
 		statuses: make(map[string]*models.ServiceStatus),
 	}
 }
 
 // SetServices sets the required services for the sync jobs screen.
-func (s *SyncJobsScreen) SetServices(cfg *config.Config, rcloneClient *rclone.Client, gen *systemd.Generator, mgr *systemd.Manager) {
+func (s *SyncJobsScreen) SetServices(cfg *config.Config, rcloneClient *rclone.Client, gen *systemd.Generator, mgr systemd.ServiceManager) {
 	s.config = cfg
 	s.rclone = rcloneClient
 	s.generator = gen
@@ -90,6 +91,11 @@ func (s *SyncJobsScreen) loadSyncJobs() tea.Msg {
 		return SyncJobsErrorMsg{Err: fmt.Errorf("config not initialized")}
 	}
 
+	// Reload config from disk to pick up external changes
+	if err := s.config.Reload(); err != nil {
+		return SyncJobsErrorMsg{Err: fmt.Errorf("failed to reload config: %w", err)}
+	}
+
 	// Load sync jobs from config
 	s.jobs = s.config.SyncJobs
 
@@ -111,30 +117,22 @@ func (s *SyncJobsScreen) loadSyncJobs() tea.Msg {
 func (s *SyncJobsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	// Handle screen-level messages first (even when in form mode)
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		// Handle mode-specific keybindings
-		switch s.mode {
-		case SyncJobsModeList:
-			return s.updateList(msg)
-		case SyncJobsModeCreate, SyncJobsModeEdit:
-			return s.updateForm(msg)
-		case SyncJobsModeDelete:
-			return s.updateDelete(msg)
-		case SyncJobsModeDetails:
-			return s.updateDetails(msg)
-		}
-
-	case SyncJobsLoadedMsg:
-		s.jobs = msg.Jobs
-		s.loading = false
-
+	case SyncJobFormCancelMsg:
+		s.mode = SyncJobsModeList
+		s.form = nil
+		s.err = nil
+		return s, nil
+	case SyncJobFormSubmitMsg:
+		// Form submitted, handled by form
+		return s, nil
 	case SyncJobCreatedMsg:
 		s.jobs = append(s.jobs, msg.Job)
 		s.success = fmt.Sprintf("Sync job '%s' created successfully", msg.Job.Name)
 		s.mode = SyncJobsModeList
 		s.err = nil
-
+		return s, nil
 	case SyncJobUpdatedMsg:
 		// Update the job in the list
 		for i, j := range s.jobs {
@@ -146,6 +144,32 @@ func (s *SyncJobsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.success = fmt.Sprintf("Sync job '%s' updated successfully", msg.Job.Name)
 		s.mode = SyncJobsModeList
 		s.err = nil
+		return s, nil
+	}
+
+	// Then handle form mode - pass remaining messages to form
+	if s.mode == SyncJobsModeCreate || s.mode == SyncJobsModeEdit {
+		if s.form != nil {
+			return s.updateForm(msg)
+		}
+		// Form is nil, reset to list mode
+		s.mode = SyncJobsModeList
+	}
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch s.mode {
+		case SyncJobsModeList:
+			return s.updateList(msg)
+		case SyncJobsModeDelete:
+			return s.updateDelete(msg)
+		case SyncJobsModeDetails:
+			return s.updateDetails(msg)
+		}
+
+	case SyncJobsLoadedMsg:
+		s.jobs = msg.Jobs
+		s.loading = false
 
 	case SyncJobDeletedMsg:
 		// Remove the job from the list
@@ -166,11 +190,6 @@ func (s *SyncJobsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SyncJobsErrorMsg:
 		s.err = msg.Err
 		s.loading = false
-
-	case SyncJobFormCancelMsg:
-		s.mode = SyncJobsModeList
-		s.form = nil
-		s.err = nil
 	}
 
 	return s, tea.Batch(cmds...)
@@ -221,7 +240,8 @@ func (s *SyncJobsScreen) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return s.toggleTimer()
 		}
 	case "R":
-		// Refresh status
+		// Refresh sync job list
+		s.loading = true
 		return s, s.loadSyncJobs
 	case "esc":
 		s.goBack = true
@@ -231,7 +251,7 @@ func (s *SyncJobsScreen) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // updateForm handles updates when in form mode.
-func (s *SyncJobsScreen) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (s *SyncJobsScreen) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if s.form == nil {
 		s.mode = SyncJobsModeList
 		return s, nil
@@ -504,14 +524,14 @@ func (s *SyncJobsScreen) renderList() string {
 	b.WriteString("\n")
 	helpText := components.HelpBar(s.width, []components.HelpItem{
 		{Key: "↑/↓", Desc: "navigate"},
-		{Key: "a/n", Desc: "add"},
+		{Key: "R", Desc: "refresh"},
+		{Key: "a", Desc: "add"},
 		{Key: "e", Desc: "edit"},
 		{Key: "d", Desc: "delete"},
 		{Key: "r", Desc: "run now"},
-		{Key: "t", Desc: "toggle timer"},
-		{Key: "Enter", Desc: "details"},
-		{Key: "R", Desc: "refresh"},
-		{Key: "Esc", Desc: "back"},
+		{Key: "t", Desc: "toggle"},
+		{Key: "enter", Desc: "details"},
+		{Key: "esc", Desc: "back"},
 	})
 	b.WriteString(helpText)
 
@@ -700,13 +720,19 @@ type SyncJobsErrorMsg struct {
 // SyncJobFormCancelMsg is sent when the form is cancelled.
 type SyncJobFormCancelMsg struct{}
 
+// SyncJobFormSubmitMsg is sent when the form is submitted.
+type SyncJobFormSubmitMsg struct {
+	Job  models.SyncJobConfig
+	Edit bool
+}
+
 // SyncJobDetails displays detailed sync job information.
 type SyncJobDetails struct {
 	job       models.SyncJobConfig
 	status    *models.ServiceStatus
 	timerNext string
 	logs      string
-	manager   *systemd.Manager
+	manager   systemd.ServiceManager
 	generator *systemd.Generator
 	done      bool
 	width     int
@@ -715,7 +741,7 @@ type SyncJobDetails struct {
 }
 
 // NewSyncJobDetails creates a new sync job details view.
-func NewSyncJobDetails(job models.SyncJobConfig, manager *systemd.Manager, generator *systemd.Generator) *SyncJobDetails {
+func NewSyncJobDetails(job models.SyncJobConfig, manager systemd.ServiceManager, generator *systemd.Generator) *SyncJobDetails {
 	d := &SyncJobDetails{
 		job:       job,
 		manager:   manager,
@@ -941,7 +967,7 @@ type SyncJobDeleteConfirm struct {
 	cursor     int
 	done       bool
 	deleteType int // 0: cancel, 1: service only, 2: service and config
-	manager    *systemd.Manager
+	manager    systemd.ServiceManager
 	generator  *systemd.Generator
 	config     *config.Config
 	width      int
@@ -957,7 +983,7 @@ func NewSyncJobDeleteConfirm(job models.SyncJobConfig) *SyncJobDeleteConfirm {
 }
 
 // SetServices sets the services for the delete confirmation.
-func (d *SyncJobDeleteConfirm) SetServices(mgr *systemd.Manager, gen *systemd.Generator, cfg *config.Config) {
+func (d *SyncJobDeleteConfirm) SetServices(mgr systemd.ServiceManager, gen *systemd.Generator, cfg *config.Config) {
 	d.manager = mgr
 	d.generator = gen
 	d.config = cfg
@@ -1028,13 +1054,16 @@ func (d *SyncJobDeleteConfirm) deleteServiceOnly() tea.Cmd {
 
 		// Disable the service
 		_ = d.manager.Disable(serviceName)
+		_ = d.manager.ResetFailed(serviceName)
 
 		// Remove the unit files
 		_ = d.generator.RemoveUnit(serviceName + ".service")
 		_ = d.generator.RemoveUnit(timerName + ".timer")
 
 		// Reload daemon
-		_ = d.manager.DaemonReload()
+		if err := d.manager.DaemonReload(); err != nil {
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to reload daemon: %w", err)}
+		}
 
 		return SyncJobDeletedMsg{Name: d.job.Name}
 	}
@@ -1056,6 +1085,7 @@ func (d *SyncJobDeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 		_ = d.manager.StopTimer(timerName)
 		_ = d.manager.DisableTimer(timerName)
 		_ = d.manager.Disable(serviceName)
+		_ = d.manager.ResetFailed(serviceName)
 
 		if err := d.generator.RemoveUnit(serviceName + ".service"); err != nil {
 			if d.config != nil {

@@ -36,11 +36,17 @@ type ServiceStatus struct {
 	Enabled  bool
 }
 
-// IsSystemdAvailable checks if systemd is available on the system.
+// IsSystemdAvailable checks if systemd user manager is available on the system.
+// It uses is-system-running which returns success if the manager is running,
+// regardless of individual service states.
 func (m *Manager) IsSystemdAvailable() bool {
-	cmd := exec.Command(m.systemctlPath, "--user", "status")
-	err := cmd.Run()
-	return err == nil
+	cmd := exec.Command(m.systemctlPath, "--user", "is-system-running")
+	output, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	state := strings.TrimSpace(string(output))
+	return state == "running" || state == "degraded"
 }
 
 // DaemonReload reloads the systemd daemon to pick up unit file changes.
@@ -89,6 +95,16 @@ func (m *Manager) Stop(name string) error {
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("stop %s failed: %w, output: %s", name, err, string(output))
+	}
+	return nil
+}
+
+// ResetFailed resets the failed state of a unit.
+func (m *Manager) ResetFailed(name string) error {
+	cmd := exec.Command(m.systemctlPath, "--user", "reset-failed", name)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("reset-failed failed: %w, output: %s", err, string(output))
 	}
 	return nil
 }
@@ -163,40 +179,49 @@ func (m *Manager) IsActive(name string) (bool, error) {
 	return strings.TrimSpace(string(output)) == "active", nil
 }
 
+// parseServiceListLine parses a single line from systemctl list-unit-files output.
+// Expected format: "rclone-mount-name.service enabled" or "rclone-sync-name.service disabled"
+// Returns the parsed name (without .service suffix) and enabled status.
+func parseServiceListLine(line string) (name string, enabled bool, ok bool) {
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return "", false, false
+	}
+
+	parts := strings.Fields(line)
+	if len(parts) < 1 {
+		return "", false, false
+	}
+
+	unitName := parts[0]
+	name = strings.TrimSuffix(unitName, ".service")
+	enabled = len(parts) > 1 && parts[1] == "enabled"
+
+	return name, enabled, true
+}
+
 // ListServices lists all rclone services (mounts and sync jobs).
 func (m *Manager) ListServices() ([]ServiceStatus, error) {
-	// List all rclone services
 	cmd := exec.Command(m.systemctlPath, "--user", "list-unit-files",
 		"--type=service", "--no-legend", "rclone-*.service")
 	output, err := cmd.Output()
 	if err != nil {
-		// If no units found, return empty list
 		return []ServiceStatus{}, nil
 	}
 
 	var services []ServiceStatus
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
+		name, enabled, ok := parseServiceListLine(line)
+		if !ok {
 			continue
 		}
-
-		// Parse line: "rclone-mount-name.service enabled"
-		parts := strings.Fields(line)
-		if len(parts) < 1 {
-			continue
-		}
-
-		unitName := parts[0]
-		name := strings.TrimSuffix(unitName, ".service")
 
 		status := &ServiceStatus{
 			Name:    name,
-			Enabled: len(parts) > 1 && parts[1] == "enabled",
+			Enabled: enabled,
 		}
 
-		// Get current state
 		if isActive, _ := m.IsActive(name); isActive {
 			status.Active = true
 			status.State = "active"
@@ -443,4 +468,160 @@ func parseSystemdTimestamp(s string) (time.Time, error) {
 	}
 
 	return time.Time{}, fmt.Errorf("unable to parse timestamp: %s", s)
+}
+
+// ServiceManager defines the interface for systemd service operations.
+// It allows for mocking in tests.
+type ServiceManager interface {
+	IsSystemdAvailable() bool
+	DaemonReload() error
+	Enable(name string) error
+	Disable(name string) error
+	Start(name string) error
+	Stop(name string) error
+	Restart(name string) error
+	Status(name string) (*ServiceStatus, error)
+	IsEnabled(name string) (bool, error)
+	IsActive(name string) (bool, error)
+	ListServices() ([]ServiceStatus, error)
+	GetLogs(name string, lines int) (string, error)
+	GetDetailedStatus(name string) (*models.ServiceStatus, error)
+	GetTimerNextRun(timerName string) (time.Time, error)
+	StartTimer(name string) error
+	StopTimer(name string) error
+	EnableTimer(name string) error
+	DisableTimer(name string) error
+	RunSyncNow(name string) error
+	ResetFailed(name string) error
+}
+
+// MockManager is a mock implementation of ServiceManager for testing.
+type MockManager struct {
+	IsSystemdAvailableResult bool
+	DaemonReloadErr          error
+	EnableErr                error
+	DisableErr               error
+	StartErr                 error
+	StopErr                  error
+	RestartErr               error
+	StatusResult             *ServiceStatus
+	StatusErr                error
+	IsEnabledResult          bool
+	IsEnabledErr             error
+	IsActiveResult           bool
+	IsActiveErr              error
+	ListServicesResult       []ServiceStatus
+	ListServicesErr          error
+	GetLogsResult            string
+	GetLogsErr               error
+	GetDetailedStatusResult  *models.ServiceStatus
+	GetDetailedStatusErr     error
+	GetTimerNextRunResult    time.Time
+	GetTimerNextRunErr       error
+	StartTimerErr            error
+	StopTimerErr             error
+	EnableTimerErr           error
+	DisableTimerErr          error
+	RunSyncNowErr            error
+	ResetFailedErr           error
+}
+
+// IsSystemdAvailable mocks the IsSystemdAvailable method.
+func (m *MockManager) IsSystemdAvailable() bool {
+	return m.IsSystemdAvailableResult
+}
+
+// DaemonReload mocks the DaemonReload method.
+func (m *MockManager) DaemonReload() error {
+	return m.DaemonReloadErr
+}
+
+// Enable mocks the Enable method.
+func (m *MockManager) Enable(name string) error {
+	return m.EnableErr
+}
+
+// Disable mocks the Disable method.
+func (m *MockManager) Disable(name string) error {
+	return m.DisableErr
+}
+
+// Start mocks the Start method.
+func (m *MockManager) Start(name string) error {
+	return m.StartErr
+}
+
+// Stop mocks the Stop method.
+func (m *MockManager) Stop(name string) error {
+	return m.StopErr
+}
+
+// Restart mocks the Restart method.
+func (m *MockManager) Restart(name string) error {
+	return m.RestartErr
+}
+
+// Status mocks the Status method.
+func (m *MockManager) Status(name string) (*ServiceStatus, error) {
+	return m.StatusResult, m.StatusErr
+}
+
+// IsEnabled mocks the IsEnabled method.
+func (m *MockManager) IsEnabled(name string) (bool, error) {
+	return m.IsEnabledResult, m.IsEnabledErr
+}
+
+// IsActive mocks the IsActive method.
+func (m *MockManager) IsActive(name string) (bool, error) {
+	return m.IsActiveResult, m.IsActiveErr
+}
+
+// ListServices mocks the ListServices method.
+func (m *MockManager) ListServices() ([]ServiceStatus, error) {
+	return m.ListServicesResult, m.ListServicesErr
+}
+
+// GetLogs mocks the GetLogs method.
+func (m *MockManager) GetLogs(name string, lines int) (string, error) {
+	return m.GetLogsResult, m.GetLogsErr
+}
+
+// GetDetailedStatus mocks the GetDetailedStatus method.
+func (m *MockManager) GetDetailedStatus(name string) (*models.ServiceStatus, error) {
+	return m.GetDetailedStatusResult, m.GetDetailedStatusErr
+}
+
+// GetTimerNextRun mocks the GetTimerNextRun method.
+func (m *MockManager) GetTimerNextRun(timerName string) (time.Time, error) {
+	return m.GetTimerNextRunResult, m.GetTimerNextRunErr
+}
+
+// StartTimer mocks the StartTimer method.
+func (m *MockManager) StartTimer(name string) error {
+	return m.StartTimerErr
+}
+
+// StopTimer mocks the StopTimer method.
+func (m *MockManager) StopTimer(name string) error {
+	return m.StopTimerErr
+}
+
+// EnableTimer mocks the EnableTimer method.
+func (m *MockManager) EnableTimer(name string) error {
+	return m.EnableTimerErr
+}
+
+// DisableTimer mocks the DisableTimer method.
+func (m *MockManager) DisableTimer(name string) error {
+	return m.DisableTimerErr
+}
+
+// RunSyncNow mocks the RunSyncNow method.
+func (m *MockManager) RunSyncNow(name string) error {
+	return m.RunSyncNowErr
+}
+
+// ResetFailed mocks the ResetFailed method.
+func (m *MockManager) ResetFailed(name string) error {
+	return m.ResetFailedErr
 }

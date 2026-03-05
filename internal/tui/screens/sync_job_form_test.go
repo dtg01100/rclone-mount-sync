@@ -11,6 +11,8 @@ import (
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
 	"github.com/dtg01100/rclone-mount-sync/internal/rclone"
+	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
+	"github.com/dtg01100/rclone-mount-sync/internal/tui/components"
 )
 
 // Helper function to create a test config for sync jobs
@@ -29,6 +31,17 @@ func createSyncTestConfig() *config.Config {
 	}
 }
 
+// createSyncTestGenerator creates a test generator for sync job tests
+func createSyncTestGenerator(t *testing.T) *systemd.Generator {
+	t.Helper()
+	tmpDir := t.TempDir()
+	return systemd.NewTestGenerator(tmpDir)
+}
+
+// createSyncTestManager creates a mock manager for sync job tests
+func createSyncTestManager() *systemd.MockManager {
+	return &systemd.MockManager{}
+}
 func TestNewSyncJobForm_Create(t *testing.T) {
 	cfg := createSyncTestConfig()
 	remotes := createTestRemotes()
@@ -374,9 +387,9 @@ func TestExpandSyncJobPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := expandSyncJobPath(tt.input)
+			result := components.ExpandHome(tt.input)
 			if result != tt.expected {
-				t.Errorf("expandSyncJobPath(%q) = %q, want %q", tt.input, result, tt.expected)
+				t.Errorf("components.ExpandHome(%q) = %q, want %q", tt.input, result, tt.expected)
 			}
 		})
 	}
@@ -541,7 +554,9 @@ func TestSyncJobForm_ShowOnBoot(t *testing.T) {
 
 func TestSyncJobForm_SubmitFormCreatesSyncJobConfig(t *testing.T) {
 	cfg := createSyncTestConfig()
-	form := NewSyncJobForm(nil, createTestRemotes(), cfg, nil, nil, nil, false)
+	gen := createSyncTestGenerator(t)
+	mgr := createTestManager()
+	form := NewSyncJobForm(nil, createTestRemotes(), cfg, gen, mgr, nil, false)
 
 	// Set form values
 	form.name = "Test Sync Job"
@@ -652,7 +667,9 @@ func TestSyncJobForm_SubmitFormEditMode(t *testing.T) {
 		ModifiedAt:  time.Now().Add(-24 * time.Hour),
 	}
 
-	form := NewSyncJobForm(existingJob, createTestRemotes(), cfg, nil, nil, nil, true)
+	gen := createSyncTestGenerator(t)
+	mgr := createTestManager()
+	form := NewSyncJobForm(existingJob, createTestRemotes(), cfg, gen, mgr, nil, true)
 
 	// Modify some values
 	form.destPath = "/backup/newdocs"
@@ -728,7 +745,9 @@ func TestSyncJobForm_DeleteModeHandling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+			gen := createSyncTestGenerator(t)
+			mgr := createTestManager()
+			form := NewSyncJobForm(nil, createTestRemotes(), nil, gen, mgr, nil, false)
 			form.deleteMode = tt.deleteMode
 
 			msg := form.submitForm()
@@ -750,7 +769,9 @@ func TestSyncJobForm_DeleteModeHandling(t *testing.T) {
 
 func TestSyncJobForm_ConfigIsUpdated(t *testing.T) {
 	cfg := createSyncTestConfig()
-	form := NewSyncJobForm(nil, createTestRemotes(), cfg, nil, nil, nil, false)
+	gen := createSyncTestGenerator(t)
+	mgr := createTestManager()
+	form := NewSyncJobForm(nil, createTestRemotes(), cfg, gen, mgr, nil, false)
 
 	// Set form values
 	form.name = "New Sync Job"
@@ -773,7 +794,9 @@ func TestSyncJobForm_ConfigIsUpdated(t *testing.T) {
 
 func TestSyncJobForm_NilConfigNoPanic(t *testing.T) {
 	// Test that form doesn't panic with nil config
-	form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+	gen := createSyncTestGenerator(t)
+	mgr := createTestManager()
+	form := NewSyncJobForm(nil, createTestRemotes(), nil, gen, mgr, nil, false)
 
 	// This should not panic
 	msg := form.submitForm()
@@ -785,7 +808,9 @@ func TestSyncJobForm_NilConfigNoPanic(t *testing.T) {
 }
 
 func TestSyncJobForm_RemoteDestination(t *testing.T) {
-	form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+	gen := createSyncTestGenerator(t)
+	mgr := createTestManager()
+	form := NewSyncJobForm(nil, createTestRemotes(), nil, gen, mgr, nil, false)
 
 	// Set a remote destination
 	form.destRemote = "s3"
@@ -858,7 +883,9 @@ func TestSyncJobForm_MaxTransfersParsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+			gen := createSyncTestGenerator(t)
+			mgr := createTestManager()
+			form := NewSyncJobForm(nil, createTestRemotes(), nil, gen, mgr, nil, false)
 			form.maxTransfers = tt.maxTransfers
 
 			msg := form.submitForm()
@@ -869,40 +896,6 @@ func TestSyncJobForm_MaxTransfersParsing(t *testing.T) {
 
 			if createdMsg.Job.SyncOptions.Transfers != tt.expectedValue {
 				t.Errorf("Transfers = %d, want %d", createdMsg.Job.SyncOptions.Transfers, tt.expectedValue)
-			}
-		})
-	}
-}
-
-func TestStrconvAtoi(t *testing.T) {
-	tests := []struct {
-		input    string
-		expected int
-		hasError bool
-	}{
-		{"123", 123, false},
-		{"0", 0, false},
-		{"-5", -5, false},
-		{"abc", 0, true},
-		{"", 0, true},
-		{"12.5", 12, false}, // fmt.Sscanf parses the integer part
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			result, err := strconvAtoi(tt.input)
-
-			if tt.hasError {
-				if err == nil {
-					t.Error("expected error, got nil")
-				}
-			} else {
-				if err != nil {
-					t.Errorf("unexpected error: %v", err)
-				}
-				if result != tt.expected {
-					t.Errorf("result = %d, want %d", result, tt.expected)
-				}
 			}
 		})
 	}
@@ -936,7 +929,9 @@ func TestSyncJobForm_GetRemotePathSuggestions_EmptyRemote(t *testing.T) {
 }
 
 func TestSyncJobForm_SubmitForm_NoSourceRemote(t *testing.T) {
-	form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+	gen := createSyncTestGenerator(t)
+	mgr := createTestManager()
+	form := NewSyncJobForm(nil, createTestRemotes(), nil, gen, mgr, nil, false)
 	form.sourceRemote = ""
 	form.name = "Test"
 	form.destPath = "/backup/test"
@@ -1014,7 +1009,9 @@ func TestSyncJobForm_ValidateDestPath_EdgeCases(t *testing.T) {
 }
 
 func TestSyncJobForm_SubmitFormWithRemoteDestination(t *testing.T) {
-	form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+	gen := createSyncTestGenerator(t)
+	mgr := createTestManager()
+	form := NewSyncJobForm(nil, createTestRemotes(), nil, gen, mgr, nil, false)
 
 	form.name = "Test Sync"
 	form.sourceRemote = "gdrive"
@@ -1167,8 +1164,8 @@ func TestSyncJobForm_OnBootParsing(t *testing.T) {
 
 	form := NewSyncJobForm(job, createTestRemotes(), nil, nil, nil, nil, true)
 
-	if !form.onBoot {
-		t.Error("onBoot should be true for onboot schedule type")
+	if form.scheduleType != "onboot" {
+		t.Error("scheduleType should be 'onboot' for onboot schedule type")
 	}
 	if form.onBootSec != "10min" {
 		t.Errorf("onBootSec = %q, want '10min'", form.onBootSec)
@@ -1237,7 +1234,9 @@ func TestSyncJobForm_NoRemotesAvailable(t *testing.T) {
 }
 
 func TestSyncJobForm_NoRemotesShowsHelpfulMessage(t *testing.T) {
-	form := NewSyncJobForm(nil, []rclone.Remote{}, nil, nil, nil, nil, false)
+	gen := createSyncTestGenerator(t)
+	mgr := createTestManager()
+	form := NewSyncJobForm(nil, []rclone.Remote{}, nil, gen, mgr, nil, false)
 	form.SetSize(80, 24)
 
 	// Verify form was created successfully with empty remotes
@@ -1262,5 +1261,218 @@ func TestSyncJobForm_NoRemotesShowsHelpfulMessage(t *testing.T) {
 	}
 	if !strings.Contains(errMsg.Err.Error(), "rclone config") {
 		t.Errorf("error should mention 'rclone config', got: %s", errMsg.Err.Error())
+	}
+}
+
+// Tests for validateOnCalendar function
+func TestSyncJobForm_ValidateOnCalendar(t *testing.T) {
+	tests := []struct {
+		name        string
+		calendar    string
+		expectError bool
+	}{
+		{
+			name:        "Empty string is invalid",
+			calendar:    "",
+			expectError: true,
+		},
+		{
+			name:        "Daily is valid",
+			calendar:    "daily",
+			expectError: false,
+		},
+		{
+			name:        "Weekly is valid",
+			calendar:    "weekly",
+			expectError: false,
+		},
+		{
+			name:        "Monthly is valid",
+			calendar:    "monthly",
+			expectError: false,
+		},
+		{
+			name:        "Hourly is valid",
+			calendar:    "hourly",
+			expectError: false,
+		},
+		{
+			name:        "Specific time daily",
+			calendar:    "*-*-* 00:00:00",
+			expectError: false,
+		},
+		{
+			name:        "Weekday at specific time",
+			calendar:    "Mon *-*-* 09:00:00",
+			expectError: false,
+		},
+		{
+			name:        "Quarter hour",
+			calendar:    "quarterly",
+			expectError: false,
+		},
+		{
+			name:        "Semi-annually",
+			calendar:    "semiannually",
+			expectError: false,
+		},
+		{
+			name:        "Annually",
+			calendar:    "annually",
+			expectError: false,
+		},
+		{
+			name:        "Specific date yearly",
+			calendar:    "*-01-01 00:00:00",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+			err := form.validateOnCalendar(tt.calendar)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// Tests for validateMaxTransfers function
+func TestSyncJobForm_ValidateMaxTransfers(t *testing.T) {
+	tests := []struct {
+		name        string
+		value       string
+		expectError bool
+		errContains string
+	}{
+		{
+			name:        "Empty string is valid",
+			value:       "",
+			expectError: false,
+		},
+		{
+			name:        "Valid positive number",
+			value:       "4",
+			expectError: false,
+		},
+		{
+			name:        "Valid large number",
+			value:       "100",
+			expectError: false,
+		},
+		{
+			name:        "Valid number with whitespace",
+			value:       " 8 ",
+			expectError: false,
+		},
+		{
+			name:        "Zero is invalid",
+			value:       "0",
+			expectError: true,
+			errContains: "greater than 0",
+		},
+		{
+			name:        "Negative number is invalid",
+			value:       "-1",
+			expectError: true,
+			errContains: "greater than 0",
+		},
+		{
+			name:        "Non-numeric is invalid",
+			value:       "abc",
+			expectError: true,
+			errContains: "valid number",
+		},
+		{
+			name:        "Float is invalid",
+			value:       "4.5",
+			expectError: true,
+			errContains: "valid number",
+		},
+		{
+			name:        "Number with spaces only",
+			value:       "   12   ",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+			err := form.validateMaxTransfers(tt.value)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				} else if tt.errContains != "" && !strings.Contains(err.Error(), tt.errContains) {
+					t.Errorf("error = %q, should contain %q", err.Error(), tt.errContains)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+// Test validateOnCalendar with various systemd calendar expressions
+func TestSyncJobForm_ValidateOnCalendar_SystemdFormats(t *testing.T) {
+	tests := []struct {
+		name        string
+		calendar    string
+		expectError bool
+	}{
+		{
+			name:        "Full datetime format",
+			calendar:    "2024-01-01 00:00:00",
+			expectError: false,
+		},
+		{
+			name:        "Time only with wildcard date",
+			calendar:    "*-*-* 12:30:00",
+			expectError: false,
+		},
+		{
+			name:        "Weekday with time",
+			calendar:    "Mon,Fri *-*-* 09:00:00",
+			expectError: false,
+		},
+		{
+			name:        "Monthly on specific day",
+			calendar:    "*-*-15 00:00:00",
+			expectError: false,
+		},
+		{
+			name:        "Yearly on specific date",
+			calendar:    "*-06-01 00:00:00",
+			expectError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
+			err := form.validateOnCalendar(tt.calendar)
+
+			if tt.expectError {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+			} else {
+				if err != nil {
+					t.Errorf("unexpected error for calendar %q: %v", tt.calendar, err)
+				}
+			}
+		})
 	}
 }

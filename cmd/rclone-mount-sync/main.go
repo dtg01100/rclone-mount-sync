@@ -7,7 +7,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/dtg01100/rclone-mount-sync/internal/cli"
 	"github.com/dtg01100/rclone-mount-sync/internal/rclone"
 	"github.com/dtg01100/rclone-mount-sync/internal/tui"
 )
@@ -192,5 +194,43 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 }
 
 func main() {
-	os.Exit(runMain(os.Args[1:], os.Stdout, os.Stderr))
+	args := os.Args[1:]
+
+	if len(args) == 0 {
+		os.Exit(runMain(args, os.Stdout, os.Stderr))
+	}
+
+	// Handle --version flag
+	for _, arg := range args {
+		if arg == "--version" || arg == "-v" {
+			printVersion(os.Stdout, version)
+			os.Exit(0)
+		}
+	}
+
+	cliCommands := map[string]bool{
+		"mount":      true,
+		"sync":       true,
+		"services":   true,
+		"config":     true,
+		"remote":     true,
+		"reconcile":  true,
+		"doctor":     true,
+		"cleanup":    true,
+		"help":       true,
+		"completion": true,
+	}
+
+	// Route to CLI if first arg is a known command or a flag (like --help, -h)
+	firstArg := args[0]
+	if cliCommands[firstArg] || strings.HasPrefix(firstArg, "-") {
+		cli.SetVersion(version)
+		if err := cli.Execute(); err != nil {
+			os.Exit(1)
+		}
+		os.Exit(0)
+	}
+
+	// Otherwise, TUI mode (supports old flags like --skip-checks, --config)
+	os.Exit(runMain(args, os.Stdout, os.Stderr))
 }

@@ -10,11 +10,11 @@ import (
 // Color palette - based on a professional dark theme
 var (
 	// Primary colors
-	ColorPrimary    = lipgloss.Color("62")  // Muted blue
-	ColorPrimaryBright = lipgloss.Color("75") // Brighter blue
-	ColorAccent     = lipgloss.Color("86")  // Cyan/teal
-	ColorBackground = lipgloss.Color("235") // Dark gray background
-	ColorSurface    = lipgloss.Color("236") // Slightly lighter surface
+	ColorPrimary       = lipgloss.Color("62")  // Muted blue
+	ColorPrimaryBright = lipgloss.Color("75")  // Brighter blue
+	ColorAccent        = lipgloss.Color("86")  // Cyan/teal
+	ColorBackground    = lipgloss.Color("235") // Dark gray background
+	ColorSurface       = lipgloss.Color("236") // Slightly lighter surface
 
 	// Text colors
 	ColorText       = lipgloss.Color("252") // Light gray text
@@ -22,10 +22,10 @@ var (
 	ColorTextBright = lipgloss.Color("15")  // White
 
 	// Semantic colors
-	ColorSuccess    = lipgloss.Color("82")  // Green
-	ColorWarning    = lipgloss.Color("214") // Orange
-	ColorError      = lipgloss.Color("196") // Red
-	ColorInfo       = lipgloss.Color("117") // Light blue
+	ColorSuccess = lipgloss.Color("82")  // Green
+	ColorWarning = lipgloss.Color("214") // Orange
+	ColorError   = lipgloss.Color("196") // Red
+	ColorInfo    = lipgloss.Color("117") // Light blue
 )
 
 // Styles contains common styling for the TUI.
@@ -51,18 +51,18 @@ var Styles = struct {
 	Box        lipgloss.Style
 
 	// Menu styles
-	MenuItem    lipgloss.Style
+	MenuItem     lipgloss.Style
 	MenuSelected lipgloss.Style
-	MenuKey     lipgloss.Style
+	MenuKey      lipgloss.Style
 
 	// Button styles
 	Button      lipgloss.Style
 	ButtonFocus lipgloss.Style
 
 	// Input styles
-	Input       lipgloss.Style
-	InputFocus  lipgloss.Style
-	InputLabel  lipgloss.Style
+	Input      lipgloss.Style
+	InputFocus lipgloss.Style
+	InputLabel lipgloss.Style
 
 	// Status indicator styles
 	StatusActive   lipgloss.Style
@@ -227,7 +227,7 @@ func (m *Menu) Render() string {
 			cursor := Styles.MenuSelected.Render("▸")
 			key := ""
 			if m.ShowKeys && item.Key != "" {
-				key = Styles.MenuKey.Render("["+item.Key+"] ") 
+				key = Styles.MenuKey.Render("[" + item.Key + "] ")
 			}
 			label := Styles.MenuSelected.Render(item.Label)
 			line = lipgloss.JoinHorizontal(lipgloss.Left, cursor, " ", key, label)
@@ -236,7 +236,7 @@ func (m *Menu) Render() string {
 			cursor := "  "
 			key := ""
 			if m.ShowKeys && item.Key != "" {
-				key = Styles.MenuKey.Render("["+item.Key+"] ")
+				key = Styles.MenuKey.Render("[" + item.Key + "] ")
 			}
 			label := Styles.MenuItem.Render(item.Label)
 			line = lipgloss.JoinHorizontal(lipgloss.Left, cursor, " ", key, label)
@@ -288,7 +288,7 @@ func HelpBar(width int, items []HelpItem) string {
 	}
 
 	content := strings.Join(parts, Styles.HelpText.Render(" • "))
-	
+
 	// Truncate if too wide by removing items from the end
 	// This preserves ANSI escape codes and respects visual width
 	if lipgloss.Width(content) > width {
@@ -305,12 +305,12 @@ func HelpBar(width int, items []HelpItem) string {
 func TitleBar(width int, title, version string) string {
 	left := Styles.Header.Render(title)
 	right := Styles.Subtitle.Render("v" + version + "  [?] Help  [q] Quit")
-	
+
 	// Calculate padding
 	leftWidth := lipgloss.Width(left)
 	rightWidth := lipgloss.Width(right)
 	padding := width - leftWidth - rightWidth
-	
+
 	if padding < 0 {
 		padding = 0
 	}
@@ -406,4 +406,98 @@ func RenderWarning(text string) string {
 // RenderInfo renders an info message.
 func RenderInfo(text string) string {
 	return Styles.Info.Render("ℹ " + text)
+}
+
+// FilePickerStyles contains styling for the enhanced file picker.
+var FilePickerStyles = struct {
+	// Breadcrumb styles
+	BreadcrumbBar lipgloss.Style
+	Breadcrumb    lipgloss.Style
+	BreadcrumbSep lipgloss.Style
+
+	// Quick jump bar styles
+	QuickJumpBar   lipgloss.Style
+	QuickJumpKey   lipgloss.Style
+	QuickJumpLabel lipgloss.Style
+
+	// Recent menu styles
+	RecentMenu             lipgloss.Style
+	RecentMenuHeader       lipgloss.Style
+	RecentMenuItem         lipgloss.Style
+	RecentMenuItemSelected lipgloss.Style
+
+	// File entry styles
+	FolderIcon lipgloss.Style
+	FileIcon   lipgloss.Style
+	ParentIcon lipgloss.Style
+
+	// Selection styles
+	SelectedEntry lipgloss.Style
+	Entry         lipgloss.Style
+
+	// Status styles
+	StatusLine lipgloss.Style
+	HelpBar    lipgloss.Style
+}{
+	// Breadcrumb styles
+	BreadcrumbBar: lipgloss.NewStyle().
+		Background(ColorSurface).
+		Padding(0, 1),
+	Breadcrumb: lipgloss.NewStyle().
+		Foreground(ColorPrimaryBright).
+		Bold(true),
+	BreadcrumbSep: lipgloss.NewStyle().
+		Foreground(ColorTextMuted).
+		Padding(0, 1),
+
+	// Quick jump bar styles
+	QuickJumpBar: lipgloss.NewStyle().
+		Background(ColorBackground).
+		Padding(0, 1),
+	QuickJumpKey: lipgloss.NewStyle().
+		Foreground(ColorAccent).
+		Bold(true),
+	QuickJumpLabel: lipgloss.NewStyle().
+		Foreground(ColorTextMuted),
+
+	// Recent menu styles
+	RecentMenu: lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ColorPrimary).
+		Background(ColorSurface).
+		Padding(0, 1),
+	RecentMenuHeader: lipgloss.NewStyle().
+		Foreground(ColorPrimaryBright).
+		Bold(true).
+		Padding(0, 0, 1, 0),
+	RecentMenuItem: lipgloss.NewStyle().
+		Foreground(ColorText),
+	RecentMenuItemSelected: lipgloss.NewStyle().
+		Foreground(ColorAccent).
+		Background(ColorPrimary).
+		Bold(true),
+
+	// File entry styles
+	FolderIcon: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("81")), // Light blue
+	FileIcon: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("248")), // Gray
+	ParentIcon: lipgloss.NewStyle().
+		Foreground(lipgloss.Color("75")), // Blue
+
+	// Selection styles
+	SelectedEntry: lipgloss.NewStyle().
+		Foreground(ColorTextBright).
+		Background(ColorPrimary),
+	Entry: lipgloss.NewStyle().
+		Foreground(ColorText),
+
+	// Status styles
+	StatusLine: lipgloss.NewStyle().
+		Foreground(ColorText).
+		Background(ColorSurface).
+		Padding(0, 1),
+	HelpBar: lipgloss.NewStyle().
+		Foreground(ColorTextMuted).
+		Padding(0, 1),
 }

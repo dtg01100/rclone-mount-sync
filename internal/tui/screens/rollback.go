@@ -33,10 +33,10 @@ type SyncJobRollbackData struct {
 type RollbackManager struct {
 	config    *config.Config
 	generator *systemd.Generator
-	manager   *systemd.Manager
+	manager   systemd.ServiceManager
 }
 
-func NewRollbackManager(cfg *config.Config, gen *systemd.Generator, mgr *systemd.Manager) *RollbackManager {
+func NewRollbackManager(cfg *config.Config, gen *systemd.Generator, mgr systemd.ServiceManager) *RollbackManager {
 	return &RollbackManager{
 		config:    cfg,
 		generator: gen,

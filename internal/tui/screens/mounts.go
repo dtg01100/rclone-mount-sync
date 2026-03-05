@@ -46,7 +46,7 @@ type MountsScreen struct {
 	config    *config.Config
 	rclone    *rclone.Client
 	generator *systemd.Generator
-	manager   *systemd.Manager
+	manager   systemd.ServiceManager
 
 	// Messages
 	err     error
@@ -58,12 +58,13 @@ type MountsScreen struct {
 func NewMountsScreen() *MountsScreen {
 	return &MountsScreen{
 		mode:     MountsModeList,
+		loading:  true,
 		statuses: make(map[string]*systemd.ServiceStatus),
 	}
 }
 
 // SetServices sets the required services for the mounts screen.
-func (s *MountsScreen) SetServices(cfg *config.Config, rcloneClient *rclone.Client, gen *systemd.Generator, mgr *systemd.Manager) {
+func (s *MountsScreen) SetServices(cfg *config.Config, rcloneClient *rclone.Client, gen *systemd.Generator, mgr systemd.ServiceManager) {
 	s.config = cfg
 	s.rclone = rcloneClient
 	s.generator = gen
@@ -90,6 +91,11 @@ func (s *MountsScreen) loadMounts() tea.Msg {
 		return MountsErrorMsg{Err: fmt.Errorf("config not initialized")}
 	}
 
+	// Reload config from disk to pick up external changes
+	if err := s.config.Reload(); err != nil {
+		return MountsErrorMsg{Err: fmt.Errorf("failed to reload config: %w", err)}
+	}
+
 	// Load mounts from config
 	s.mounts = s.config.Mounts
 
@@ -111,30 +117,22 @@ func (s *MountsScreen) loadMounts() tea.Msg {
 func (s *MountsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	// Handle screen-level messages first (even when in form mode)
 	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		// Handle mode-specific keybindings
-		switch s.mode {
-		case MountsModeList:
-			return s.updateList(msg)
-		case MountsModeCreate, MountsModeEdit:
-			return s.updateForm(msg)
-		case MountsModeDelete:
-			return s.updateDelete(msg)
-		case MountsModeDetails:
-			return s.updateDetails(msg)
-		}
-
-	case MountsLoadedMsg:
-		s.mounts = msg.Mounts
-		s.loading = false
-
+	case MountFormCancelMsg:
+		s.mode = MountsModeList
+		s.form = nil
+		s.err = nil
+		return s, nil
+	case MountFormSubmitMsg:
+		// Form submitted, handled by form
+		return s, nil
 	case MountCreatedMsg:
 		s.mounts = append(s.mounts, msg.Mount)
 		s.success = fmt.Sprintf("Mount '%s' created successfully", msg.Mount.Name)
 		s.mode = MountsModeList
 		s.err = nil
-
+		return s, nil
 	case MountUpdatedMsg:
 		// Update the mount in the list
 		for i, m := range s.mounts {
@@ -146,6 +144,32 @@ func (s *MountsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		s.success = fmt.Sprintf("Mount '%s' updated successfully", msg.Mount.Name)
 		s.mode = MountsModeList
 		s.err = nil
+		return s, nil
+	}
+
+	// Then handle form mode - pass remaining messages to form
+	if s.mode == MountsModeCreate || s.mode == MountsModeEdit {
+		if s.form != nil {
+			return s.updateForm(msg)
+		}
+		// Form is nil, reset to list mode
+		s.mode = MountsModeList
+	}
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch s.mode {
+		case MountsModeList:
+			return s.updateList(msg)
+		case MountsModeDelete:
+			return s.updateDelete(msg)
+		case MountsModeDetails:
+			return s.updateDetails(msg)
+		}
+
+	case MountsLoadedMsg:
+		s.mounts = msg.Mounts
+		s.loading = false
 
 	case MountDeletedMsg:
 		// Remove the mount from the list
@@ -166,14 +190,6 @@ func (s *MountsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case MountsErrorMsg:
 		s.err = msg.Err
 		s.loading = false
-
-	case MountFormCancelMsg:
-		s.mode = MountsModeList
-		s.form = nil
-		s.err = nil
-
-	case MountFormSubmitMsg:
-		// Form submitted, handled by form
 	}
 
 	return s, tea.Batch(cmds...)
@@ -203,6 +219,9 @@ func (s *MountsScreen) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if len(s.mounts) > 0 && s.cursor < len(s.mounts) {
 			s.mode = MountsModeDelete
 			s.delete = NewDeleteConfirm(s.mounts[s.cursor])
+			if s.config != nil {
+				s.delete.SetServices(s.manager, s.generator, s.config)
+			}
 		}
 	case "enter":
 		// View details
@@ -226,7 +245,8 @@ func (s *MountsScreen) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return s.stopMount()
 		}
 	case "r":
-		// Refresh status
+		// Refresh mount list
+		s.loading = true
 		return s, s.loadMounts
 	case "esc":
 		s.goBack = true
@@ -236,7 +256,7 @@ func (s *MountsScreen) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // updateForm handles updates when in form mode.
-func (s *MountsScreen) updateForm(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (s *MountsScreen) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if s.form == nil {
 		s.mode = MountsModeList
 		return s, nil
@@ -534,6 +554,7 @@ func (s *MountsScreen) renderList() string {
 	b.WriteString("\n")
 	helpText := components.HelpBar(s.width, []components.HelpItem{
 		{Key: "↑/↓", Desc: "navigate"},
+		{Key: "r", Desc: "refresh"},
 		{Key: "a", Desc: "add"},
 		{Key: "e", Desc: "edit"},
 		{Key: "d", Desc: "delete"},
@@ -682,7 +703,7 @@ type DeleteConfirm struct {
 	cursor     int
 	done       bool
 	deleteType int // 0: cancel, 1: service only, 2: service and config
-	manager    *systemd.Manager
+	manager    systemd.ServiceManager
 	generator  *systemd.Generator
 	config     *config.Config
 	width      int
@@ -698,7 +719,7 @@ func NewDeleteConfirm(mount models.MountConfig) *DeleteConfirm {
 }
 
 // SetServices sets the services for the delete confirmation.
-func (d *DeleteConfirm) SetServices(mgr *systemd.Manager, gen *systemd.Generator, cfg *config.Config) {
+func (d *DeleteConfirm) SetServices(mgr systemd.ServiceManager, gen *systemd.Generator, cfg *config.Config) {
 	d.manager = mgr
 	d.generator = gen
 	d.config = cfg
@@ -764,12 +785,15 @@ func (d *DeleteConfirm) deleteServiceOnly() tea.Cmd {
 
 		// Disable the service
 		_ = d.manager.Disable(serviceName)
+		_ = d.manager.ResetFailed(serviceName)
 
 		// Remove the unit file
 		_ = d.generator.RemoveUnit(serviceName)
 
 		// Reload daemon
-		_ = d.manager.DaemonReload()
+		if err := d.manager.DaemonReload(); err != nil {
+			return MountsErrorMsg{Err: fmt.Errorf("failed to reload daemon: %w", err)}
+		}
 
 		return MountDeletedMsg{Name: d.mount.Name}
 	}
@@ -788,6 +812,7 @@ func (d *DeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 
 		_ = d.manager.Stop(serviceName)
 		_ = d.manager.Disable(serviceName)
+		_ = d.manager.ResetFailed(serviceName)
 
 		if err := d.generator.RemoveUnit(serviceName); err != nil {
 			if d.config != nil {
@@ -882,7 +907,7 @@ type MountDetails struct {
 	mount     models.MountConfig
 	status    *systemd.ServiceStatus
 	logs      string
-	manager   *systemd.Manager
+	manager   systemd.ServiceManager
 	generator *systemd.Generator
 	done      bool
 	width     int
@@ -891,7 +916,7 @@ type MountDetails struct {
 }
 
 // NewMountDetails creates a new mount details view.
-func NewMountDetails(mount models.MountConfig, manager *systemd.Manager, generator *systemd.Generator) *MountDetails {
+func NewMountDetails(mount models.MountConfig, manager systemd.ServiceManager, generator *systemd.Generator) *MountDetails {
 	d := &MountDetails{
 		mount:     mount,
 		manager:   manager,

@@ -1,11 +1,13 @@
 package screens
 
 import (
+	"os"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
+	"github.com/dtg01100/rclone-mount-sync/internal/models"
 )
 
 func TestNewSettingsScreen(t *testing.T) {
@@ -924,5 +926,768 @@ func TestSettingsScreen_SettingsListTruncation(t *testing.T) {
 	// View should still render without errors
 	if view == "" {
 		t.Error("View() should not be empty")
+	}
+}
+
+// Tests for Import/Export functionality
+
+func TestSettingsScreen_StartExport(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Call startExport
+	model, cmd := screen.startExport()
+
+	// Verify state was set correctly
+	if !screen.showingFilePicker {
+		t.Error("showingFilePicker should be true after startExport")
+	}
+
+	if screen.form == nil {
+		t.Error("form should be initialized")
+	}
+
+	// Verify model returned is the screen
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+
+	// cmd should be the form init command (may not be nil)
+	_ = cmd
+}
+
+func TestSettingsScreen_StartImport(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Call startImport
+	model, cmd := screen.startImport()
+
+	// Verify state was set correctly
+	if !screen.showingFilePicker {
+		t.Error("showingFilePicker should be true after startImport")
+	}
+
+	if screen.form == nil {
+		t.Error("form should be initialized")
+	}
+
+	// Verify model returned is the screen
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+
+	// cmd should be the form init command
+	_ = cmd
+}
+
+func TestSettingsScreen_UpdateFilePicker_Escape(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Initialize file picker state
+	screen.showingFilePicker = true
+	screen.exportPath = "/some/path"
+	screen.pendingImportPath = "/some/import/path"
+
+	// Create a dummy form
+	screen.startExport()
+
+	// Press escape to cancel
+	model, _ := screen.updateFilePicker(tea.KeyMsg{Type: tea.KeyEsc})
+
+	// Verify state was reset
+	if screen.showingFilePicker {
+		t.Error("showingFilePicker should be false after escape")
+	}
+
+	if screen.form != nil {
+		t.Error("form should be nil after escape")
+	}
+
+	if screen.exportPath != "" {
+		t.Error("exportPath should be empty after escape")
+	}
+
+	if screen.pendingImportPath != "" {
+		t.Error("pendingImportPath should be empty after escape")
+	}
+
+	// Verify model returned is the screen
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_CompleteExport_NilConfig(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+	// Don't set config - it should be nil
+
+	// Call completeExport
+	model, _ := screen.completeExport("/tmp/export.yaml")
+
+	// Verify error message was set
+	if screen.message == "" {
+		t.Error("message should be set when config is nil")
+	}
+
+	if screen.messageType != "error" {
+		t.Errorf("messageType = %q, want 'error'", screen.messageType)
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_CompleteExport_Success(t *testing.T) {
+	// Create a temp file for export
+	tmpDir := t.TempDir()
+	exportPath := tmpDir + "/export.yaml"
+
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	cfg := &config.Config{
+		Version: "1.0",
+		Mounts: []models.MountConfig{
+			{Name: "test-mount", Remote: "remote:path", MountPoint: "/mnt/test"},
+		},
+	}
+	screen.SetConfig(cfg)
+
+	// Call completeExport
+	model, _ := screen.completeExport(exportPath)
+
+	// Verify success message
+	if !strings.Contains(screen.message, "exported") {
+		t.Errorf("message = %q, should contain 'exported'", screen.message)
+	}
+
+	if screen.messageType != "success" {
+		t.Errorf("messageType = %q, want 'success'", screen.messageType)
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_CompleteImportFileSelection_FileNotExist(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Call with non-existent file
+	model, _ := screen.completeImportFileSelection("/nonexistent/path.yaml")
+
+	// Verify error message
+	if !strings.Contains(screen.message, "does not exist") {
+		t.Errorf("message = %q, should contain 'does not exist'", screen.message)
+	}
+
+	if screen.messageType != "error" {
+		t.Errorf("messageType = %q, want 'error'", screen.messageType)
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_CompleteImportFileSelection_Success(t *testing.T) {
+	// Create a temp file for import
+	tmpFile, err := os.CreateTemp("", "import-*.yaml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	// Write valid export data
+	exportData := `version: "1.0"
+mounts: []
+sync_jobs: []
+exported: "2024-01-01T00:00:00Z"
+`
+	if _, err := tmpFile.WriteString(exportData); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Call with existing file
+	model, _ := screen.completeImportFileSelection(tmpFile.Name())
+
+	// Verify pendingImportPath was set
+	if screen.pendingImportPath != tmpFile.Name() {
+		t.Errorf("pendingImportPath = %q, want %q", screen.pendingImportPath, tmpFile.Name())
+	}
+
+	// Verify showing import mode selection
+	if !screen.showingImportMode {
+		t.Error("showingImportMode should be true")
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_ShowImportModeSelection(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Call showImportModeSelection
+	model, cmd := screen.showImportModeSelection()
+
+	// Verify state
+	if !screen.showingImportMode {
+		t.Error("showingImportMode should be true")
+	}
+
+	if screen.form == nil {
+		t.Error("form should be initialized")
+	}
+
+	if screen.importMode != "merge" {
+		t.Errorf("importMode = %q, want 'merge'", screen.importMode)
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+
+	_ = cmd
+}
+
+func TestSettingsScreen_UpdateImportModeForm_Escape(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Initialize import mode form
+	screen.showImportModeSelection()
+	screen.pendingImportPath = "/some/path.yaml"
+
+	// Press escape to cancel
+	model, _ := screen.updateImportModeForm(tea.KeyMsg{Type: tea.KeyEsc})
+
+	// Verify state was reset
+	if screen.showingImportMode {
+		t.Error("showingImportMode should be false after escape")
+	}
+
+	if screen.form != nil {
+		t.Error("form should be nil after escape")
+	}
+
+	if screen.pendingImportPath != "" {
+		t.Error("pendingImportPath should be empty after escape")
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_ShowReplaceConfirm(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Call showReplaceConfirm
+	model, cmd := screen.showReplaceConfirm()
+
+	// Verify state
+	if !screen.showingConfirm {
+		t.Error("showingConfirm should be true")
+	}
+
+	if screen.confirmDialog == nil {
+		t.Error("confirmDialog should be initialized")
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+
+	_ = cmd
+}
+
+func TestSettingsScreen_UpdateConfirmDialog_Escape(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Initialize confirm dialog
+	screen.showReplaceConfirm()
+	screen.pendingImportPath = "/some/path.yaml"
+
+	// Press escape to cancel
+	model, _ := screen.updateConfirmDialog(tea.KeyMsg{Type: tea.KeyEsc})
+
+	// Verify state was reset
+	if screen.showingConfirm {
+		t.Error("showingConfirm should be false after escape")
+	}
+
+	if screen.confirmDialog != nil {
+		t.Error("confirmDialog should be nil after escape")
+	}
+
+	if screen.pendingImportPath != "" {
+		t.Error("pendingImportPath should be empty after escape")
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_ExecuteImport_NilConfig(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+	// Don't set config - it should be nil
+
+	screen.pendingImportPath = "/some/path.yaml"
+	screen.importMode = "merge"
+
+	// Call executeImport
+	model, _ := screen.executeImport()
+
+	// Verify error message
+	if !strings.Contains(screen.message, "No configuration") {
+		t.Errorf("message = %q, should contain 'No configuration'", screen.message)
+	}
+
+	if screen.messageType != "error" {
+		t.Errorf("messageType = %q, want 'error'", screen.messageType)
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_ExecuteImport_Success(t *testing.T) {
+	// Create a temp file for import
+	tmpFile, err := os.CreateTemp("", "import-*.yaml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	// Write valid export data
+	exportData := `version: "1.0"
+mounts:
+  - name: imported-mount
+    remote: remote:path
+    mount_point: /mnt/imported
+sync_jobs:
+  - name: imported-sync
+    source: remote:src
+    destination: /dest
+exported: "2024-01-01T00:00:00Z"
+`
+	if _, err := tmpFile.WriteString(exportData); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	cfg := &config.Config{
+		Version: "1.0",
+	}
+	screen.SetConfig(cfg)
+	screen.pendingImportPath = tmpFile.Name()
+	screen.importMode = "merge"
+
+	// Call executeImport
+	model, _ := screen.executeImport()
+
+	// Verify success message
+	if !strings.Contains(screen.message, "imported") {
+		t.Errorf("message = %q, should contain 'imported'", screen.message)
+	}
+
+	if screen.messageType != "success" {
+		t.Errorf("messageType = %q, want 'success'", screen.messageType)
+	}
+
+	// Verify pendingImportPath was cleared
+	if screen.pendingImportPath != "" {
+		t.Error("pendingImportPath should be empty after import")
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_ExecuteImport_ReplaceMode(t *testing.T) {
+	// Create a temp file for import
+	tmpFile, err := os.CreateTemp("", "import-*.yaml")
+	if err != nil {
+		t.Fatalf("failed to create temp file: %v", err)
+	}
+	defer os.Remove(tmpFile.Name())
+
+	// Write valid export data
+	exportData := `version: "1.0"
+mounts:
+  - name: replaced-mount
+    remote: remote:path
+    mount_point: /mnt/replaced
+sync_jobs: []
+exported: "2024-01-01T00:00:00Z"
+`
+	if _, err := tmpFile.WriteString(exportData); err != nil {
+		t.Fatalf("failed to write temp file: %v", err)
+	}
+	tmpFile.Close()
+
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	cfg := &config.Config{
+		Version: "1.0",
+		Mounts: []models.MountConfig{
+			{Name: "old-mount", Remote: "old:path", MountPoint: "/mnt/old"},
+		},
+	}
+	screen.SetConfig(cfg)
+	screen.pendingImportPath = tmpFile.Name()
+	screen.importMode = "replace"
+
+	// Call executeImport
+	model, _ := screen.executeImport()
+
+	// Verify success
+	if screen.messageType != "success" {
+		t.Errorf("messageType = %q, want 'success'", screen.messageType)
+	}
+
+	// Verify mounts were replaced
+	if len(cfg.Mounts) != 1 || cfg.Mounts[0].Name != "replaced-mount" {
+		t.Errorf("mounts should be replaced, got: %v", cfg.Mounts)
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_ExecuteAction_Export(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Set action cursor to export action (index 0)
+	screen.actionCursor = 0
+	screen.showingActions = true
+
+	// Call executeAction
+	model, _ := screen.executeAction()
+
+	// Verify showingActions was reset
+	if screen.showingActions {
+		t.Error("showingActions should be false after executeAction")
+	}
+
+	// Verify file picker is shown
+	if !screen.showingFilePicker {
+		t.Error("showingFilePicker should be true for export action")
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_ExecuteAction_Import(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Set action cursor to import action (index 1)
+	screen.actionCursor = 1
+	screen.showingActions = true
+
+	// Call executeAction
+	model, _ := screen.executeAction()
+
+	// Verify showingActions was reset
+	if screen.showingActions {
+		t.Error("showingActions should be false after executeAction")
+	}
+
+	// Verify file picker is shown
+	if !screen.showingFilePicker {
+		t.Error("showingFilePicker should be true for import action")
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_ExecuteAction_InvalidCursor(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Set invalid cursor
+	screen.actionCursor = 100
+	screen.showingActions = true
+
+	// Call executeAction - should not panic
+	model, _ := screen.executeAction()
+
+	// Verify model is returned
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_RenderFilePicker(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Initialize file picker
+	screen.startExport()
+
+	// Render file picker
+	view := screen.renderFilePicker()
+
+	// Verify view contains expected elements
+	if !strings.Contains(view, "File Selection") {
+		t.Error("renderFilePicker should contain 'File Selection' title")
+	}
+
+	if !strings.Contains(view, "Enter") {
+		t.Error("renderFilePicker should contain help text for Enter key")
+	}
+
+	if !strings.Contains(view, "Esc") {
+		t.Error("renderFilePicker should contain help text for Esc key")
+	}
+}
+
+func TestSettingsScreen_RenderImportModeForm(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Initialize import mode form
+	screen.showImportModeSelection()
+
+	// Render import mode form
+	view := screen.renderImportModeForm()
+
+	// Verify view contains expected elements
+	if !strings.Contains(view, "Import Mode") {
+		t.Error("renderImportModeForm should contain 'Import Mode' title")
+	}
+
+	if !strings.Contains(view, "Enter") {
+		t.Error("renderImportModeForm should contain help text for Enter key")
+	}
+
+	if !strings.Contains(view, "Esc") {
+		t.Error("renderImportModeForm should contain help text for Esc key")
+	}
+}
+
+func TestSettingsScreen_RenderConfirmDialog(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Initialize confirm dialog
+	screen.showReplaceConfirm()
+
+	// Render confirm dialog
+	view := screen.renderConfirmDialog()
+
+	// Verify view contains expected elements
+	if !strings.Contains(view, "Confirm Import") {
+		t.Error("renderConfirmDialog should contain 'Confirm Import' title")
+	}
+
+	if !strings.Contains(view, "Enter") {
+		t.Error("renderConfirmDialog should contain help text for Enter key")
+	}
+
+	if !strings.Contains(view, "Esc") {
+		t.Error("renderConfirmDialog should contain help text for Esc key")
+	}
+}
+
+func TestSettingsScreen_RenderSettingsList(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Render settings list
+	view := screen.renderSettingsList()
+
+	// Verify view contains expected elements
+	if !strings.Contains(view, "Setting") {
+		t.Error("renderSettingsList should contain 'Setting' header")
+	}
+
+	// Verify settings are rendered
+	for _, setting := range screen.settings {
+		if !strings.Contains(view, setting.Name) {
+			t.Errorf("renderSettingsList should contain setting name '%s'", setting.Name)
+		}
+	}
+}
+
+func TestSettingsScreen_View_WithFilePicker(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Start file picker
+	screen.startExport()
+
+	view := screen.View()
+
+	// Should show file picker, not normal view
+	if !strings.Contains(view, "File Selection") {
+		t.Error("View() should show file picker when showingFilePicker is true")
+	}
+}
+
+func TestSettingsScreen_View_WithImportModeForm(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Start import mode form
+	screen.showImportModeSelection()
+
+	view := screen.View()
+
+	// Should show import mode form
+	if !strings.Contains(view, "Import Mode") {
+		t.Error("View() should show import mode form when showingImportMode is true")
+	}
+}
+
+func TestSettingsScreen_View_WithConfirmDialog(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Start confirm dialog
+	screen.showReplaceConfirm()
+
+	view := screen.View()
+
+	// Should show confirm dialog
+	if !strings.Contains(view, "Confirm Import") {
+		t.Error("View() should show confirm dialog when showingConfirm is true")
+	}
+}
+
+func TestSettingsScreen_KeyboardShortcuts_Export(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Press 'x' to start export
+	model, _ := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+
+	// Verify export started
+	if !screen.showingFilePicker {
+		t.Error("pressing 'x' should start export (showingFilePicker should be true)")
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_KeyboardShortcuts_Import(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Press 'i' to start import
+	model, _ := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
+
+	// Verify import started
+	if !screen.showingFilePicker {
+		t.Error("pressing 'i' should start import (showingFilePicker should be true)")
+	}
+
+	if model == nil {
+		t.Error("model should not be nil")
+	}
+}
+
+func TestSettingsScreen_ActionsNavigation(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Switch to actions panel with right arrow
+	screen.Update(tea.KeyMsg{Type: tea.KeyRight})
+
+	if !screen.showingActions {
+		t.Error("showingActions should be true after pressing right")
+	}
+
+	if screen.actionCursor != 0 {
+		t.Errorf("actionCursor = %d, want 0", screen.actionCursor)
+	}
+
+	// Move down in actions
+	screen.Update(tea.KeyMsg{Type: tea.KeyDown})
+
+	if screen.actionCursor != 1 {
+		t.Errorf("actionCursor = %d, want 1", screen.actionCursor)
+	}
+
+	// Move up in actions
+	screen.Update(tea.KeyMsg{Type: tea.KeyUp})
+
+	if screen.actionCursor != 0 {
+		t.Errorf("actionCursor = %d, want 0", screen.actionCursor)
+	}
+
+	// Switch back to settings with left arrow
+	screen.Update(tea.KeyMsg{Type: tea.KeyLeft})
+
+	if screen.showingActions {
+		t.Error("showingActions should be false after pressing left")
+	}
+}
+
+func TestSettingsScreen_ActionsEnterKey(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Switch to actions panel
+	screen.showingActions = true
+	screen.actionCursor = 0 // Export action
+
+	// Press enter to execute action
+	screen.Update(tea.KeyMsg{Type: tea.KeyEnter})
+
+	// Verify export started
+	if !screen.showingFilePicker {
+		t.Error("pressing Enter on export action should start export")
+	}
+}
+
+func TestSettingsScreen_EscapeFromActions(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+
+	// Switch to actions panel
+	screen.showingActions = true
+
+	// Press escape
+	screen.Update(tea.KeyMsg{Type: tea.KeyEsc})
+
+	// Should go back from actions, not main menu
+	if screen.showingActions {
+		t.Error("showingActions should be false after escape")
+	}
+
+	if screen.ShouldGoBack() {
+		t.Error("ShouldGoBack should be false when escaping from actions")
 	}
 }

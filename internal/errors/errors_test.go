@@ -43,8 +43,8 @@ func TestAppError_Error(t *testing.T) {
 		{
 			name: "error with cause but no code",
 			err: &AppError{
-				Message:    "no code",
-				Cause:      fmt.Errorf("cause"),
+				Message: "no code",
+				Cause:   fmt.Errorf("cause"),
 			},
 			expected: "no code: cause",
 		},
