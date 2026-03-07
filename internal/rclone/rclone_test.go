@@ -239,6 +239,24 @@ echo "type=s3"
 	}
 }
 
+func TestGetRemoteTypeExtraSpace(t *testing.T) {
+	mockScript := `#!/bin/sh
+echo "[drive]"
+echo "type   =   drive  "
+`
+	mockPath := createMockRclone(t, mockScript)
+	c := NewClientWithPath(mockPath)
+
+	remoteType, err := c.GetRemoteType("drive")
+	if err != nil {
+		t.Fatalf("GetRemoteType() error = %v", err)
+	}
+
+	if remoteType != "drive" {
+		t.Errorf("GetRemoteType() = %q, want %q", remoteType, "drive")
+	}
+}
+
 func TestGetRemoteTypeNotFound(t *testing.T) {
 	mockScript := `#!/bin/sh
 echo "[other]"

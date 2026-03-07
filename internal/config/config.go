@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
@@ -38,6 +39,7 @@ type ExportData struct {
 
 // Config represents the application configuration.
 type Config struct {
+	mu       sync.RWMutex
 	Version  string                 `mapstructure:"version"`
 	Mounts   []models.MountConfig   `mapstructure:"mounts"`
 	SyncJobs []models.SyncJobConfig `mapstructure:"sync_jobs"`
@@ -115,6 +117,9 @@ func Load() (*Config, error) {
 // Reload re-reads the configuration from disk and updates the Config.
 // This allows the application to pick up changes made externally (e.g., via CLI).
 func (c *Config) Reload() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	configDir, err := getConfigDir()
 	if err != nil {
 		return fmt.Errorf("failed to get config directory: %w", err)
@@ -157,6 +162,9 @@ func (c *Config) Reload() error {
 // It uses an atomic write pattern: writes to a temp file first, then renames.
 // A backup of the existing config is created before overwriting.
 func (c *Config) Save() error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	configDir, err := getConfigDir()
 	if err != nil {
 		return fmt.Errorf("failed to get config directory: %w", err)
@@ -286,6 +294,9 @@ func createBackup(configPath, backupPath string) error {
 
 // AddMount adds a new mount configuration.
 func (c *Config) AddMount(mount models.MountConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	// Generate ID if not provided
 	if mount.ID == "" {
 		mount.ID = generateID()
@@ -309,6 +320,9 @@ func (c *Config) AddMount(mount models.MountConfig) error {
 
 // RemoveMount removes a mount configuration by name.
 func (c *Config) RemoveMount(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	for i, m := range c.Mounts {
 		if m.Name == name {
 			c.Mounts = append(c.Mounts[:i], c.Mounts[i+1:]...)
@@ -320,6 +334,9 @@ func (c *Config) RemoveMount(name string) error {
 
 // GetMount returns a mount configuration by name.
 func (c *Config) GetMount(name string) *models.MountConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	for i := range c.Mounts {
 		if c.Mounts[i].Name == name {
 			return &c.Mounts[i]
@@ -330,6 +347,9 @@ func (c *Config) GetMount(name string) *models.MountConfig {
 
 // AddSyncJob adds a new sync job configuration.
 func (c *Config) AddSyncJob(job models.SyncJobConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	// Generate ID if not provided
 	if job.ID == "" {
 		job.ID = generateID()
@@ -353,6 +373,9 @@ func (c *Config) AddSyncJob(job models.SyncJobConfig) error {
 
 // RemoveSyncJob removes a sync job configuration by name.
 func (c *Config) RemoveSyncJob(name string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	for i, j := range c.SyncJobs {
 		if j.Name == name {
 			c.SyncJobs = append(c.SyncJobs[:i], c.SyncJobs[i+1:]...)
@@ -364,6 +387,9 @@ func (c *Config) RemoveSyncJob(name string) error {
 
 // GetSyncJob returns a sync job configuration by name.
 func (c *Config) GetSyncJob(name string) *models.SyncJobConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	for i := range c.SyncJobs {
 		if c.SyncJobs[i].Name == name {
 			return &c.SyncJobs[i]
@@ -375,6 +401,9 @@ func (c *Config) GetSyncJob(name string) *models.SyncJobConfig {
 // AddRecentPath adds a path to the front of the recent paths list,
 // removes duplicates, and keeps only the 10 most recent paths.
 func (c *Config) AddRecentPath(path string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	var result []string
 	result = append(result, path)
 	for _, p := range c.Settings.RecentPaths {
@@ -447,6 +476,9 @@ func generateID() string {
 // ExportConfig exports the current mounts and sync jobs to a file.
 // The file format is determined by the file extension (.json or .yaml/.yml).
 func (c *Config) ExportConfig(filePath string) error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
 	data := ExportData{
 		Version:  c.Version,
 		Mounts:   c.Mounts,
@@ -491,6 +523,9 @@ func (c *Config) ExportConfig(filePath string) error {
 // ImportConfig imports mounts and sync jobs from a file.
 // The import mode determines how conflicts are handled.
 func (c *Config) ImportConfig(filePath string, mode ImportMode) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {
 		return fmt.Errorf("import file does not exist: %s", filePath)
 	}
@@ -537,6 +572,7 @@ func (c *Config) ImportConfig(filePath string, mode ImportMode) error {
 // mergeImport merges the imported data with the existing configuration.
 // Items with duplicate names are skipped with an error recorded.
 func (c *Config) mergeImport(data ExportData) {
+	// Note: mergeImport is called from ImportConfig, which already holds the lock.
 	existingMountNames := make(map[string]bool)
 	for _, m := range c.Mounts {
 		existingMountNames[m.Name] = true

@@ -212,8 +212,13 @@ func (r *Reconciler) Import(orphan OrphanedUnit) (*ImportedConfig, error) {
 
 // parseMountUnit parses a mount service file and extracts config.
 func (r *Reconciler) parseMountUnit(content string, orphan OrphanedUnit) (*models.MountConfig, error) {
+	id := orphan.ID
+	if orphan.IsLegacy {
+		id = generateNewID()
+	}
+
 	mount := &models.MountConfig{
-		ID:         generateNewID(),
+		ID:         id,
 		Name:       extractNameFromDescription(content, "mount"),
 		CreatedAt:  time.Now(),
 		ModifiedAt: time.Now(),
@@ -233,8 +238,13 @@ func (r *Reconciler) parseMountUnit(content string, orphan OrphanedUnit) (*model
 
 // parseSyncUnit parses a sync service file and extracts config.
 func (r *Reconciler) parseSyncUnit(content string, orphan OrphanedUnit) (*models.SyncJobConfig, error) {
+	id := orphan.ID
+	if orphan.IsLegacy {
+		id = generateNewID()
+	}
+
 	job := &models.SyncJobConfig{
-		ID:         generateNewID(),
+		ID:         id,
 		Name:       extractNameFromDescription(content, "sync"),
 		CreatedAt:  time.Now(),
 		ModifiedAt: time.Now(),
@@ -282,34 +292,93 @@ func extractExecStart(content string) string {
 		line := scanner.Text()
 		if strings.HasPrefix(line, "ExecStart=") {
 			inExecStart = true
-			lines = append(lines, strings.TrimPrefix(line, "ExecStart="))
+			val := strings.TrimPrefix(line, "ExecStart=")
+			lines = append(lines, val)
 		} else if inExecStart {
 			if strings.HasPrefix(line, "    ") || strings.HasPrefix(line, "\t") {
-				lines = append(lines, strings.TrimSpace(line))
+				lines = append(lines, line)
 			} else {
 				break
 			}
 		}
 	}
 
-	return strings.Join(lines, " ")
+	fullCmd := strings.Join(lines, "")
+	// Handle backslash line continuations
+	fullCmd = strings.ReplaceAll(fullCmd, "\\\n", " ")
+	fullCmd = strings.ReplaceAll(fullCmd, "\\", " ")
+
+	// Normalize whitespace
+	fields := strings.Fields(fullCmd)
+	return strings.Join(fields, " ")
 }
 
 func parseRcloneMountCommand(execStart string) []string {
-	re := regexp.MustCompile(`^\S+\s+mount\s+(\S+)\s+(\S+)`)
-	matches := re.FindStringSubmatch(execStart)
-	if len(matches) >= 3 {
-		return []string{matches[1], matches[2]}
+	fields := strings.Fields(execStart)
+	if len(fields) < 2 {
+		return nil
 	}
+
+	// Skip rclone binary and find 'mount'
+	mountIdx := -1
+	for i, field := range fields {
+		if field == "mount" {
+			mountIdx = i
+			break
+		}
+	}
+
+	if mountIdx == -1 || mountIdx == len(fields)-1 {
+		return nil
+	}
+
+	// Find the first two non-flag arguments after 'mount'
+	var args []string
+	for i := mountIdx + 1; i < len(fields); i++ {
+		if !strings.HasPrefix(fields[i], "-") {
+			args = append(args, fields[i])
+			if len(args) == 2 {
+				return args
+			}
+		}
+	}
+
 	return nil
 }
 
 func parseRcloneSyncCommand(execStart string) []string {
-	re := regexp.MustCompile(`^\S+\s+(sync|copy|move)\s+(\S+)\s+(\S+)`)
-	matches := re.FindStringSubmatch(execStart)
-	if len(matches) >= 4 {
-		return []string{matches[1], matches[2], matches[3]}
+	fields := strings.Fields(execStart)
+	if len(fields) < 2 {
+		return nil
 	}
+
+	// Skip rclone binary and find sync/copy/move
+	cmdIdx := -1
+	direction := ""
+	for i, field := range fields {
+		if field == "sync" || field == "copy" || field == "move" {
+			cmdIdx = i
+			direction = field
+			break
+		}
+	}
+
+	if cmdIdx == -1 || cmdIdx == len(fields)-1 {
+		return nil
+	}
+
+	// Find the first two non-flag arguments after the command
+	var args []string
+	args = append(args, direction)
+	for i := cmdIdx + 1; i < len(fields); i++ {
+		if !strings.HasPrefix(fields[i], "-") {
+			args = append(args, fields[i])
+			if len(args) == 3 {
+				return args
+			}
+		}
+	}
+
 	return nil
 }
 

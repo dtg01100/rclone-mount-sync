@@ -105,11 +105,11 @@ func (c *Client) GetRemoteType(remote string) (string, error) {
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "type = ") {
-			return strings.TrimPrefix(line, "type = "), nil
-		}
-		if strings.HasPrefix(line, "type=") {
-			return strings.TrimPrefix(line, "type="), nil
+		if strings.HasPrefix(line, "type") {
+			parts := strings.SplitN(line, "=", 2)
+			if len(parts) == 2 && strings.TrimSpace(parts[0]) == "type" {
+				return strings.TrimSpace(parts[1]), nil
+			}
 		}
 	}
 

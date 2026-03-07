@@ -37,8 +37,8 @@ func TestNewEnhancedFilePicker(t *testing.T) {
 // TestEnhancedFilePicker_Options tests the builder pattern for setting options.
 func TestEnhancedFilePicker_Options(t *testing.T) {
 	tests := []struct {
-		name string
-		opts func(*EnhancedFilePicker) *EnhancedFilePicker
+		name  string
+		opts  func(*EnhancedFilePicker) *EnhancedFilePicker
 		check func(*EnhancedFilePicker) bool
 	}{
 		{
@@ -317,33 +317,33 @@ func TestEnhancedFilePicker_Value(t *testing.T) {
 // TestEnhancedFilePicker_ValidateDirectoryPath tests the ValidateDirectoryPath function.
 func TestEnhancedFilePicker_ValidateDirectoryPath(t *testing.T) {
 	tests := []struct {
-		name string
-		path string
+		name    string
+		path    string
 		wantErr bool
 	}{
 		{
-			name: "empty path",
-			path: "",
+			name:    "empty path",
+			path:    "",
 			wantErr: true,
 		},
 		{
-			name: "valid directory",
-			path: "/tmp",
+			name:    "valid directory",
+			path:    "/tmp",
 			wantErr: false,
 		},
 		{
-			name: "valid home directory",
-			path: "~",
+			name:    "valid home directory",
+			path:    "~",
 			wantErr: false,
 		},
 		{
-			name: "non-existent path",
-			path: "/nonexistent/path/12345",
+			name:    "non-existent path",
+			path:    "/nonexistent/path/12345",
 			wantErr: true,
 		},
 		{
-			name: "file instead of directory",
-			path: "/etc/passwd",
+			name:    "file instead of directory",
+			path:    "/etc/passwd",
 			wantErr: true,
 		},
 	}
@@ -361,33 +361,33 @@ func TestEnhancedFilePicker_ValidateDirectoryPath(t *testing.T) {
 // TestEnhancedFilePicker_ValidateFilePath tests the ValidateFilePath function.
 func TestEnhancedFilePicker_ValidateFilePath(t *testing.T) {
 	tests := []struct {
-		name string
-		path string
+		name    string
+		path    string
 		wantErr bool
 	}{
 		{
-			name: "empty path",
-			path: "",
+			name:    "empty path",
+			path:    "",
 			wantErr: true,
 		},
 		{
-			name: "valid file path",
-			path: "/tmp/testfile",
+			name:    "valid file path",
+			path:    "/tmp/testfile",
 			wantErr: false,
 		},
 		{
-			name: "valid file under home",
-			path: "~/test.txt",
+			name:    "valid file under home",
+			path:    "~/test.txt",
 			wantErr: false, // Parent is home directory which always exists
 		},
 		{
-			name: "non-existent parent directory",
-			path: "/nonexistent/path/file.txt",
+			name:    "non-existent parent directory",
+			path:    "/nonexistent/path/file.txt",
 			wantErr: true,
 		},
 		{
-			name: "file in root",
-			path: "/rootfile",
+			name:    "file in root",
+			path:    "/rootfile",
 			wantErr: false, // Parent is / which exists
 		},
 	}

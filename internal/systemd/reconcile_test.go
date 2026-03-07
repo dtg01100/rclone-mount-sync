@@ -629,13 +629,20 @@ ExecStart=/usr/bin/rclone mount remote:/ /mnt
 			wantContains: "/usr/bin/rclone mount remote:/ /mnt",
 		},
 		{
-			name: "multiline exec",
+			name: "multiline exec with backslashes",
 			content: `[Service]
-ExecStart=/usr/bin/rclone mount remote:/ /mnt \
-    --config=/home/user/.config/rclone/rclone.conf \
+ExecStart=/usr/bin/rclone mount \
+    remote:/ /mnt \
     --vfs-cache-mode=full
 `,
-			wantContains: "/usr/bin/rclone mount remote:/ /mnt",
+			wantContains: "/usr/bin/rclone mount remote:/ /mnt --vfs-cache-mode=full",
+		},
+		{
+			name: "exec with options before args",
+			content: `[Service]
+ExecStart=/usr/bin/rclone --config=/path/to/config mount remote:/ /mnt
+`,
+			wantContains: "/usr/bin/rclone --config=/path/to/config mount remote:/ /mnt",
 		},
 		{
 			name: "no exec",
@@ -663,35 +670,46 @@ func TestParseRcloneMountCommand(t *testing.T) {
 	tests := []struct {
 		name      string
 		execStart string
-		wantLen   int
+		want      []string
 	}{
 		{
 			name:      "valid mount command",
 			execStart: "/usr/bin/rclone mount gdrive:/ /mnt/gdrive",
-			wantLen:   2,
+			want:      []string{"gdrive:/", "/mnt/gdrive"},
 		},
 		{
-			name:      "mount with options",
-			execStart: "/usr/bin/rclone mount remote:/path /mnt/point --vfs-cache-mode=full",
-			wantLen:   2,
+			name:      "mount with options before args",
+			execStart: "/usr/bin/rclone --config=/etc/rclone.conf mount remote:/path /mnt/point",
+			want:      []string{"remote:/path", "/mnt/point"},
+		},
+		{
+			name:      "mount with options between args",
+			execStart: "/usr/bin/rclone mount remote:/path --vfs-cache-mode=full /mnt/point",
+			want:      []string{"remote:/path", "/mnt/point"},
 		},
 		{
 			name:      "invalid command",
 			execStart: "/usr/bin/rclone sync source dest",
-			wantLen:   0,
+			want:      nil,
 		},
 		{
 			name:      "empty command",
 			execStart: "",
-			wantLen:   0,
+			want:      nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := parseRcloneMountCommand(tt.execStart)
-			if len(got) != tt.wantLen {
-				t.Errorf("parseRcloneMountCommand() returned %d elements, want %d", len(got), tt.wantLen)
+			if len(got) != len(tt.want) {
+				t.Errorf("parseRcloneMountCommand() returned %d elements, want %d", len(got), len(tt.want))
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("got[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
 			}
 		})
 	}
@@ -701,40 +719,46 @@ func TestParseRcloneSyncCommand(t *testing.T) {
 	tests := []struct {
 		name      string
 		execStart string
-		wantLen   int
+		want      []string
 	}{
 		{
 			name:      "sync command",
 			execStart: "/usr/bin/rclone sync source:/path /dest/path",
-			wantLen:   3,
+			want:      []string{"sync", "source:/path", "/dest/path"},
 		},
 		{
-			name:      "copy command",
-			execStart: "/usr/bin/rclone copy source:/path /dest/path",
-			wantLen:   3,
+			name:      "copy command with options",
+			execStart: "/usr/bin/rclone --config=test.conf copy source:/path --dry-run /dest/path",
+			want:      []string{"copy", "source:/path", "/dest/path"},
 		},
 		{
 			name:      "move command",
 			execStart: "/usr/bin/rclone move source:/path /dest/path",
-			wantLen:   3,
+			want:      []string{"move", "source:/path", "/dest/path"},
 		},
 		{
 			name:      "invalid command",
 			execStart: "/usr/bin/rclone mount source dest",
-			wantLen:   0,
+			want:      nil,
 		},
 		{
 			name:      "empty command",
 			execStart: "",
-			wantLen:   0,
+			want:      nil,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := parseRcloneSyncCommand(tt.execStart)
-			if len(got) != tt.wantLen {
-				t.Errorf("parseRcloneSyncCommand() returned %d elements, want %d", len(got), tt.wantLen)
+			if len(got) != len(tt.want) {
+				t.Errorf("parseRcloneSyncCommand() returned %d elements, want %d", len(got), len(tt.want))
+				return
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Errorf("got[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
 			}
 		})
 	}
