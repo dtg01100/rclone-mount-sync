@@ -264,7 +264,11 @@ func createBackup(configPath, backupPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to open config file: %w", err)
 	}
-	defer srcFile.Close()
+	defer func() {
+		if cerr := srcFile.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to close config file: %v\n", cerr)
+		}
+	}()
 
 	srcInfo, err := srcFile.Stat()
 	if err != nil {
@@ -275,7 +279,11 @@ func createBackup(configPath, backupPath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create backup file: %w", err)
 	}
-	defer dstFile.Close()
+	defer func() {
+		if cerr := dstFile.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to close backup file: %v\n", cerr)
+		}
+	}()
 
 	if _, err := srcFile.Seek(0, 0); err != nil {
 		return fmt.Errorf("failed to seek config file: %w", err)
@@ -497,7 +505,11 @@ func (c *Config) ExportConfig(filePath string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create export file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to close export file: %v\n", cerr)
+		}
+	}()
 
 	ext := strings.ToLower(filepath.Ext(filePath))
 	switch ext {
@@ -534,7 +546,11 @@ func (c *Config) ImportConfig(filePath string, mode ImportMode) error {
 	if err != nil {
 		return fmt.Errorf("failed to open import file: %w", err)
 	}
-	defer file.Close()
+	defer func() {
+		if cerr := file.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to close import file: %v\n", cerr)
+		}
+	}()
 
 	var data ExportData
 	ext := strings.ToLower(filepath.Ext(filePath))

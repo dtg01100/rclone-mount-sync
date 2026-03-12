@@ -290,20 +290,24 @@ func (s *ServicesScreen) loadSystemdStatus() SystemdStatus {
 
 	// Count active services and timers
 	cmd = exec.Command("systemctl", "--user", "list-units", "--type=service", "--state=active", "--no-legend")
-	output, _ = cmd.Output()
-	lines := strings.Split(string(output), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "rclone-") {
-			status.ActiveServices++
+	output, err = cmd.Output()
+	if err == nil {
+		serviceLines := strings.Split(string(output), "\n")
+		for _, line := range serviceLines {
+			if strings.Contains(line, "rclone-") {
+				status.ActiveServices++
+			}
 		}
 	}
 
 	cmd = exec.Command("systemctl", "--user", "list-units", "--type=timer", "--state=active", "--no-legend")
-	output, _ = cmd.Output()
-	lines = strings.Split(string(output), "\n")
-	for _, line := range lines {
-		if strings.Contains(line, "rclone-") {
-			status.ActiveTimers++
+	output, err = cmd.Output()
+	if err == nil {
+		timerLines := strings.Split(string(output), "\n")
+		for _, line := range timerLines {
+			if strings.Contains(line, "rclone-") {
+				status.ActiveTimers++
+			}
 		}
 	}
 

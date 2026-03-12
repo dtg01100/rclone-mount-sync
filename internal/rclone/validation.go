@@ -28,7 +28,7 @@ func PreflightChecks(client *Client) []CheckResult {
 	results = append(results, checkRcloneBinary(client))
 
 	// If rclone binary doesn't exist, we can't run other rclone checks
-	if !results[0].Passed {
+	if len(results) == 0 || !results[0].Passed {
 		// Add placeholder failures for rclone-dependent checks
 		results = append(results, CheckResult{
 			Name:       "Rclone Version",
@@ -161,6 +161,11 @@ func checkConfiguredRemotes(client *Client) CheckResult {
 	resultChan := make(chan remoteResult, 1)
 
 	go func() {
+		defer func() {
+			if r := recover(); r != nil {
+				resultChan <- remoteResult{remotes: nil, err: fmt.Errorf("panic while listing remotes: %v", r)}
+			}
+		}()
 		remotes, err := client.ListRemotes()
 		resultChan <- remoteResult{remotes: remotes, err: err}
 	}()

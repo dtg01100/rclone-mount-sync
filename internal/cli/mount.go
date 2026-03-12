@@ -197,9 +197,16 @@ func runMountDelete(cmd *cobra.Command, args []string) error {
 
 	serviceName := generator.ServiceName(mount.ID, "mount") + ".service"
 
-	_ = manager.Stop(serviceName)
-	_ = manager.Disable(serviceName)
-	_ = manager.ResetFailed(serviceName)
+	// Attempt to stop and disable, but don't fail if service doesn't exist
+	if err := manager.Stop(serviceName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to stop %s: %v\n", serviceName, err)
+	}
+	if err := manager.Disable(serviceName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to disable %s: %v\n", serviceName, err)
+	}
+	if err := manager.ResetFailed(serviceName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to reset failed state for %s: %v\n", serviceName, err)
+	}
 
 	if err := generator.RemoveUnit(serviceName); err != nil {
 		return fmt.Errorf("failed to remove unit file: %w", err)
