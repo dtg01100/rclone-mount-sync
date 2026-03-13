@@ -9,7 +9,7 @@ import (
 func TestManager_ListServices_Optimized(t *testing.T) {
 	tmpDir := t.TempDir()
 	mockSystemctl := filepath.Join(tmpDir, "mock-systemctl")
-	
+
 	// Create a mock systemctl that handles both list-unit-files and list-units
 	mockScript := `#!/bin/bash
 if [[ "$*" == *"--user list-unit-files"* ]]; then
@@ -83,7 +83,7 @@ exit 1
 	}
 
 	if !foundGdrive || !foundDropbox || !foundBackup {
-		t.Errorf("Did not find all expected services: gdrive=%v, dropbox=%v, backup=%v", 
+		t.Errorf("Did not find all expected services: gdrive=%v, dropbox=%v, backup=%v",
 			foundGdrive, foundDropbox, foundBackup)
 	}
 }

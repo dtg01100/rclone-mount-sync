@@ -755,7 +755,7 @@ func (a *App) importSelectedOrphan() (tea.Model, tea.Cmd) {
 		}
 
 		_ = reconciler.RemoveOrphan(orphan)
-		
+
 		return OrphanActionMsg{
 			Action: "import",
 			Index:  a.orphanSelected,
