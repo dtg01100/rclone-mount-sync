@@ -1,0 +1,6 @@
+run:
+  tests: true
+linters:
+  disable:
+    - errcheck
+    - unused

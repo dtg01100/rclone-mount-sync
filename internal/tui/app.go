@@ -97,6 +97,7 @@ type App struct {
 	showOrphanPrompt bool
 	orphanSelected   int
 	orphanMode       int
+	orphanError      error
 }
 
 // NewApp creates a new TUI application.
@@ -271,6 +272,32 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AppInitDone:
 		cmds = append(cmds, a.mounts.Init(), a.syncJobs.Init(), a.services.Init())
+
+	case OrphanActionMsg:
+		a.loading = false
+		if msg.Err != nil {
+			a.orphanError = msg.Err
+		} else {
+			// Success - remove the orphan
+			if a.orphans != nil && msg.Index >= 0 && msg.Index < len(a.orphans.OrphanedUnits) {
+				a.orphans.OrphanedUnits = append(
+					a.orphans.OrphanedUnits[:msg.Index],
+					a.orphans.OrphanedUnits[msg.Index+1:]...,
+				)
+			}
+
+			if a.orphanSelected >= len(a.orphans.OrphanedUnits) {
+				a.orphanSelected = len(a.orphans.OrphanedUnits) - 1
+			}
+			a.orphanMode = 0
+
+			if len(a.orphans.OrphanedUnits) == 0 {
+				a.showOrphanPrompt = false
+			}
+
+			// Refresh screens
+			cmds = append(cmds, a.mounts.Init(), a.syncJobs.Init(), a.services.Init())
+		}
 	}
 
 	// Update the current screen
@@ -630,6 +657,9 @@ func (a *App) renderInitError() string {
 }
 
 func (a *App) updateOrphanPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	if a.loading {
+		return a, nil
+	}
 	if a.orphans == nil {
 		return a, nil
 	}
@@ -669,115 +699,104 @@ func (a *App) updateOrphanPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (a *App) importSelectedOrphan() (tea.Model, tea.Cmd) {
 	if a.orphans == nil || a.orphanSelected < 0 || a.orphanSelected >= len(a.orphans.OrphanedUnits) {
 		return a, func() tea.Msg {
-			return screens.MountsErrorMsg{Err: fmt.Errorf("invalid orphan selection")}
+			return OrphanActionMsg{Err: fmt.Errorf("invalid orphan selection")}
 		}
 	}
 	if a.generator == nil || a.manager == nil {
 		return a, func() tea.Msg {
-			return screens.MountsErrorMsg{Err: fmt.Errorf("services not initialized")}
+			return OrphanActionMsg{Err: fmt.Errorf("services not initialized")}
 		}
 	}
 	orphan := a.orphans.OrphanedUnits[a.orphanSelected]
 
-	reconciler := systemd.NewReconciler(a.generator, a.manager)
-	imported, err := reconciler.Import(orphan)
-	if err != nil {
-		return a, func() tea.Msg {
-			return screens.MountsErrorMsg{Err: fmt.Errorf("failed to import orphan: %w", err)}
+	a.loading = true
+	a.orphanError = nil
+
+	// Return a command to handle the heavy lifting
+	return a, func() tea.Msg {
+		reconciler := systemd.NewReconciler(a.generator, a.manager)
+		imported, err := reconciler.Import(orphan)
+		if err != nil {
+			return OrphanActionMsg{Err: fmt.Errorf("failed to import orphan: %w", err)}
 		}
-	}
 
-	if imported.Mount != nil {
-		a.config.Mounts = append(a.config.Mounts, *imported.Mount)
-	} else if imported.SyncJob != nil {
-		a.config.SyncJobs = append(a.config.SyncJobs, *imported.SyncJob)
-	}
-
-	if err := a.config.Save(); err != nil {
-		return a, func() tea.Msg {
-			return screens.MountsErrorMsg{Err: fmt.Errorf("failed to save config: %w", err)}
-		}
-	}
-
-	var writeErr error
-	if imported.Mount != nil {
-		_, writeErr = a.generator.WriteMountService(imported.Mount)
-	} else if imported.SyncJob != nil {
-		_, _, writeErr = a.generator.WriteSyncUnits(imported.SyncJob)
-	}
-
-	if writeErr != nil {
+		// We need to access config here, but it's safe since this is a command (async)
+		// and we added mutexes to Config.
 		if imported.Mount != nil {
-			for i := len(a.config.Mounts) - 1; i >= 0; i-- {
-				if a.config.Mounts[i].Name == imported.Mount.Name {
-					a.config.Mounts = append(a.config.Mounts[:i], a.config.Mounts[i+1:]...)
-					break
-				}
+			if err := a.config.AddMount(*imported.Mount); err != nil {
+				return OrphanActionMsg{Err: fmt.Errorf("failed to add mount: %w", err)}
 			}
 		} else if imported.SyncJob != nil {
-			for i := len(a.config.SyncJobs) - 1; i >= 0; i-- {
-				if a.config.SyncJobs[i].Name == imported.SyncJob.Name {
-					a.config.SyncJobs = append(a.config.SyncJobs[:i], a.config.SyncJobs[i+1:]...)
-					break
-				}
+			if err := a.config.AddSyncJob(*imported.SyncJob); err != nil {
+				return OrphanActionMsg{Err: fmt.Errorf("failed to add sync job: %w", err)}
 			}
 		}
-		a.config.Save()
-		return a, func() tea.Msg {
-			return screens.MountsErrorMsg{Err: fmt.Errorf("failed to write service file: %w", writeErr)}
+
+		if err := a.config.Save(); err != nil {
+			return OrphanActionMsg{Err: fmt.Errorf("failed to save config: %w", err)}
+		}
+
+		var writeErr error
+		if imported.Mount != nil {
+			_, writeErr = a.generator.WriteMountService(imported.Mount)
+		} else if imported.SyncJob != nil {
+			_, _, writeErr = a.generator.WriteSyncUnits(imported.SyncJob)
+		}
+
+		if writeErr != nil {
+			// Rollback config change
+			if imported.Mount != nil {
+				a.config.RemoveMount(imported.Mount.Name)
+			} else if imported.SyncJob != nil {
+				a.config.RemoveSyncJob(imported.SyncJob.Name)
+			}
+			a.config.Save()
+			return OrphanActionMsg{Err: fmt.Errorf("failed to write service file: %w", writeErr)}
+		}
+
+		_ = reconciler.RemoveOrphan(orphan)
+
+		return OrphanActionMsg{
+			Action: "import",
+			Index:  a.orphanSelected,
 		}
 	}
-
-	_ = reconciler.RemoveOrphan(orphan)
-
-	a.orphans.OrphanedUnits = append(
-		a.orphans.OrphanedUnits[:a.orphanSelected],
-		a.orphans.OrphanedUnits[a.orphanSelected+1:]...,
-	)
-
-	if a.orphanSelected >= len(a.orphans.OrphanedUnits) {
-		a.orphanSelected = len(a.orphans.OrphanedUnits) - 1
-	}
-	a.orphanMode = 0
-
-	if len(a.orphans.OrphanedUnits) == 0 {
-		a.showOrphanPrompt = false
-	}
-
-	return a, nil
 }
 
 func (a *App) cleanupSelectedOrphan() (tea.Model, tea.Cmd) {
 	if a.orphans == nil || a.orphanSelected < 0 || a.orphanSelected >= len(a.orphans.OrphanedUnits) {
 		return a, func() tea.Msg {
-			return screens.MountsErrorMsg{Err: fmt.Errorf("invalid orphan selection")}
+			return OrphanActionMsg{Err: fmt.Errorf("invalid orphan selection")}
 		}
 	}
 	if a.generator == nil || a.manager == nil {
 		return a, func() tea.Msg {
-			return screens.MountsErrorMsg{Err: fmt.Errorf("services not initialized")}
+			return OrphanActionMsg{Err: fmt.Errorf("services not initialized")}
 		}
 	}
 	orphan := a.orphans.OrphanedUnits[a.orphanSelected]
 
-	reconciler := systemd.NewReconciler(a.generator, a.manager)
-	reconciler.RemoveOrphan(orphan)
+	a.loading = true
+	a.orphanError = nil
 
-	a.orphans.OrphanedUnits = append(
-		a.orphans.OrphanedUnits[:a.orphanSelected],
-		a.orphans.OrphanedUnits[a.orphanSelected+1:]...,
-	)
+	return a, func() tea.Msg {
+		reconciler := systemd.NewReconciler(a.generator, a.manager)
+		if err := reconciler.RemoveOrphan(orphan); err != nil {
+			return OrphanActionMsg{Err: fmt.Errorf("failed to cleanup orphan: %w", err)}
+		}
 
-	if a.orphanSelected >= len(a.orphans.OrphanedUnits) {
-		a.orphanSelected = len(a.orphans.OrphanedUnits) - 1
+		return OrphanActionMsg{
+			Action: "cleanup",
+			Index:  a.orphanSelected,
+		}
 	}
-	a.orphanMode = 0
+}
 
-	if len(a.orphans.OrphanedUnits) == 0 {
-		a.showOrphanPrompt = false
-	}
-
-	return a, nil
+// OrphanActionMsg is sent when an orphan action is completed.
+type OrphanActionMsg struct {
+	Action string // "import" or "cleanup"
+	Index  int
+	Err    error
 }
 
 func (a *App) renderOrphanPrompt(baseView string) string {
@@ -786,7 +805,13 @@ func (a *App) renderOrphanPrompt(baseView string) string {
 	b.WriteString(components.Styles.Warning.Render("Orphaned Units Detected"))
 	b.WriteString("\n\n")
 
-	if a.orphanMode == 0 {
+	if a.loading {
+		b.WriteString(components.Styles.Info.Render("Processing..."))
+	} else if a.orphanError != nil {
+		b.WriteString(components.RenderError(a.orphanError.Error()))
+		b.WriteString("\n")
+		b.WriteString(components.Styles.HelpText.Render("Press Esc to go back"))
+	} else if a.orphanMode == 0 {
 		b.WriteString("Select a unit to manage:\n\n")
 		for i, orphan := range a.orphans.OrphanedUnits {
 			legacyTag := ""
@@ -838,7 +863,7 @@ func (a *App) renderOrphanPrompt(baseView string) string {
 		lipgloss.WithWhitespaceChars(" "),
 	)
 
-	return baseView + "\n" + overlay
+	return overlay
 }
 
 // Run starts the TUI application.

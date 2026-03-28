@@ -190,11 +190,22 @@ func runSyncDelete(cmd *cobra.Command, args []string) error {
 	serviceName := generator.ServiceName(job.ID, "sync") + ".service"
 	timerName := generator.ServiceName(job.ID, "sync") + ".timer"
 
-	_ = manager.StopTimer(timerName)
-	_ = manager.DisableTimer(timerName)
-	_ = manager.Stop(serviceName)
-	_ = manager.Disable(serviceName)
-	_ = manager.ResetFailed(serviceName)
+	// Attempt to stop and disable, but don't fail if service doesn't exist
+	if err := manager.StopTimer(timerName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to stop timer %s: %v\n", timerName, err)
+	}
+	if err := manager.DisableTimer(timerName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to disable timer %s: %v\n", timerName, err)
+	}
+	if err := manager.Stop(serviceName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to stop %s: %v\n", serviceName, err)
+	}
+	if err := manager.Disable(serviceName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to disable %s: %v\n", serviceName, err)
+	}
+	if err := manager.ResetFailed(serviceName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to reset failed state for %s: %v\n", serviceName, err)
+	}
 
 	if err := generator.RemoveUnit(serviceName); err != nil {
 		return fmt.Errorf("failed to remove service unit: %w", err)
