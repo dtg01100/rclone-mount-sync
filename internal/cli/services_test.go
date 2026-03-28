@@ -10,9 +10,16 @@ import (
 )
 
 func TestServicesListNoSystemd(t *testing.T) {
-	// Listing services should not panic even if systemd isn't available.
-	// Error is acceptable here - just ensure command runs without panicking.
-	_, _, _ = runCmd(t, servicesListCmd)
+	// Listing services should handle gracefully when systemd isn't available.
+	// The command should either return an error or succeed if systemd is available.
+	// We just verify it doesn't panic and returns a result.
+	_, _, err := runCmd(t, servicesListCmd)
+	// If systemd is not available, we expect an error
+	// If it is available, the command should succeed
+	// Either way, we've verified the command handles the situation gracefully
+	if err != nil {
+		t.Logf("services list returned error (expected if systemd unavailable): %v", err)
+	}
 }
 
 func TestServicesListWithServices(t *testing.T) {

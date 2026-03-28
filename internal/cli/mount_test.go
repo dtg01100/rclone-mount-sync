@@ -10,12 +10,18 @@ import (
 )
 
 func TestMountListNoConfig(t *testing.T) {
-	oldCfg := cfgFile
-	cfgFile = "/no/such/path"
-	defer func() { cfgFile = oldCfg }()
-	_, _, err := runCmd(t, mountListCmd)
+	// Test that mount list handles gracefully when config loading fails
+	oldLoadConfig := loadConfig
+	defer func() { loadConfig = oldLoadConfig }()
+	
+	// Mock loadConfig to return an error
+	loadConfig = func() (*config.Config, error) {
+		return nil, fmt.Errorf("failed to load config: config directory not found")
+	}
+	
+	err := runMountList(nil, nil)
 	if err == nil {
-		t.Logf("mount list returned no error; ensure manual testing for config loading")
+		t.Error("mount list should return error when config loading fails")
 	}
 }
 
