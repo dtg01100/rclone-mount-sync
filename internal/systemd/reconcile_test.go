@@ -398,6 +398,66 @@ WantedBy=default.target
 	if result.Mount.ID == "" {
 		t.Error("Import() Mount.ID is empty")
 	}
+	if !isValidID(result.Mount.ID) {
+		t.Errorf("Import() expected generated mount ID format 8-char lowercase alnum, got %q", result.Mount.ID)
+	}
+}
+
+func TestReconciler_Import_SyncLegacyID(t *testing.T) {
+	tmpDir := t.TempDir()
+	serviceContent := `[Unit]
+Description=Rclone sync: My Sync
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/rclone sync gdrive:/ /home/user/backup --config=/home/user/.config/rclone/rclone.conf
+
+[Install]
+WantedBy=default.target
+`
+	serviceFile := filepath.Join(tmpDir, "rclone-sync-legacy-svc.service")
+	if err := os.WriteFile(serviceFile, []byte(serviceContent), 0644); err != nil {
+		t.Fatalf("Failed to create test file: %v", err)
+	}
+
+	g := &Generator{
+		systemdDir: tmpDir,
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     tmpDir,
+	}
+	m := NewManager()
+	r := NewReconciler(g, m)
+
+	orphan := OrphanedUnit{
+		Name:     "rclone-sync-legacy-svc.service",
+		Type:     "sync",
+		ID:       "legacy-svc",
+		IsLegacy: true,
+		Path:     serviceFile,
+	}
+
+	result, err := r.Import(orphan)
+	if err != nil {
+		t.Fatalf("Import() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("Import() returned nil")
+	}
+	if result.SyncJob == nil {
+		t.Fatal("Import() SyncJob is nil")
+	}
+	if result.SyncJob.Name == "" {
+		t.Error("Import() SyncJob.Name is empty")
+	}
+	if result.SyncJob.ID == "" {
+		t.Error("Import() SyncJob.ID is empty")
+	}
+	if !isValidID(result.SyncJob.ID) {
+		t.Errorf("Import() expected generated sync ID format 8-char lowercase alnum, got %q", result.SyncJob.ID)
+	}
 }
 
 func TestReconciler_Import_Sync(t *testing.T) {

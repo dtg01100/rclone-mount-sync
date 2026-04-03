@@ -229,7 +229,9 @@ func (g *Generator) buildMountOptions(opts *models.MountOptions) string {
 	if configPath == "" {
 		configPath = g.configPath
 	}
-	args = append(args, fmt.Sprintf("--config=%s", configPath))
+	if configPath != "" {
+		args = append(args, fmt.Sprintf("--config=%s", configPath))
+	}
 
 	// VFS options
 	if opts.VFSCacheMode != "" {
@@ -316,7 +318,9 @@ func (g *Generator) buildSyncOptions(opts *models.SyncOptions) string {
 	if configPath == "" {
 		configPath = g.configPath
 	}
-	args = append(args, fmt.Sprintf("--config=%s", configPath))
+	if configPath != "" {
+		args = append(args, fmt.Sprintf("--config=%s", configPath))
+	}
 
 	// Deletion handling
 	if opts.DeleteExtraneous {

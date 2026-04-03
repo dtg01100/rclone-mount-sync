@@ -219,3 +219,43 @@ func TestSyncRunNotFound(t *testing.T) {
 		t.Fatalf("expected error when running non-existent sync job")
 	}
 }
+
+func TestSyncCreateValidationMissingFields(t *testing.T) {
+	cfg := &config.Config{Defaults: config.DefaultConfig{Sync: config.SyncDefaults{LogLevel: "INFO", Transfers: 4, Checkers: 8}}}
+	tmpDir := t.TempDir()
+
+	oldLoadConfig := loadConfig
+	oldLoadGenerator := loadGenerator
+	oldLoadManager := loadManager
+	oldSyncCreateName := syncCreateName
+	oldSyncCreateSource := syncCreateSource
+	oldSyncCreateDestination := syncCreateDestination
+	defer func() {
+		loadConfig = oldLoadConfig
+		loadGenerator = oldLoadGenerator
+		loadManager = oldLoadManager
+		syncCreateName = oldSyncCreateName
+		syncCreateSource = oldSyncCreateSource
+		syncCreateDestination = oldSyncCreateDestination
+	}()
+
+	loadConfig = func() (*config.Config, error) { return cfg, nil }
+	loadGenerator = func() (*systemd.Generator, error) { return systemd.NewTestGenerator(tmpDir), nil }
+	loadManager = func() systemd.ServiceManager { return &systemd.MockManager{} }
+
+	syncCreateName = ""
+	syncCreateSource = ""
+	syncCreateDestination = ""
+
+	if err := runSyncCreate(nil, nil); err == nil {
+		t.Fatal("expected runSyncCreate to fail when required fields are missing")
+	}
+
+	syncCreateName = "test-sync"
+	syncCreateSource = "gdrive:/Photos"
+	syncCreateDestination = ""
+
+	if err := runSyncCreate(nil, nil); err == nil {
+		t.Fatal("expected runSyncCreate to fail when destination is missing")
+	}
+}

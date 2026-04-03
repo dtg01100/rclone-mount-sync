@@ -305,6 +305,20 @@ func (c *Config) AddMount(mount models.MountConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if strings.TrimSpace(mount.Name) == "" {
+		return fmt.Errorf("mount name is required")
+	}
+	if strings.TrimSpace(mount.Remote) == "" {
+		return fmt.Errorf("mount remote is required")
+	}
+	if strings.TrimSpace(mount.MountPoint) == "" {
+		return fmt.Errorf("mount point is required")
+	}
+
+	if mount.RemotePath == "" {
+		mount.RemotePath = "/"
+	}
+
 	// Generate ID if not provided
 	if mount.ID == "" {
 		mount.ID = generateID()
@@ -358,6 +372,19 @@ func (c *Config) AddSyncJob(job models.SyncJobConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if strings.TrimSpace(job.Name) == "" {
+		return fmt.Errorf("sync job name is required")
+	}
+	if strings.TrimSpace(job.Source) == "" {
+		return fmt.Errorf("sync job source is required")
+	}
+	if strings.TrimSpace(job.Destination) == "" {
+		return fmt.Errorf("sync job destination is required")
+	}
+	if strings.TrimSpace(job.SyncOptions.Direction) == "" {
+		job.SyncOptions.Direction = "sync"
+	}
+
 	// Generate ID if not provided
 	if job.ID == "" {
 		job.ID = generateID()
@@ -409,6 +436,11 @@ func (c *Config) GetSyncJob(name string) *models.SyncJobConfig {
 // AddRecentPath adds a path to the front of the recent paths list,
 // removes duplicates, and keeps only the 10 most recent paths.
 func (c *Config) AddRecentPath(path string) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 

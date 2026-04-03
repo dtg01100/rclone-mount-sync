@@ -261,6 +261,26 @@ func TestGenerator_BuildMountOptions(t *testing.T) {
 }
 
 // TestBuildSyncOptions tests the buildSyncOptions method.
+func TestGenerator_BuildOptionsWithNoConfig(t *testing.T) {
+	g := &Generator{
+		systemdDir: t.TempDir(),
+		rclonePath: "/usr/bin/rclone",
+		configPath: "",
+		logDir:     t.TempDir(),
+	}
+
+	mountOpts := models.MountOptions{}
+	syncOpts := models.SyncOptions{}
+
+	if strings.Contains(g.buildMountOptions(&mountOpts), "--config=") {
+		t.Error("buildMountOptions() should not include empty --config when config path is empty")
+	}
+
+	if strings.Contains(g.buildSyncOptions(&syncOpts), "--config=") {
+		t.Error("buildSyncOptions() should not include empty --config when config path is empty")
+	}
+}
+
 func TestGenerator_BuildSyncOptions(t *testing.T) {
 	g := &Generator{
 		systemdDir: t.TempDir(),

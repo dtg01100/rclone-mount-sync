@@ -89,6 +89,27 @@ func TestConfigAddMountDuplicate(t *testing.T) {
 	}
 }
 
+func TestConfigAddMountValidation(t *testing.T) {
+	cfg := newConfigWithDefaults()
+
+	cases := []struct {
+		name string
+		mnt  models.MountConfig
+	}{
+		{"empty name", models.MountConfig{Remote: "gdrive:", MountPoint: "/mnt/test"}},
+		{"empty remote", models.MountConfig{Name: "test-mount", MountPoint: "/mnt/test"}},
+		{"empty mountpoint", models.MountConfig{Name: "test-mount", Remote: "gdrive:"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := cfg.AddMount(tc.mnt); err == nil {
+				t.Errorf("expected validation error for %s", tc.name)
+			}
+		})
+	}
+}
+
 func TestConfigRemoveMount(t *testing.T) {
 	cfg := newConfigWithDefaults()
 
@@ -193,6 +214,27 @@ func TestConfigAddSyncJobDuplicate(t *testing.T) {
 
 	if err := cfg.AddSyncJob(job); err == nil {
 		t.Error("AddSyncJob() should return error for duplicate name")
+	}
+}
+
+func TestConfigAddSyncJobValidation(t *testing.T) {
+	cfg := newConfigWithDefaults()
+
+	cases := []struct {
+		name string
+		job  models.SyncJobConfig
+	}{
+		{"empty name", models.SyncJobConfig{Source: "gdrive:/Photos", Destination: "/home/user/Backup"}},
+		{"empty source", models.SyncJobConfig{Name: "test-sync", Destination: "/home/user/Backup"}},
+		{"empty destination", models.SyncJobConfig{Name: "test-sync", Source: "gdrive:/Photos"}},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := cfg.AddSyncJob(tc.job); err == nil {
+				t.Errorf("expected validation error for %s", tc.name)
+			}
+		})
 	}
 }
 

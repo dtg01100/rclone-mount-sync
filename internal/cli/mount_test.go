@@ -13,12 +13,12 @@ func TestMountListNoConfig(t *testing.T) {
 	// Test that mount list handles gracefully when config loading fails
 	oldLoadConfig := loadConfig
 	defer func() { loadConfig = oldLoadConfig }()
-	
+
 	// Mock loadConfig to return an error
 	loadConfig = func() (*config.Config, error) {
 		return nil, fmt.Errorf("failed to load config: config directory not found")
 	}
-	
+
 	err := runMountList(nil, nil)
 	if err == nil {
 		t.Error("mount list should return error when config loading fails")
@@ -436,5 +436,53 @@ func TestMountStopError(t *testing.T) {
 	err := runMountStop(nil, []string{"test-mount-stop-error"})
 	if err == nil {
 		t.Fatal("expected error when stopping mount fails")
+	}
+}
+
+func TestMountCreateValidationMissingFields(t *testing.T) {
+	tmp := t.TempDir()
+	cfg := &config.Config{Defaults: config.DefaultConfig{Mount: config.MountDefaults{LogLevel: "INFO", VFSCacheMode: "full", BufferSize: "16M"}}}
+
+	oldLoadConfig := loadConfig
+	oldLoadGenerator := loadGenerator
+	oldLoadManager := loadManager
+	oldMountCreateName := mountCreateName
+	oldMountCreateRemote := mountCreateRemote
+	oldMountCreateMountPoint := mountCreateMountPoint
+	defer func() {
+		loadConfig = oldLoadConfig
+		loadGenerator = oldLoadGenerator
+		loadManager = oldLoadManager
+		mountCreateName = oldMountCreateName
+		mountCreateRemote = oldMountCreateRemote
+		mountCreateMountPoint = oldMountCreateMountPoint
+	}()
+
+	loadConfig = func() (*config.Config, error) { return cfg, nil }
+	loadGenerator = func() (*systemd.Generator, error) { return systemd.NewTestGenerator(tmp), nil }
+	loadManager = func() systemd.ServiceManager { return &systemd.MockManager{} }
+
+	mountCreateName = ""
+	mountCreateRemote = ""
+	mountCreateMountPoint = ""
+
+	if err := runMountCreate(nil, nil); err == nil {
+		t.Fatal("expected runMountCreate to fail when required fields are missing")
+	}
+
+	mountCreateName = "test-mount"
+	mountCreateRemote = "gdrive:"
+	mountCreateMountPoint = ""
+
+	if err := runMountCreate(nil, nil); err == nil {
+		t.Fatal("expected runMountCreate to fail when mount point is missing")
+	}
+
+	mountCreateName = "test-mount"
+	mountCreateRemote = ""
+	mountCreateMountPoint = "/home/user/mnt"
+
+	if err := runMountCreate(nil, nil); err == nil {
+		t.Fatal("expected runMountCreate to fail when remote is missing")
 	}
 }
