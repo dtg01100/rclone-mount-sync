@@ -4,6 +4,7 @@ package screens
 import (
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -254,6 +255,11 @@ func (s *ServicesScreen) loadServices() tea.Msg {
 			})
 		}
 	}
+
+	// Sort services alphabetically by display name
+	sort.Slice(services, func(i, j int) bool {
+		return services[i].DisplayName < services[j].DisplayName
+	})
 
 	// Load systemd status
 	s.systemdStatus = s.loadSystemdStatus()

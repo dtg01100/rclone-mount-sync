@@ -2,6 +2,7 @@ package screens
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
@@ -72,10 +73,18 @@ func (r *RollbackManager) RollbackMount(data MountRollbackData, systemdFailed bo
 	if systemdFailed && data.Operation != OperationDelete {
 		if r.generator != nil {
 			serviceName := r.generator.ServiceName(data.MountID, "mount") + ".service"
-			_ = r.manager.Stop(serviceName)
-			_ = r.manager.Disable(serviceName)
-			_ = r.generator.RemoveUnit(serviceName)
-			_ = r.manager.DaemonReload()
+			if err := r.manager.Stop(serviceName); err != nil {
+				errs = append(errs, fmt.Errorf("failed to stop service: %w", err))
+			}
+			if err := r.manager.Disable(serviceName); err != nil {
+				errs = append(errs, fmt.Errorf("failed to disable service: %w", err))
+			}
+			if err := r.generator.RemoveUnit(serviceName); err != nil {
+				errs = append(errs, fmt.Errorf("failed to remove unit: %w", err))
+			}
+			if err := r.manager.DaemonReload(); err != nil {
+				errs = append(errs, fmt.Errorf("failed to reload daemon: %w", err))
+			}
 		}
 	}
 
@@ -102,13 +111,27 @@ func (r *RollbackManager) RollbackSyncJob(data SyncJobRollbackData, systemdFaile
 		if r.generator != nil {
 			serviceName := r.generator.ServiceName(data.JobID, "sync") + ".service"
 			timerName := r.generator.ServiceName(data.JobID, "sync") + ".timer"
-			_ = r.manager.Stop(serviceName)
-			_ = r.manager.StopTimer(timerName)
-			_ = r.manager.Disable(serviceName)
-			_ = r.manager.DisableTimer(timerName)
-			_ = r.generator.RemoveUnit(serviceName)
-			_ = r.generator.RemoveUnit(timerName)
-			_ = r.manager.DaemonReload()
+			if err := r.manager.Stop(serviceName); err != nil {
+				errs = append(errs, fmt.Errorf("failed to stop service: %w", err))
+			}
+			if err := r.manager.StopTimer(timerName); err != nil {
+				errs = append(errs, fmt.Errorf("failed to stop timer: %w", err))
+			}
+			if err := r.manager.Disable(serviceName); err != nil {
+				errs = append(errs, fmt.Errorf("failed to disable service: %w", err))
+			}
+			if err := r.manager.DisableTimer(timerName); err != nil {
+				errs = append(errs, fmt.Errorf("failed to disable timer: %w", err))
+			}
+			if err := r.generator.RemoveUnit(serviceName); err != nil {
+				errs = append(errs, fmt.Errorf("failed to remove service unit: %w", err))
+			}
+			if err := r.generator.RemoveUnit(timerName); err != nil {
+				errs = append(errs, fmt.Errorf("failed to remove timer unit: %w", err))
+			}
+			if err := r.manager.DaemonReload(); err != nil {
+				errs = append(errs, fmt.Errorf("failed to reload daemon: %w", err))
+			}
 		}
 	}
 
@@ -133,10 +156,18 @@ func (r *RollbackManager) CleanupMountSystemd(mountID string) {
 		return
 	}
 	serviceName := r.generator.ServiceName(mountID, "mount") + ".service"
-	_ = r.manager.Stop(serviceName)
-	_ = r.manager.Disable(serviceName)
-	_ = r.generator.RemoveUnit(serviceName)
-	_ = r.manager.DaemonReload()
+	if err := r.manager.Stop(serviceName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to stop service %s: %v\n", serviceName, err)
+	}
+	if err := r.manager.Disable(serviceName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to disable service %s: %v\n", serviceName, err)
+	}
+	if err := r.generator.RemoveUnit(serviceName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove unit %s: %v\n", serviceName, err)
+	}
+	if err := r.manager.DaemonReload(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to reload daemon: %v\n", err)
+	}
 }
 
 func (r *RollbackManager) CleanupSyncJobSystemd(jobID string) {
@@ -145,11 +176,25 @@ func (r *RollbackManager) CleanupSyncJobSystemd(jobID string) {
 	}
 	serviceName := r.generator.ServiceName(jobID, "sync") + ".service"
 	timerName := r.generator.ServiceName(jobID, "sync") + ".timer"
-	_ = r.manager.Stop(serviceName)
-	_ = r.manager.StopTimer(timerName)
-	_ = r.manager.Disable(serviceName)
-	_ = r.manager.DisableTimer(timerName)
-	_ = r.generator.RemoveUnit(serviceName)
-	_ = r.generator.RemoveUnit(timerName)
-	_ = r.manager.DaemonReload()
+	if err := r.manager.Stop(serviceName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to stop service %s: %v\n", serviceName, err)
+	}
+	if err := r.manager.StopTimer(timerName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to stop timer %s: %v\n", timerName, err)
+	}
+	if err := r.manager.Disable(serviceName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to disable service %s: %v\n", serviceName, err)
+	}
+	if err := r.manager.DisableTimer(timerName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to disable timer %s: %v\n", timerName, err)
+	}
+	if err := r.generator.RemoveUnit(serviceName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove unit %s: %v\n", serviceName, err)
+	}
+	if err := r.generator.RemoveUnit(timerName); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove unit %s: %v\n", timerName, err)
+	}
+	if err := r.manager.DaemonReload(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: failed to reload daemon: %v\n", err)
+	}
 }

@@ -353,6 +353,15 @@ func (f *MountForm) validateMountPoint(path string) error {
 		return fmt.Errorf("parent directory does not exist: %s", parentDir)
 	}
 
+	// Check for duplicate mount points (only for new mounts)
+	if !f.isEdit && f.config != nil {
+		for _, m := range f.config.Mounts {
+			if m.MountPoint == expandedPath {
+				return fmt.Errorf("a mount is already using this mount point: %s", expandedPath)
+			}
+		}
+	}
+
 	return nil
 }
 
