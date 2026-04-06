@@ -2,6 +2,7 @@
 package screens
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -372,7 +373,7 @@ func (f *MountForm) getRemotePathSuggestions() []string {
 	if f.rcloneClient == nil {
 		return staticSuggestions
 	}
-	return components.GetRemotePathSuggestions(f.rcloneClient, remoteName, staticSuggestions)
+	return components.GetRemotePathSuggestions(context.Background(), f.rcloneClient, remoteName, staticSuggestions)
 }
 
 // SetSize sets the form size.

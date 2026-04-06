@@ -58,7 +58,7 @@ esac
 		RetryMultiplier: 2.0,
 	})
 
-	remotes, err := c.ListRemotes()
+	remotes, err := c.ListRemotes(context.Background())
 	if err != nil {
 		t.Fatalf("ListRemotes() error = %v", err)
 	}
@@ -83,7 +83,7 @@ exit 1
 		RetryMultiplier: 2.0,
 	})
 
-	_, err := c.ListRemotes()
+	_, err := c.ListRemotes(context.Background())
 	if err == nil {
 		t.Fatal("ListRemotes() should return error for permanent error")
 	}
@@ -108,7 +108,7 @@ exit 1
 		RetryMultiplier: 2.0,
 	})
 
-	_, err := c.ListRemotes()
+	_, err := c.ListRemotes(context.Background())
 	if err == nil {
 		t.Fatal("ListRemotes() should return error after max retries")
 	}
@@ -140,7 +140,7 @@ echo "type = drive"
 		RetryMultiplier: 2.0,
 	})
 
-	remoteType, err := c.GetRemoteType("gdrive")
+	remoteType, err := c.GetRemoteType(context.Background(), "gdrive")
 	if err != nil {
 		t.Fatalf("GetRemoteType() error = %v", err)
 	}
@@ -176,7 +176,7 @@ echo "file2.txt"
 		RetryMultiplier: 2.0,
 	})
 
-	entries, err := c.ListRemotePath("gdrive", "/")
+	entries, err := c.ListRemotePath(context.Background(), "gdrive", "/")
 	if err != nil {
 		t.Fatalf("ListRemotePath() error = %v", err)
 	}
@@ -211,7 +211,7 @@ exit 0
 		RetryMultiplier: 2.0,
 	})
 
-	err := c.TestRemoteAccess("gdrive", "/")
+	err := c.TestRemoteAccess(context.Background(), "gdrive", "/")
 	if err != nil {
 		t.Fatalf("TestRemoteAccess() error = %v", err)
 	}

@@ -166,7 +166,7 @@ func checkConfiguredRemotes(client *Client) CheckResult {
 				resultChan <- remoteResult{remotes: nil, err: fmt.Errorf("panic while listing remotes: %v", r)}
 			}
 		}()
-		remotes, err := client.ListRemotes()
+		remotes, err := client.ListRemotes(ctx)
 		resultChan <- remoteResult{remotes: remotes, err: err}
 	}()
 

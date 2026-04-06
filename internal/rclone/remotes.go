@@ -3,6 +3,7 @@ package rclone
 import (
 	"context"
 	"fmt"
+	"log"
 	"os/exec"
 	"strings"
 	"time"
@@ -22,8 +23,12 @@ type RemotePath struct {
 }
 
 // ListRemotes returns a list of configured rclone remotes.
-func (c *Client) ListRemotes() ([]Remote, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func (c *Client) ListRemotes(ctx context.Context) ([]Remote, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	args := []string{"listremotes"}
@@ -46,7 +51,7 @@ func (c *Client) ListRemotes() ([]Remote, error) {
 	// gdrive:
 	// dropbox:
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	var remotes []Remote
+	remotes := make([]Remote, 0, len(lines))
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -61,9 +66,10 @@ func (c *Client) ListRemotes() ([]Remote, error) {
 		}
 
 		// Get the remote type
-		remoteType, err := c.GetRemoteType(name)
+		remoteType, err := c.GetRemoteType(ctx, name)
 		if err != nil {
 			// Log warning but continue - remote might still be usable
+			log.Printf("Warning: failed to get remote type for %s: %v", name, err)
 			remoteType = "unknown"
 		}
 
@@ -78,8 +84,12 @@ func (c *Client) ListRemotes() ([]Remote, error) {
 }
 
 // GetRemoteType returns the type of a specific remote (e.g., "drive", "s3", "dropbox").
-func (c *Client) GetRemoteType(remote string) (string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+func (c *Client) GetRemoteType(ctx context.Context, remote string) (string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
 	args := []string{"config", "show", remote}
@@ -118,8 +128,12 @@ func (c *Client) GetRemoteType(remote string) (string, error) {
 
 // ListRemotePath lists the contents of a path on an rclone remote.
 // Returns a slice of entry names (directories and files).
-func (c *Client) ListRemotePath(remote, path string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+func (c *Client) ListRemotePath(ctx context.Context, remote, path string) ([]string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
 	remotePath := remote + ":" + path
@@ -142,7 +156,7 @@ func (c *Client) ListRemotePath(remote, path string) ([]string, error) {
 
 	// Output format: one entry per line, directories end with "/"
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	var entries []string
+	entries := make([]string, 0, len(lines))
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -156,8 +170,12 @@ func (c *Client) ListRemotePath(remote, path string) ([]string, error) {
 
 // ListRemoteDirectories lists only directories in a path on an rclone remote.
 // Returns clean directory names without trailing slashes.
-func (c *Client) ListRemoteDirectories(remote, path string) ([]string, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+func (c *Client) ListRemoteDirectories(ctx context.Context, remote, path string) ([]string, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 
 	remotePath := remote + ":" + path
@@ -179,7 +197,7 @@ func (c *Client) ListRemoteDirectories(remote, path string) ([]string, error) {
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	var directories []string
+	directories := make([]string, 0, len(lines))
 
 	for _, line := range lines {
 		line = strings.TrimSpace(line)
@@ -192,13 +210,13 @@ func (c *Client) ListRemoteDirectories(remote, path string) ([]string, error) {
 }
 
 // ListRootDirectories lists directories at the root of a remote.
-func (c *Client) ListRootDirectories(remote string) ([]string, error) {
-	return c.ListRemoteDirectories(remote, "")
+func (c *Client) ListRootDirectories(ctx context.Context, remote string) ([]string, error) {
+	return c.ListRemoteDirectories(ctx, remote, "")
 }
 
 // ValidateRemote checks if a remote exists in the rclone configuration.
-func (c *Client) ValidateRemote(remote string) error {
-	remotes, err := c.ListRemotes()
+func (c *Client) ValidateRemote(ctx context.Context, remote string) error {
+	remotes, err := c.ListRemotes(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to validate remote: %w", err)
 	}
@@ -214,8 +232,12 @@ func (c *Client) ValidateRemote(remote string) error {
 
 // TestRemoteAccess tests if a remote path is accessible.
 // This performs a simple directory listing to verify connectivity.
-func (c *Client) TestRemoteAccess(remote, path string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+func (c *Client) TestRemoteAccess(ctx context.Context, remote, path string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
 	remotePath := remote + ":" + path

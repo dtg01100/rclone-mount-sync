@@ -27,10 +27,13 @@ func NewGenerator() (*Generator, error) {
 		return nil, fmt.Errorf("failed to get systemd path: %w", err)
 	}
 
-	// Find rclone binary
-	rclonePath, err := exec.LookPath("rclone")
-	if err != nil {
-		rclonePath = "/usr/bin/rclone" // Default fallback
+	// Find rclone binary - check environment variable first, then PATH
+	rclonePath := os.Getenv("RCLONE_BINARY_PATH")
+	if rclonePath == "" {
+		rclonePath, err = exec.LookPath("rclone")
+		if err != nil {
+			rclonePath = "/usr/bin/rclone" // Default fallback
+		}
 	}
 
 	// Get rclone config path

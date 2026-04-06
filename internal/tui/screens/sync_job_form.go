@@ -2,6 +2,7 @@
 package screens
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -438,7 +439,7 @@ func (f *SyncJobForm) getRemotePathSuggestions() []string {
 	if f.rcloneClient == nil {
 		return staticSuggestions
 	}
-	return components.GetRemotePathSuggestions(f.rcloneClient, f.sourceRemote, staticSuggestions)
+	return components.GetRemotePathSuggestions(context.Background(), f.rcloneClient, f.sourceRemote, staticSuggestions)
 }
 
 // SetSize sets the form size.

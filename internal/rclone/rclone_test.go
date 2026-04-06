@@ -116,7 +116,7 @@ esac
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	remotes, err := c.ListRemotes()
+	remotes, err := c.ListRemotes(context.Background())
 	if err != nil {
 		t.Fatalf("ListRemotes() error = %v", err)
 	}
@@ -150,7 +150,7 @@ echo ""
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	remotes, err := c.ListRemotes()
+	remotes, err := c.ListRemotes(context.Background())
 	if err != nil {
 		t.Fatalf("ListRemotes() error = %v", err)
 	}
@@ -168,7 +168,7 @@ exit 1
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	_, err := c.ListRemotes()
+	_, err := c.ListRemotes(context.Background())
 	if err == nil {
 		t.Error("ListRemotes() expected error, got nil")
 	}
@@ -192,7 +192,7 @@ esac
 	c := NewClientWithPath(mockPath)
 	c.SetConfigPath("/custom/config.conf")
 
-	remotes, err := c.ListRemotes()
+	remotes, err := c.ListRemotes(context.Background())
 	if err != nil {
 		t.Fatalf("ListRemotes() error = %v", err)
 	}
@@ -211,7 +211,7 @@ echo "client_id = xxx"
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	remoteType, err := c.GetRemoteType("gdrive")
+	remoteType, err := c.GetRemoteType(context.Background(), "gdrive")
 	if err != nil {
 		t.Fatalf("GetRemoteType() error = %v", err)
 	}
@@ -229,7 +229,7 @@ echo "type=s3"
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	remoteType, err := c.GetRemoteType("s3")
+	remoteType, err := c.GetRemoteType(context.Background(), "s3")
 	if err != nil {
 		t.Fatalf("GetRemoteType() error = %v", err)
 	}
@@ -247,7 +247,7 @@ echo "type   =   drive  "
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	remoteType, err := c.GetRemoteType("drive")
+	remoteType, err := c.GetRemoteType(context.Background(), "drive")
 	if err != nil {
 		t.Fatalf("GetRemoteType() error = %v", err)
 	}
@@ -265,7 +265,7 @@ echo "name = value"
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	_, err := c.GetRemoteType("gdrive")
+	_, err := c.GetRemoteType(context.Background(), "gdrive")
 	if err == nil {
 		t.Error("GetRemoteType() expected error when type not found")
 	}
@@ -279,7 +279,7 @@ exit 1
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	_, err := c.GetRemoteType("nonexistent")
+	_, err := c.GetRemoteType(context.Background(), "nonexistent")
 	if err == nil {
 		t.Error("GetRemoteType() expected error")
 	}
@@ -294,7 +294,7 @@ echo "file.txt"
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	entries, err := c.ListRemotePath("gdrive", "/")
+	entries, err := c.ListRemotePath(context.Background(), "gdrive", "/")
 	if err != nil {
 		t.Fatalf("ListRemotePath() error = %v", err)
 	}
@@ -318,7 +318,7 @@ echo ""
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	entries, err := c.ListRemotePath("gdrive", "/empty")
+	entries, err := c.ListRemotePath(context.Background(), "gdrive", "/empty")
 	if err != nil {
 		t.Fatalf("ListRemotePath() error = %v", err)
 	}
@@ -336,7 +336,7 @@ exit 1
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	_, err := c.ListRemotePath("gdrive", "/nonexistent")
+	_, err := c.ListRemotePath(context.Background(), "gdrive", "/nonexistent")
 	if err == nil {
 		t.Error("ListRemotePath() expected error")
 	}
@@ -351,7 +351,7 @@ echo "Music/"
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	dirs, err := c.ListRemoteDirectories("gdrive", "/")
+	dirs, err := c.ListRemoteDirectories(context.Background(), "gdrive", "/")
 	if err != nil {
 		t.Fatalf("ListRemoteDirectories() error = %v", err)
 	}
@@ -375,7 +375,7 @@ echo ""
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	dirs, err := c.ListRemoteDirectories("gdrive", "/empty")
+	dirs, err := c.ListRemoteDirectories(context.Background(), "gdrive", "/empty")
 	if err != nil {
 		t.Fatalf("ListRemoteDirectories() error = %v", err)
 	}
@@ -393,7 +393,7 @@ exit 1
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	_, err := c.ListRemoteDirectories("gdrive", "/private")
+	_, err := c.ListRemoteDirectories(context.Background(), "gdrive", "/private")
 	if err == nil {
 		t.Error("ListRemoteDirectories() expected error")
 	}
@@ -407,7 +407,7 @@ echo "Documents/"
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	dirs, err := c.ListRootDirectories("gdrive")
+	dirs, err := c.ListRootDirectories(context.Background(), "gdrive")
 	if err != nil {
 		t.Fatalf("ListRootDirectories() error = %v", err)
 	}
@@ -437,7 +437,7 @@ esac
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	err := c.ValidateRemote("gdrive")
+	err := c.ValidateRemote(context.Background(), "gdrive")
 	if err != nil {
 		t.Errorf("ValidateRemote() error = %v", err)
 	}
@@ -457,7 +457,7 @@ esac
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	err := c.ValidateRemote("dropbox")
+	err := c.ValidateRemote(context.Background(), "dropbox")
 	if err == nil {
 		t.Error("ValidateRemote() expected error for nonexistent remote")
 	}
@@ -474,7 +474,7 @@ exit 1
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	err := c.ValidateRemote("gdrive")
+	err := c.ValidateRemote(context.Background(), "gdrive")
 	if err == nil {
 		t.Error("ValidateRemote() expected error")
 	}
@@ -487,7 +487,7 @@ echo ""
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	err := c.TestRemoteAccess("gdrive", "/")
+	err := c.TestRemoteAccess(context.Background(), "gdrive", "/")
 	if err != nil {
 		t.Errorf("TestRemoteAccess() error = %v", err)
 	}
@@ -501,7 +501,7 @@ exit 1
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	err := c.TestRemoteAccess("gdrive", "/private")
+	err := c.TestRemoteAccess(context.Background(), "gdrive", "/private")
 	if err == nil {
 		t.Error("TestRemoteAccess() expected error")
 	}
@@ -672,7 +672,7 @@ esac
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	remotes, err := c.ListRemotes()
+	remotes, err := c.ListRemotes(context.Background())
 	if err != nil {
 		t.Fatalf("ListRemotes() error = %v", err)
 	}
@@ -706,7 +706,7 @@ esac
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	remotes, err := c.ListRemotes()
+	remotes, err := c.ListRemotes(context.Background())
 	if err != nil {
 		t.Fatalf("ListRemotes() error = %v", err)
 	}
@@ -731,7 +731,7 @@ esac
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	remotes, err := c.ListRemotes()
+	remotes, err := c.ListRemotes(context.Background())
 	if err != nil {
 		t.Fatalf("ListRemotes() error = %v", err)
 	}
@@ -752,7 +752,7 @@ echo ""
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	entries, err := c.ListRemotePath("gdrive", "/")
+	entries, err := c.ListRemotePath(context.Background(), "gdrive", "/")
 	if err != nil {
 		t.Fatalf("ListRemotePath() error = %v", err)
 	}
@@ -773,7 +773,7 @@ echo ""
 	mockPath := createMockRclone(t, mockScript)
 	c := NewClientWithPath(mockPath)
 
-	dirs, err := c.ListRemoteDirectories("gdrive", "/")
+	dirs, err := c.ListRemoteDirectories(context.Background(), "gdrive", "/")
 	if err != nil {
 		t.Fatalf("ListRemoteDirectories() error = %v", err)
 	}

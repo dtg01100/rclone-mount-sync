@@ -2,6 +2,7 @@
 package screens
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
@@ -333,7 +334,7 @@ func (s *MountsScreen) startCreateForm() (tea.Model, tea.Cmd) {
 	}
 
 	// Get available remotes
-	remotes, err := s.rclone.ListRemotes()
+	remotes, err := s.rclone.ListRemotes(context.Background())
 	if err != nil {
 		s.err = fmt.Errorf("failed to list remotes: %w", err)
 		return s, nil
@@ -368,7 +369,7 @@ func (s *MountsScreen) startEditForm() (tea.Model, tea.Cmd) {
 	}
 
 	// Get available remotes
-	remotes, err := s.rclone.ListRemotes()
+	remotes, err := s.rclone.ListRemotes(context.Background())
 	if err != nil {
 		s.err = fmt.Errorf("failed to list remotes: %w", err)
 		return s, nil

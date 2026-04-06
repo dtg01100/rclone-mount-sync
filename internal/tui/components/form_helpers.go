@@ -1,6 +1,7 @@
 package components
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"strconv"
@@ -8,7 +9,7 @@ import (
 )
 
 type RemoteLister interface {
-	ListRootDirectories(remoteName string) ([]string, error)
+	ListRootDirectories(ctx context.Context, remoteName string) ([]string, error)
 }
 
 func ValidateBufferSize(value string) error {
@@ -102,13 +103,13 @@ func ValidateBandwidthLimit(value string) error {
 	return nil
 }
 
-func GetRemotePathSuggestions(rcloneClient interface{}, remoteName string, staticFallbacks []string) []string {
+func GetRemotePathSuggestions(ctx context.Context, rcloneClient interface{}, remoteName string, staticFallbacks []string) []string {
 	var suggestions []string
 	seen := make(map[string]bool)
 
 	if rcloneClient != nil {
 		if lister, ok := rcloneClient.(RemoteLister); ok {
-			dirs, err := lister.ListRootDirectories(remoteName)
+			dirs, err := lister.ListRootDirectories(ctx, remoteName)
 			if err == nil {
 				for _, dir := range dirs {
 					if dir == "" {

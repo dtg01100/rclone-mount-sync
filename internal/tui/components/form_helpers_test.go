@@ -1,6 +1,7 @@
 package components
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -12,7 +13,7 @@ type mockRemoteLister struct {
 	err  error
 }
 
-func (m *mockRemoteLister) ListRootDirectories(remoteName string) ([]string, error) {
+func (m *mockRemoteLister) ListRootDirectories(ctx context.Context, remoteName string) ([]string, error) {
 	return m.dirs, m.err
 }
 
@@ -610,7 +611,7 @@ func TestGetRemotePathSuggestions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := GetRemotePathSuggestions(tt.rcloneClient, tt.remoteName, tt.staticFallbacks)
+			got := GetRemotePathSuggestions(context.Background(), tt.rcloneClient, tt.remoteName, tt.staticFallbacks)
 			if len(got) != len(tt.want) {
 				t.Errorf("GetRemotePathSuggestions() len = %d, want %d", len(got), len(tt.want))
 				return
