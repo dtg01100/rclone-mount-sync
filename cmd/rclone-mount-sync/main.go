@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/cli"
 	"github.com/dtg01100/rclone-mount-sync/internal/rclone"
@@ -221,9 +220,9 @@ func main() {
 		"completion": true,
 	}
 
-	// Route to CLI if first arg is a known command or a flag (like --help, -h)
+	// Route to CLI if first arg is a known command
 	firstArg := args[0]
-	if cliCommands[firstArg] || strings.HasPrefix(firstArg, "-") {
+	if cliCommands[firstArg] {
 		cli.SetVersion(version)
 		if err := cli.Execute(); err != nil {
 			os.Exit(1)
@@ -231,6 +230,21 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Otherwise, TUI mode (supports old flags like --skip-checks, --config)
-	os.Exit(runMain(args, os.Stdout, os.Stderr))
+	// TUI mode flags (--skip-checks, --config, --version)
+	tuiFlags := map[string]bool{
+		"--skip-checks": true,
+		"--config":      true,
+		"--version":     true,
+		"-v":            true,
+	}
+	if tuiFlags[firstArg] || firstArg == "-v" {
+		os.Exit(runMain(args, os.Stdout, os.Stderr))
+	}
+
+	// Unknown non-flag args route to CLI for help
+	cli.SetVersion(version)
+	if err := cli.Execute(); err != nil {
+		os.Exit(1)
+	}
+	os.Exit(0)
 }
