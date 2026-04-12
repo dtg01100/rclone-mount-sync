@@ -122,13 +122,13 @@ func (d *ConfirmDialog) View() string {
 		var style lipgloss.Style
 		if i == d.cursor {
 			if opt.IsDestructive {
-				style = Styles.ButtonFocus.Copy().Background(ColorError)
+				style = Styles.ButtonFocus.Background(ColorError)
 			} else {
 				style = Styles.ButtonFocus
 			}
 		} else {
 			if opt.IsDestructive {
-				style = Styles.Button.Copy().Foreground(ColorError)
+				style = Styles.Button.Foreground(ColorError)
 			} else {
 				style = Styles.Button
 			}

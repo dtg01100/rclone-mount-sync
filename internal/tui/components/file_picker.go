@@ -494,9 +494,6 @@ func (p *EnhancedFilePicker) WithPosition(pos huh.FieldPosition) huh.Field {
 // WithAccessible sets whether the field should run in accessible mode.
 func (p *EnhancedFilePicker) WithAccessible(accessible bool) huh.Field {
 	p.accessible = accessible
-	if p.innerPicker != nil {
-		p.innerPicker.WithAccessible(accessible)
-	}
 	return p
 }
 

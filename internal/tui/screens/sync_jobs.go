@@ -898,50 +898,50 @@ func (d *SyncJobDetails) renderDetails() string {
 	var b strings.Builder
 
 	// Sync job info
-	b.WriteString(fmt.Sprintf("  Name: %s\n", d.job.Name))
-	b.WriteString(fmt.Sprintf("  Source: %s\n", d.job.Source))
-	b.WriteString(fmt.Sprintf("  Destination: %s\n", d.job.Destination))
-	b.WriteString(fmt.Sprintf("  Schedule: %s\n", getScheduleDisplay(&d.job)))
+	fmt.Fprintf(&b, "  Name: %s\n", d.job.Name)
+	fmt.Fprintf(&b, "  Source: %s\n", d.job.Source)
+	fmt.Fprintf(&b, "  Destination: %s\n", d.job.Destination)
+	fmt.Fprintf(&b, "  Schedule: %s\n", getScheduleDisplay(&d.job))
 
 	// Schedule details
 	if d.job.Schedule.Type == "timer" && d.job.Schedule.OnCalendar != "" {
-		b.WriteString(fmt.Sprintf("  Calendar: %s\n", d.job.Schedule.OnCalendar))
+		fmt.Fprintf(&b, "  Calendar: %s\n", d.job.Schedule.OnCalendar)
 	}
 	if d.job.Schedule.Type == "onboot" && d.job.Schedule.OnBootSec != "" {
-		b.WriteString(fmt.Sprintf("  Boot Delay: %s\n", d.job.Schedule.OnBootSec))
+		fmt.Fprintf(&b, "  Boot Delay: %s\n", d.job.Schedule.OnBootSec)
 	}
 
-	b.WriteString(fmt.Sprintf("  Enabled: %t\n", d.job.Enabled))
+	fmt.Fprintf(&b, "  Enabled: %t\n", d.job.Enabled)
 
 	// Status
 	if d.status != nil {
 		b.WriteString("\n  Service Status:\n")
-		b.WriteString(fmt.Sprintf("    State: %s\n", d.status.ActiveState))
-		b.WriteString(fmt.Sprintf("    SubState: %s\n", d.status.SubState))
-		b.WriteString(fmt.Sprintf("    Timer Active: %t\n", d.status.TimerActive))
+		fmt.Fprintf(&b, "    State: %s\n", d.status.ActiveState)
+		fmt.Fprintf(&b, "    SubState: %s\n", d.status.SubState)
+		fmt.Fprintf(&b, "    Timer Active: %t\n", d.status.TimerActive)
 
 		if d.timerNext != "" {
-			b.WriteString(fmt.Sprintf("    Next Run: %s\n", d.timerNext))
+			fmt.Fprintf(&b, "    Next Run: %s\n", d.timerNext)
 		}
 
 		if !d.status.LastRun.IsZero() {
-			b.WriteString(fmt.Sprintf("    Last Run: %s\n", d.status.LastRun.Format("2006-01-02 15:04:05")))
+			fmt.Fprintf(&b, "    Last Run: %s\n", d.status.LastRun.Format("2006-01-02 15:04:05"))
 		}
 	}
 
 	// Sync options
 	b.WriteString("\n  Sync Options:\n")
 	if d.job.SyncOptions.Direction != "" {
-		b.WriteString(fmt.Sprintf("    Direction: %s\n", d.job.SyncOptions.Direction))
+		fmt.Fprintf(&b, "    Direction: %s\n", d.job.SyncOptions.Direction)
 	}
 	if d.job.SyncOptions.DryRun {
 		b.WriteString("    Dry Run: true\n")
 	}
 	if d.job.SyncOptions.BandwidthLimit != "" {
-		b.WriteString(fmt.Sprintf("    Bandwidth Limit: %s\n", d.job.SyncOptions.BandwidthLimit))
+		fmt.Fprintf(&b, "    Bandwidth Limit: %s\n", d.job.SyncOptions.BandwidthLimit)
 	}
 	if d.job.SyncOptions.Transfers > 0 {
-		b.WriteString(fmt.Sprintf("    Max Transfers: %d\n", d.job.SyncOptions.Transfers))
+		fmt.Fprintf(&b, "    Max Transfers: %d\n", d.job.SyncOptions.Transfers)
 	}
 
 	return b.String()

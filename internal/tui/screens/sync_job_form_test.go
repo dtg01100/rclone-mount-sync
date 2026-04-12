@@ -416,9 +416,7 @@ func TestSyncJobForm_Init(t *testing.T) {
 
 	// Init should return a command (form initialization)
 	// The exact command depends on huh.Form implementation
-	if cmd == nil {
-		// This is acceptable - form might not need initialization
-	}
+	_ = cmd
 }
 
 func TestSyncJobForm_View(t *testing.T) {
@@ -1246,9 +1244,7 @@ func TestSyncJobForm_NoRemotesShowsHelpfulMessage(t *testing.T) {
 
 	// The placeholder option is added in buildForm - verify form can be initialized
 	cmd := form.Init()
-	if cmd == nil {
-		// Init may return nil, that's fine
-	}
+	_ = cmd
 
 	// Verify submitting with no remote selected gives helpful error
 	form.name = "Test"

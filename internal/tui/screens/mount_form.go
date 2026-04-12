@@ -500,10 +500,7 @@ func (f *MountForm) submitForm() tea.Msg {
 	if err != nil {
 		if f.config != nil {
 			rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
-			if rollbackErr := rollbackMgr.RollbackMount(rollbackData, true); rollbackErr != nil {
-				// Log rollback failure but don't mask the original error
-				// Rollback is best-effort cleanup
-			}
+			_ = rollbackMgr.RollbackMount(rollbackData, true)
 		}
 		return MountsErrorMsg{Err: fmt.Errorf("failed to write service file: %w", err)}
 	}
@@ -516,10 +513,7 @@ func (f *MountForm) submitForm() tea.Msg {
 	if err := f.manager.DaemonReload(); err != nil {
 		if f.config != nil {
 			rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
-			if rollbackErr := rollbackMgr.RollbackMount(rollbackData, true); rollbackErr != nil {
-				// Log rollback failure but don't mask the original error
-				// Rollback is best-effort cleanup
-			}
+			_ = rollbackMgr.RollbackMount(rollbackData, true)
 		}
 		return MountsErrorMsg{Err: fmt.Errorf("failed to reload systemd daemon: %w", err)}
 	}
@@ -531,10 +525,7 @@ func (f *MountForm) submitForm() tea.Msg {
 		if err := f.manager.Enable(serviceName); err != nil {
 			if f.config != nil {
 				rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
-				if rollbackErr := rollbackMgr.RollbackMount(rollbackData, true); rollbackErr != nil {
-					// Log rollback failure but don't mask the original error
-					// Rollback is best-effort cleanup
-				}
+				_ = rollbackMgr.RollbackMount(rollbackData, true)
 			}
 			return MountsErrorMsg{Err: fmt.Errorf("failed to enable service: %w", err)}
 		}
@@ -545,10 +536,7 @@ func (f *MountForm) submitForm() tea.Msg {
 		if err := f.manager.Start(serviceName); err != nil {
 			if f.config != nil {
 				rollbackMgr := NewRollbackManager(f.config, f.generator, f.manager)
-				if rollbackErr := rollbackMgr.RollbackMount(rollbackData, true); rollbackErr != nil {
-					// Log rollback failure but don't mask the original error
-					// Rollback is best-effort cleanup
-				}
+				_ = rollbackMgr.RollbackMount(rollbackData, true)
 			}
 			return MountsErrorMsg{Err: fmt.Errorf("failed to start service: %w", err)}
 		}

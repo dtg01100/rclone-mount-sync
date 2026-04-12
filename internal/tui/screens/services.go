@@ -1038,11 +1038,12 @@ func (s *ServicesScreen) renderDetailsView() string {
 	// Status indicator
 	status := components.StatusIndicator(service.Status)
 	statusText := fmt.Sprintf("%s %s (%s)", status, service.Status, service.SubState)
-	if service.Status == "active" {
+	switch service.Status {
+	case "active":
 		b.WriteString(components.Styles.Success.Render(statusText))
-	} else if service.Status == "failed" {
+	case "failed":
 		b.WriteString(components.Styles.Error.Render(statusText))
-	} else {
+	default:
 		b.WriteString(components.Styles.Normal.Render(statusText))
 	}
 	b.WriteString("\n\n")

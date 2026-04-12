@@ -1060,28 +1060,28 @@ func (d *MountDetails) renderDetails() string {
 	var b strings.Builder
 
 	// Mount info
-	b.WriteString(fmt.Sprintf("  Name: %s\n", d.mount.Name))
-	b.WriteString(fmt.Sprintf("  Remote: %s\n", d.mount.Remote))
-	b.WriteString(fmt.Sprintf("  Remote Path: %s\n", d.mount.RemotePath))
-	b.WriteString(fmt.Sprintf("  Mount Point: %s\n", d.mount.MountPoint))
-	b.WriteString(fmt.Sprintf("  Auto Start: %t\n", d.mount.AutoStart))
-	b.WriteString(fmt.Sprintf("  Enabled: %t\n", d.mount.Enabled))
+	fmt.Fprintf(&b, "  Name: %s\n", d.mount.Name)
+	fmt.Fprintf(&b, "  Remote: %s\n", d.mount.Remote)
+	fmt.Fprintf(&b, "  Remote Path: %s\n", d.mount.RemotePath)
+	fmt.Fprintf(&b, "  Mount Point: %s\n", d.mount.MountPoint)
+	fmt.Fprintf(&b, "  Auto Start: %t\n", d.mount.AutoStart)
+	fmt.Fprintf(&b, "  Enabled: %t\n", d.mount.Enabled)
 
 	// Status
 	if d.status != nil {
 		b.WriteString("\n  Service Status:\n")
-		b.WriteString(fmt.Sprintf("    State: %s\n", d.status.State))
-		b.WriteString(fmt.Sprintf("    SubState: %s\n", d.status.SubState))
-		b.WriteString(fmt.Sprintf("    Enabled: %t\n", d.status.Enabled))
+		fmt.Fprintf(&b, "    State: %s\n", d.status.State)
+		fmt.Fprintf(&b, "    SubState: %s\n", d.status.SubState)
+		fmt.Fprintf(&b, "    Enabled: %t\n", d.status.Enabled)
 	}
 
 	// Mount options
 	b.WriteString("\n  Mount Options:\n")
 	if d.mount.MountOptions.VFSCacheMode != "" {
-		b.WriteString(fmt.Sprintf("    VFS Cache Mode: %s\n", d.mount.MountOptions.VFSCacheMode))
+		fmt.Fprintf(&b, "    VFS Cache Mode: %s\n", d.mount.MountOptions.VFSCacheMode)
 	}
 	if d.mount.MountOptions.BufferSize != "" {
-		b.WriteString(fmt.Sprintf("    Buffer Size: %s\n", d.mount.MountOptions.BufferSize))
+		fmt.Fprintf(&b, "    Buffer Size: %s\n", d.mount.MountOptions.BufferSize)
 	}
 	if d.mount.MountOptions.ReadOnly {
 		b.WriteString("    Read Only: true\n")

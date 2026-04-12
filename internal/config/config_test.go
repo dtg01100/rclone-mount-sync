@@ -526,9 +526,7 @@ func TestAddMountTableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := newConfigWithDefaults()
-			for _, m := range tt.existing {
-				cfg.Mounts = append(cfg.Mounts, m)
-			}
+			cfg.Mounts = append(cfg.Mounts, tt.existing...)
 
 			err := cfg.AddMount(tt.add)
 
@@ -620,9 +618,7 @@ func TestRemoveMountTableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := newConfigWithDefaults()
-			for _, m := range tt.existing {
-				cfg.Mounts = append(cfg.Mounts, m)
-			}
+			cfg.Mounts = append(cfg.Mounts, tt.existing...)
 
 			initialCount := len(cfg.Mounts)
 			err := cfg.RemoveMount(tt.removeName)
@@ -691,9 +687,7 @@ func TestGetMountTableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := newConfigWithDefaults()
-			for _, m := range tt.existing {
-				cfg.Mounts = append(cfg.Mounts, m)
-			}
+			cfg.Mounts = append(cfg.Mounts, tt.existing...)
 
 			result := cfg.GetMount(tt.getName)
 
@@ -762,9 +756,7 @@ func TestAddSyncJobTableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := newConfigWithDefaults()
-			for _, j := range tt.existing {
-				cfg.SyncJobs = append(cfg.SyncJobs, j)
-			}
+			cfg.SyncJobs = append(cfg.SyncJobs, tt.existing...)
 
 			err := cfg.AddSyncJob(tt.add)
 
@@ -856,9 +848,7 @@ func TestRemoveSyncJobTableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := newConfigWithDefaults()
-			for _, j := range tt.existing {
-				cfg.SyncJobs = append(cfg.SyncJobs, j)
-			}
+			cfg.SyncJobs = append(cfg.SyncJobs, tt.existing...)
 
 			initialCount := len(cfg.SyncJobs)
 			err := cfg.RemoveSyncJob(tt.removeName)
@@ -927,9 +917,7 @@ func TestGetSyncJobTableDriven(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := newConfigWithDefaults()
-			for _, j := range tt.existing {
-				cfg.SyncJobs = append(cfg.SyncJobs, j)
-			}
+			cfg.SyncJobs = append(cfg.SyncJobs, tt.existing...)
 
 			result := cfg.GetSyncJob(tt.getName)
 

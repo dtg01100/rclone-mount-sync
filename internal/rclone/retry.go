@@ -135,11 +135,7 @@ func IsRetryableError(err error) bool {
 		}
 	}
 
-	if errors.Is(err, io.ErrUnexpectedEOF) {
-		return true
-	}
-
-	return false
+	return errors.Is(err, io.ErrUnexpectedEOF)
 }
 
 func IsPermanentError(err error) bool {

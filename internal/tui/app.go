@@ -821,9 +821,9 @@ func (a *App) renderOrphanPrompt(baseView string) string {
 			cursor := "  "
 			if i == a.orphanSelected {
 				cursor = "> "
-				b.WriteString(fmt.Sprintf("%s%s [%s%s]\n", cursor, components.Styles.Selected.Render(orphan.Name), orphan.Type, legacyTag))
+				fmt.Fprintf(&b, "%s%s [%s%s]\n", cursor, components.Styles.Selected.Render(orphan.Name), orphan.Type, legacyTag)
 			} else {
-				b.WriteString(fmt.Sprintf("%s%s [%s%s]\n", cursor, orphan.Name, orphan.Type, legacyTag))
+				fmt.Fprintf(&b, "%s%s [%s%s]\n", cursor, orphan.Name, orphan.Type, legacyTag)
 			}
 		}
 		b.WriteString("\n")
@@ -834,9 +834,9 @@ func (a *App) renderOrphanPrompt(baseView string) string {
 		if orphan.IsLegacy {
 			legacyTag = " (legacy)"
 		}
-		b.WriteString(fmt.Sprintf("Unit: %s\n", orphan.Name))
-		b.WriteString(fmt.Sprintf("Type: %s%s\n", orphan.Type, legacyTag))
-		b.WriteString(fmt.Sprintf("Path: %s\n\n", orphan.Path))
+		fmt.Fprintf(&b, "Unit: %s\n", orphan.Name)
+		fmt.Fprintf(&b, "Type: %s%s\n", orphan.Type, legacyTag)
+		fmt.Fprintf(&b, "Path: %s\n\n", orphan.Path)
 		b.WriteString(components.Styles.HelpText.Render("[Enter] Import to config  [c] Cleanup (delete)  [Esc] Back"))
 	}
 

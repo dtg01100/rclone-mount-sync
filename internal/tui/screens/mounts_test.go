@@ -2086,10 +2086,6 @@ func TestMountDetails_NilManager(t *testing.T) {
 		mount: mount,
 	}
 
-	if details == nil {
-		t.Fatal("MountDetails struct creation returned nil")
-	}
-
 	// Verify the mount is set correctly
 	if details.mount.Name != mount.Name {
 		t.Errorf("mount name = %q, want %q", details.mount.Name, mount.Name)

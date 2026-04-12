@@ -966,7 +966,7 @@ func (s *SettingsScreen) renderActionsListCompact(width int) string {
 			line := fmt.Sprintf("▸ %s", components.Styles.Selected.Render(name))
 			b.WriteString(line + "\n")
 			if len(action.Description) <= maxNameLen {
-				b.WriteString(fmt.Sprintf("  %s\n", components.Styles.Subtitle.Render(action.Description)))
+				fmt.Fprintf(&b, "  %s\n", components.Styles.Subtitle.Render(action.Description))
 			}
 		} else {
 			line := fmt.Sprintf("  %s", name)

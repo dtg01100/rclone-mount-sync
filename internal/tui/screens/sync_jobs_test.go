@@ -2377,10 +2377,6 @@ func TestSyncJobDetails_NilManager(t *testing.T) {
 		job: job,
 	}
 
-	if details == nil {
-		t.Fatal("SyncJobDetails struct creation returned nil")
-	}
-
 	// Verify the job is set correctly
 	if details.job.Name != job.Name {
 		t.Errorf("job name = %q, want %q", details.job.Name, job.Name)

@@ -453,10 +453,10 @@ func FormatResults(results []CheckResult) string {
 			}
 		}
 
-		sb.WriteString(fmt.Sprintf("\n[%s] %s\n", status, r.Name))
-		sb.WriteString(fmt.Sprintf("  %s\n", r.Message))
+		fmt.Fprintf(&sb, "\n[%s] %s\n", status, r.Name)
+		fmt.Fprintf(&sb, "  %s\n", r.Message)
 		if r.Suggestion != "" {
-			sb.WriteString(fmt.Sprintf("  Suggestion: %s\n", r.Suggestion))
+			fmt.Fprintf(&sb, "  Suggestion: %s\n", r.Suggestion)
 		}
 	}
 
