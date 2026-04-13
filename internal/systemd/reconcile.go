@@ -387,7 +387,7 @@ func parseRemotePath(remotePath string) (remote, path string) {
 	if idx == -1 {
 		return remotePath, "/"
 	}
-	return remotePath[:idx+1], remotePath[idx+1:]
+	return remotePath[:idx], remotePath[idx+1:]
 }
 
 func (r *Reconciler) parseTimerSchedule(content string) models.ScheduleConfig {

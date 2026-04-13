@@ -1058,8 +1058,8 @@ func (d *SyncJobDeleteConfirm) deleteServiceOnly() tea.Cmd {
 		_ = d.manager.ResetFailed(serviceName)
 
 		// Remove the unit files
-		_ = d.generator.RemoveUnit(serviceName + ".service")
-		_ = d.generator.RemoveUnit(timerName + ".timer")
+		_ = d.generator.RemoveUnit(serviceName)
+		_ = d.generator.RemoveUnit(timerName)
 
 		// Reload daemon
 		if err := d.manager.DaemonReload(); err != nil {
@@ -1088,7 +1088,7 @@ func (d *SyncJobDeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 		_ = d.manager.Disable(serviceName)
 		_ = d.manager.ResetFailed(serviceName)
 
-		if err := d.generator.RemoveUnit(serviceName + ".service"); err != nil {
+		if err := d.generator.RemoveUnit(serviceName); err != nil {
 			if d.config != nil {
 				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
 				_ = rollbackMgr.RollbackSyncJob(rollbackData, false)
@@ -1096,7 +1096,7 @@ func (d *SyncJobDeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to remove service unit: %w", err)}
 		}
 
-		if err := d.generator.RemoveUnit(timerName + ".timer"); err != nil {
+		if err := d.generator.RemoveUnit(timerName); err != nil {
 			if d.config != nil {
 				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
 				_ = rollbackMgr.RollbackSyncJob(rollbackData, false)
