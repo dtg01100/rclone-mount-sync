@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,15 +11,43 @@ import (
 )
 
 func TestServicesListNoSystemd(t *testing.T) {
-	// Listing services should handle gracefully when systemd isn't available.
-	// The command should either return an error or succeed if systemd is available.
-	// We just verify it doesn't panic and returns a result.
-	_, _, err := runCmd(t, servicesListCmd)
-	// If systemd is not available, we expect an error
-	// If it is available, the command should succeed
-	// Either way, we've verified the command handles the situation gracefully
+	// Test that services list properly handles when systemd is unavailable
+	oldLoadManager := loadManager
+	defer func() { loadManager = oldLoadManager }()
+
+	// Mock manager that indicates systemd is not available
+	mock := &systemd.MockManager{
+		IsSystemdAvailableResult: false,
+		ListServicesErr:         fmt.Errorf("systemd user session not available"),
+	}
+	loadManager = func() systemd.ServiceManager { return mock }
+
+	// Call runServicesList directly to bypass cobra command routing
+	err := runServicesList(nil, nil)
+	// Should return error when systemd is unavailable
+	if err == nil {
+		t.Error("expected error when systemd is unavailable")
+	}
+	if err != nil && !strings.Contains(err.Error(), "systemd") {
+		t.Errorf("expected systemd-related error, got: %v", err)
+	}
+}
+
+func TestServicesListSystemdAvailable(t *testing.T) {
+	// Test that services list succeeds when systemd is available
+	oldLoadManager := loadManager
+	defer func() { loadManager = oldLoadManager }()
+
+	mock := &systemd.MockManager{
+		IsSystemdAvailableResult: true,
+		ListServicesResult:       []systemd.UnitStatus{},
+	}
+	loadManager = func() systemd.ServiceManager { return mock }
+
+	// Call runServicesList directly
+	err := runServicesList(nil, nil)
 	if err != nil {
-		t.Logf("services list returned error (expected if systemd unavailable): %v", err)
+		t.Fatalf("expected no error when systemd is available: %v", err)
 	}
 }
 
