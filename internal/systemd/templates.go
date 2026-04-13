@@ -16,12 +16,14 @@ ExecStart={{.RclonePath}} mount \
     {{.Remote}}{{.RemotePath}} \
     {{.MountPoint}} \
     {{.MountOptions}}
-ExecStop=/bin/fusermount -u {{.MountPoint}}
+ExecStop={{.FusermountPath}} -u {{.MountPoint}}
 ExecStopPost=/bin/rmdir {{.MountPoint}}
 Restart=on-failure
 RestartSec=5s
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-
+{{if .MemoryMax}}MemoryMax={{.MemoryMax}}
+{{end}}{{if .CPUQuota}}CPUQuota={{.CPUQuota}}
+{{end}}
 [Install]
 WantedBy=default.target
 `
@@ -42,9 +44,9 @@ Type=oneshot
     {{.Destination}} \
     {{.SyncOptions}}
 Environment="PATH=/usr/local/bin:/usr/bin:/bin"
-MemoryMax=1G
-CPUQuota=50%
-
+{{if .MemoryMax}}MemoryMax={{.MemoryMax}}
+{{end}}{{if .CPUQuota}}CPUQuota={{.CPUQuota}}
+{{end}}
 [Install]
 WantedBy=default.target
 `
@@ -63,15 +65,18 @@ WantedBy=timers.target
 
 // MountUnitData contains data for mount service unit generation.
 type MountUnitData struct {
-	Name         string
-	Remote       string
-	RemotePath   string
-	MountPoint   string
-	ConfigPath   string
-	MountOptions string
-	LogLevel     string
-	LogPath      string
-	RclonePath   string
+	Name           string
+	Remote         string
+	RemotePath     string
+	MountPoint     string
+	ConfigPath     string
+	MountOptions   string
+	LogLevel       string
+	LogPath        string
+	RclonePath     string
+	FusermountPath string // Path to fusermount binary (prefers fusermount3)
+	MemoryMax      string // Memory limit (e.g., "1G", "512M")
+	CPUQuota       string // CPU quota (e.g., "50%", "100%")
 }
 
 // SyncUnitData contains data for sync service unit generation.
@@ -88,6 +93,8 @@ type SyncUnitData struct {
 	RequireACPower   bool
 	RequireUnmetered bool
 	ExecCondition    string
+	MemoryMax        string // Memory limit (e.g., "1G", "512M")
+	CPUQuota         string // CPU quota (e.g., "50%", "100%")
 }
 
 // TimerUnitData contains data for timer unit generation.

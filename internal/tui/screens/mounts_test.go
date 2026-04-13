@@ -449,9 +449,9 @@ func TestMountsScreen_MountDeletedMsg(t *testing.T) {
 
 func TestMountsScreen_MountStatusMsg(t *testing.T) {
 	screen := NewMountsScreen()
-	screen.statuses = make(map[string]*systemd.ServiceStatus)
+	screen.statuses = make(map[string]*systemd.UnitStatus)
 
-	status := &systemd.ServiceStatus{
+	status := &systemd.UnitStatus{
 		Active: true,
 		State:  "running",
 	}
@@ -1210,7 +1210,7 @@ func TestMountsScreen_EnterNoMounts(t *testing.T) {
 
 func TestMountsScreen_GetMountStatus(t *testing.T) {
 	screen := NewMountsScreen()
-	screen.statuses = make(map[string]*systemd.ServiceStatus)
+	screen.statuses = make(map[string]*systemd.UnitStatus)
 
 	mount := &models.MountConfig{Name: "TestMount"}
 
@@ -1221,14 +1221,14 @@ func TestMountsScreen_GetMountStatus(t *testing.T) {
 	}
 
 	// Test active status
-	screen.statuses["TestMount"] = &systemd.ServiceStatus{Active: true}
+	screen.statuses["TestMount"] = &systemd.UnitStatus{Active: true}
 	status = screen.getMountStatus(mount)
 	if !strings.Contains(status, "running") {
 		t.Errorf("status for active mount = %q, should contain 'running'", status)
 	}
 
 	// Test inactive status
-	screen.statuses["TestMount"] = &systemd.ServiceStatus{Active: false}
+	screen.statuses["TestMount"] = &systemd.UnitStatus{Active: false}
 	status = screen.getMountStatus(mount)
 	if !strings.Contains(status, "stopped") {
 		t.Errorf("status for inactive mount = %q, should contain 'stopped'", status)
@@ -1242,8 +1242,8 @@ func TestMountsScreen_RenderMountDetails(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.statuses = make(map[string]*systemd.ServiceStatus)
-	screen.statuses["Google Drive"] = &systemd.ServiceStatus{Active: true}
+	screen.statuses = make(map[string]*systemd.UnitStatus)
+	screen.statuses["Google Drive"] = &systemd.UnitStatus{Active: true}
 
 	details := screen.renderMountDetails()
 
@@ -1874,8 +1874,8 @@ func TestMountsScreen_ToggleMount_ActiveMount(t *testing.T) {
 	screen.manager = &systemd.Manager{}
 
 	// Set up status to indicate mount is active
-	screen.statuses = make(map[string]*systemd.ServiceStatus)
-	screen.statuses["Google Drive"] = &systemd.ServiceStatus{
+	screen.statuses = make(map[string]*systemd.UnitStatus)
+	screen.statuses["Google Drive"] = &systemd.UnitStatus{
 		Active: true,
 	}
 
@@ -1901,8 +1901,8 @@ func TestMountsScreen_ToggleMount_InactiveMount(t *testing.T) {
 	screen.manager = &systemd.Manager{}
 
 	// Set up status to indicate mount is inactive
-	screen.statuses = make(map[string]*systemd.ServiceStatus)
-	screen.statuses["Google Drive"] = &systemd.ServiceStatus{
+	screen.statuses = make(map[string]*systemd.UnitStatus)
+	screen.statuses["Google Drive"] = &systemd.UnitStatus{
 		Active: false,
 	}
 
@@ -2107,7 +2107,7 @@ func TestMountsScreen_RenderMountList_LongPaths(t *testing.T) {
 		},
 	}
 	screen.cursor = 0
-	screen.statuses = make(map[string]*systemd.ServiceStatus)
+	screen.statuses = make(map[string]*systemd.UnitStatus)
 
 	list := screen.renderMountList()
 
@@ -2240,8 +2240,8 @@ func TestMountsScreen_RenderMountDetails_WithStatus(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.statuses = make(map[string]*systemd.ServiceStatus)
-	screen.statuses["Google Drive"] = &systemd.ServiceStatus{
+	screen.statuses = make(map[string]*systemd.UnitStatus)
+	screen.statuses["Google Drive"] = &systemd.UnitStatus{
 		Active: true,
 		State:  "running",
 	}
@@ -2259,7 +2259,7 @@ func TestMountsScreen_RenderMountDetails_UnknownStatus(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.statuses = make(map[string]*systemd.ServiceStatus)
+	screen.statuses = make(map[string]*systemd.UnitStatus)
 	// No status for the mount
 
 	details := screen.renderMountDetails()
@@ -2312,7 +2312,7 @@ func TestMountDetails_RenderDetails_WithStatus(t *testing.T) {
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 	details.width = 80
-	details.status = &systemd.ServiceStatus{
+	details.status = &systemd.UnitStatus{
 		State:    "running",
 		SubState: "active",
 		Enabled:  true,

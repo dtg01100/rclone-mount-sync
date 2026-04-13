@@ -122,9 +122,42 @@ func TestParseSystemdTimestamp_RFC3339(t *testing.T) {
 	}
 }
 
-// TestServiceStatus_Struct tests that ServiceStatus struct fields work correctly.
+func TestParseTimerNextRunOutput(t *testing.T) {
+	input := "NextElapseUSec=1708540800000000\n"
+
+	got, err := parseTimerNextRunOutput(input)
+	if err != nil {
+		t.Fatalf("parseTimerNextRunOutput() error = %v", err)
+	}
+
+	expected := time.Unix(1708540800, 0)
+	if !got.Equal(expected) {
+		t.Errorf("parseTimerNextRunOutput() = %v, want %v", got, expected)
+	}
+}
+
+func TestIsEnabledState(t *testing.T) {
+	tests := []struct {
+		state string
+		want  bool
+	}{
+		{"enabled", true},
+		{"enabled-runtime", true},
+		{"disabled", false},
+		{"static", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		if got := isEnabledState(tt.state); got != tt.want {
+			t.Errorf("isEnabledState(%q) = %v, want %v", tt.state, got, tt.want)
+		}
+	}
+}
+
+// TestServiceStatus_Struct tests that UnitStatus struct fields work correctly.
 func TestServiceStatus_Struct(t *testing.T) {
-	status := ServiceStatus{
+	status := UnitStatus{
 		Name:     "rclone-mount-gdrive",
 		Active:   true,
 		State:    "active",
@@ -133,19 +166,19 @@ func TestServiceStatus_Struct(t *testing.T) {
 	}
 
 	if status.Name != "rclone-mount-gdrive" {
-		t.Errorf("ServiceStatus.Name = %q, want %q", status.Name, "rclone-mount-gdrive")
+		t.Errorf("UnitStatus.Name = %q, want %q", status.Name, "rclone-mount-gdrive")
 	}
 	if !status.Active {
-		t.Error("ServiceStatus.Active should be true")
+		t.Error("UnitStatus.Active should be true")
 	}
 	if status.State != "active" {
-		t.Errorf("ServiceStatus.State = %q, want %q", status.State, "active")
+		t.Errorf("UnitStatus.State = %q, want %q", status.State, "active")
 	}
 	if status.SubState != "running" {
-		t.Errorf("ServiceStatus.SubState = %q, want %q", status.SubState, "running")
+		t.Errorf("UnitStatus.SubState = %q, want %q", status.SubState, "running")
 	}
 	if !status.Enabled {
-		t.Error("ServiceStatus.Enabled should be true")
+		t.Error("UnitStatus.Enabled should be true")
 	}
 }
 
@@ -368,6 +401,9 @@ func TestManager_DaemonReload(t *testing.T) {
 // TestManager_Enable tests Enable.
 func TestManager_Enable(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	// This will fail because the service doesn't exist
 	err := m.Enable("nonexistent-service-12345")
@@ -379,6 +415,9 @@ func TestManager_Enable(t *testing.T) {
 // TestManager_Disable tests Disable.
 func TestManager_Disable(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	// This will fail because the service doesn't exist
 	err := m.Disable("nonexistent-service-12345")
@@ -390,6 +429,9 @@ func TestManager_Disable(t *testing.T) {
 // TestManager_Start tests Start.
 func TestManager_Start(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	// This will fail because the service doesn't exist
 	err := m.Start("nonexistent-service-12345")
@@ -401,6 +443,9 @@ func TestManager_Start(t *testing.T) {
 // TestManager_Stop tests Stop.
 func TestManager_Stop(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	// This will fail because the service doesn't exist
 	err := m.Stop("nonexistent-service-12345")
@@ -412,6 +457,9 @@ func TestManager_Stop(t *testing.T) {
 // TestManager_Restart tests Restart.
 func TestManager_Restart(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	// This will fail because the service doesn't exist
 	err := m.Restart("nonexistent-service-12345")
@@ -469,6 +517,9 @@ func TestManager_ListServices(t *testing.T) {
 // TestManager_GetLogs tests GetLogs.
 func TestManager_GetLogs(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	// This will fail because the service doesn't exist
 	_, err := m.GetLogs("nonexistent-service-12345", 10)
@@ -502,6 +553,9 @@ func TestManager_GetTimerNextRun(t *testing.T) {
 // TestManager_StartTimer tests StartTimer.
 func TestManager_StartTimer(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	// This will fail because the timer doesn't exist
 	err := m.StartTimer("nonexistent-timer-12345")
@@ -513,6 +567,9 @@ func TestManager_StartTimer(t *testing.T) {
 // TestManager_StopTimer tests StopTimer.
 func TestManager_StopTimer(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	// This will fail because the timer doesn't exist
 	err := m.StopTimer("nonexistent-timer-12345")
@@ -524,6 +581,9 @@ func TestManager_StopTimer(t *testing.T) {
 // TestManager_EnableTimer tests EnableTimer.
 func TestManager_EnableTimer(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	// This will fail because the timer doesn't exist
 	err := m.EnableTimer("nonexistent-timer-12345")
@@ -535,6 +595,9 @@ func TestManager_EnableTimer(t *testing.T) {
 // TestManager_DisableTimer tests DisableTimer.
 func TestManager_DisableTimer(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	// This will fail because the timer doesn't exist
 	err := m.DisableTimer("nonexistent-timer-12345")
@@ -546,6 +609,9 @@ func TestManager_DisableTimer(t *testing.T) {
 // TestManager_RunSyncNow tests RunSyncNow.
 func TestManager_RunSyncNow(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	// This will fail because the service doesn't exist
 	err := m.RunSyncNow("nonexistent-sync-12345")
@@ -596,21 +662,21 @@ func TestParseSystemdTimestamp_CommonFormats(t *testing.T) {
 	}
 }
 
-// TestServiceStatus_ZeroValue tests zero value of ServiceStatus.
+// TestServiceStatus_ZeroValue tests zero value of UnitStatus.
 func TestServiceStatus_ZeroValue(t *testing.T) {
-	var status ServiceStatus
+	var status UnitStatus
 
 	if status.Name != "" {
-		t.Errorf("Zero value ServiceStatus.Name = %q, want empty", status.Name)
+		t.Errorf("Zero value UnitStatus.Name = %q, want empty", status.Name)
 	}
 	if status.Active {
-		t.Error("Zero value ServiceStatus.Active should be false")
+		t.Error("Zero value UnitStatus.Active should be false")
 	}
 	if status.State != "" {
-		t.Errorf("Zero value ServiceStatus.State = %q, want empty", status.State)
+		t.Errorf("Zero value UnitStatus.State = %q, want empty", status.State)
 	}
 	if status.Enabled {
-		t.Error("Zero value ServiceStatus.Enabled should be false")
+		t.Error("Zero value UnitStatus.Enabled should be false")
 	}
 }
 
@@ -673,6 +739,9 @@ func TestManager_Timeout(t *testing.T) {
 // TestManager_EnableTimerError tests EnableTimer with nonexistent timer.
 func TestManager_EnableTimerError(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	err := m.EnableTimer("nonexistent-timer-12345")
 	if err == nil {
@@ -683,6 +752,9 @@ func TestManager_EnableTimerError(t *testing.T) {
 // TestManager_DisableTimerError tests DisableTimer with nonexistent timer.
 func TestManager_DisableTimerError(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	err := m.DisableTimer("nonexistent-timer-12345")
 	if err == nil {
@@ -693,6 +765,9 @@ func TestManager_DisableTimerError(t *testing.T) {
 // TestManager_StopTimerError tests StopTimer with nonexistent timer.
 func TestManager_StopTimerError(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	err := m.StopTimer("nonexistent-timer-12345")
 	if err == nil {
@@ -703,6 +778,9 @@ func TestManager_StopTimerError(t *testing.T) {
 // TestManager_RunSyncNowError tests RunSyncNow with nonexistent service.
 func TestManager_RunSyncNowError(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	err := m.RunSyncNow("nonexistent-sync-12345")
 	if err == nil {
@@ -713,6 +791,9 @@ func TestManager_RunSyncNowError(t *testing.T) {
 // TestManager_GetLogsError tests GetLogs error handling.
 func TestManager_GetLogsError(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	_, err := m.GetLogs("nonexistent-service-12345", 10)
 	if err == nil {
@@ -746,6 +827,9 @@ func TestManager_GetTimerNextRunNonexistent(t *testing.T) {
 // TestManager_StartTimerWithServiceSuffix tests StartTimer name handling with .service suffix.
 func TestManager_StartTimerWithServiceSuffix(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	err := m.StartTimer("rclone-sync-u1v2w3x4.service")
 	// Should fail because timer doesn't exist, but name should be handled
@@ -757,6 +841,9 @@ func TestManager_StartTimerWithServiceSuffix(t *testing.T) {
 // TestManager_StopTimerWithServiceSuffix tests StopTimer name handling with .service suffix.
 func TestManager_StopTimerWithServiceSuffix(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	err := m.StopTimer("rclone-sync-y5z6a7b8.service")
 	// Should fail because timer doesn't exist, but name should be handled
@@ -768,6 +855,9 @@ func TestManager_StopTimerWithServiceSuffix(t *testing.T) {
 // TestManager_EnableTimerWithServiceSuffix tests EnableTimer name handling with .service suffix.
 func TestManager_EnableTimerWithServiceSuffix(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	err := m.EnableTimer("rclone-sync-c9d0e1f2.service")
 	// Should fail because timer doesn't exist, but name should be handled
@@ -779,6 +869,9 @@ func TestManager_EnableTimerWithServiceSuffix(t *testing.T) {
 // TestManager_DisableTimerWithServiceSuffix tests DisableTimer name handling with .service suffix.
 func TestManager_DisableTimerWithServiceSuffix(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	err := m.DisableTimer("rclone-sync-g3h4i5j6.service")
 	// Should fail because timer doesn't exist, but name should be handled
@@ -790,6 +883,9 @@ func TestManager_DisableTimerWithServiceSuffix(t *testing.T) {
 // TestManager_RunSyncNowWithTimerSuffix tests RunSyncNow name handling with .timer suffix.
 func TestManager_RunSyncNowWithTimerSuffix(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	err := m.RunSyncNow("rclone-sync-k7l8m9n0.timer")
 	// Should fail because service doesn't exist, but name should be handled
@@ -847,9 +943,9 @@ func TestParseSystemdTimestamp_EdgeCases(t *testing.T) {
 	}
 }
 
-// TestServiceStatus_AllFields tests ServiceStatus with all fields populated.
+// TestServiceStatus_AllFields tests UnitStatus with all fields populated.
 func TestServiceStatus_AllFields(t *testing.T) {
-	status := ServiceStatus{
+	status := UnitStatus{
 		Name:     "rclone-mount-gdrive",
 		Active:   true,
 		State:    "active",
@@ -858,19 +954,19 @@ func TestServiceStatus_AllFields(t *testing.T) {
 	}
 
 	if status.Name != "rclone-mount-gdrive" {
-		t.Errorf("ServiceStatus.Name = %q, want %q", status.Name, "rclone-mount-gdrive")
+		t.Errorf("UnitStatus.Name = %q, want %q", status.Name, "rclone-mount-gdrive")
 	}
 	if !status.Active {
-		t.Error("ServiceStatus.Active should be true")
+		t.Error("UnitStatus.Active should be true")
 	}
 	if status.State != "active" {
-		t.Errorf("ServiceStatus.State = %q, want %q", status.State, "active")
+		t.Errorf("UnitStatus.State = %q, want %q", status.State, "active")
 	}
 	if status.SubState != "running" {
-		t.Errorf("ServiceStatus.SubState = %q, want %q", status.SubState, "running")
+		t.Errorf("UnitStatus.SubState = %q, want %q", status.SubState, "running")
 	}
 	if !status.Enabled {
-		t.Error("ServiceStatus.Enabled should be true")
+		t.Error("UnitStatus.Enabled should be true")
 	}
 }
 
@@ -1147,6 +1243,9 @@ func TestManager_GetDetailedStatus_NameParsing(t *testing.T) {
 // TestManager_EnableDisable tests that Enable/Disable work as expected.
 func TestManager_EnableDisable_NonexistentUnit(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	unitName := "nonexistent-unit-for-testing-12345"
 
@@ -1162,6 +1261,9 @@ func TestManager_EnableDisable_NonexistentUnit(t *testing.T) {
 // TestManager_StartStop tests that Start/Stop work as expected.
 func TestManager_StartStop_NonexistentUnit(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	unitName := "nonexistent-unit-for-testing-12345"
 
@@ -1177,6 +1279,9 @@ func TestManager_StartStop_NonexistentUnit(t *testing.T) {
 // TestManager_TimerOperations tests timer operations with nonexistent timers.
 func TestManager_TimerOperations_NonexistentTimer(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	timerName := "nonexistent-timer-for-testing-12345"
 
@@ -1198,6 +1303,9 @@ func TestManager_TimerOperations_NonexistentTimer(t *testing.T) {
 // TestManager_RestartNonexistent tests Restart with nonexistent service.
 func TestManager_RestartNonexistent(t *testing.T) {
 	m := NewManager()
+	if !m.IsSystemdAvailable() {
+		t.Skip("systemd user session not available")
+	}
 
 	err := m.Restart("nonexistent-service-12345")
 	if err == nil {
@@ -1789,9 +1897,9 @@ func TestListServices_ReturnsEmptySliceOnError(t *testing.T) {
 	}
 }
 
-// TestListServices_ServiceStatusFields tests that ServiceStatus has correct fields.
+// TestListServices_ServiceStatusFields tests that UnitStatus has correct fields.
 func TestListServices_ServiceStatusFields(t *testing.T) {
-	status := ServiceStatus{
+	status := UnitStatus{
 		Name:    "rclone-mount-test",
 		Active:  true,
 		State:   "active",
@@ -1799,16 +1907,16 @@ func TestListServices_ServiceStatusFields(t *testing.T) {
 	}
 
 	if status.Name != "rclone-mount-test" {
-		t.Errorf("ServiceStatus.Name = %q, want %q", status.Name, "rclone-mount-test")
+		t.Errorf("UnitStatus.Name = %q, want %q", status.Name, "rclone-mount-test")
 	}
 	if !status.Active {
-		t.Error("ServiceStatus.Active should be true")
+		t.Error("UnitStatus.Active should be true")
 	}
 	if status.State != "active" {
-		t.Errorf("ServiceStatus.State = %q, want %q", status.State, "active")
+		t.Errorf("UnitStatus.State = %q, want %q", status.State, "active")
 	}
 	if !status.Enabled {
-		t.Error("ServiceStatus.Enabled should be true")
+		t.Error("UnitStatus.Enabled should be true")
 	}
 }
 

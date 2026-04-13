@@ -135,7 +135,12 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	cmd2 := exec.Command("systemctl", "--user", "list-units", "--state=failed", "--no-legend")
+	systemctlPath := "systemctl"
+	if manager != nil {
+		systemctlPath = manager.SystemctlPath()
+	}
+
+	cmd2 := exec.Command(systemctlPath, "--user", "list-units", "--state=failed", "--no-legend")
 	output, err := cmd2.Output()
 	if err != nil {
 		return fmt.Errorf("failed to list failed units: %w", err)

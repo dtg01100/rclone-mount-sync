@@ -122,3 +122,21 @@ func TestFindSyncJobByIDOrName(t *testing.T) {
 		t.Error("expected nil for nonexistent sync job")
 	}
 }
+
+func TestRunCleanup(t *testing.T) {
+	// runCleanup calls systemctl, which may not be available in test environment
+	// We can test that it doesn't panic and returns an error
+	defer func() {
+		if r := recover(); r != nil {
+			t.Errorf("runCleanup panicked: %v", r)
+		}
+	}()
+
+	err := runCleanup(rootCmd, []string{})
+	// In test environment, systemctl is likely not available, so expect error
+	if err == nil {
+		t.Log("runCleanup succeeded (systemctl available)")
+	} else {
+		t.Logf("runCleanup failed as expected: %v", err)
+	}
+}

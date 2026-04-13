@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 )
 
 // TestNewEnhancedFilePicker tests the creation of a new enhanced file picker.
@@ -129,6 +130,99 @@ func TestEnhancedFilePicker_Options(t *testing.T) {
 				t.Errorf("Option %s failed check", tt.name)
 			}
 		})
+	}
+}
+
+// TestEnhancedFilePicker_Focus tests the Focus method.
+func TestEnhancedFilePicker_Focus(t *testing.T) {
+	picker := NewEnhancedFilePicker()
+	picker.focused = false
+
+	cmd := picker.Focus()
+
+	if !picker.focused {
+		t.Error("Focus should set focused to true")
+	}
+
+	// cmd might be nil if innerPicker is nil
+	_ = cmd
+}
+
+// TestEnhancedFilePicker_Blur tests the Blur method.
+func TestEnhancedFilePicker_Blur(t *testing.T) {
+	picker := NewEnhancedFilePicker()
+	picker.focused = true
+
+	cmd := picker.Blur()
+
+	if picker.focused {
+		t.Error("Blur should set focused to false")
+	}
+
+	// cmd might be nil if innerPicker is nil
+	_ = cmd
+}
+
+// TestEnhancedFilePicker_WithTheme tests the WithTheme method.
+func TestEnhancedFilePicker_WithTheme(t *testing.T) {
+	picker := NewEnhancedFilePicker()
+	theme := &huh.Theme{}
+
+	result := picker.WithTheme(theme)
+
+	if result != picker {
+		t.Error("WithTheme should return the picker itself")
+	}
+}
+
+// TestEnhancedFilePicker_WithHeight tests the WithHeight method.
+func TestEnhancedFilePicker_WithHeight(t *testing.T) {
+	picker := NewEnhancedFilePicker()
+
+	result := picker.WithHeight(20)
+
+	if result != picker {
+		t.Error("WithHeight should return the picker itself")
+	}
+	if picker.height != 20 {
+		t.Errorf("Height should be set to 20, got %d", picker.height)
+	}
+}
+
+// TestEnhancedFilePicker_WithAccessible tests the WithAccessible method.
+func TestEnhancedFilePicker_WithAccessible(t *testing.T) {
+	picker := NewEnhancedFilePicker()
+
+	result := picker.WithAccessible(true)
+
+	if result != picker {
+		t.Error("WithAccessible should return the picker itself")
+	}
+	if !picker.accessible {
+		t.Error("Accessible should be set to true")
+	}
+}
+
+// TestEnhancedFilePicker_RunAccessible tests the RunAccessible method.
+func TestEnhancedFilePicker_RunAccessible(t *testing.T) {
+	picker := NewEnhancedFilePicker()
+
+	err := picker.RunAccessible(nil, nil)
+
+	// Should not error if innerPicker is nil
+	if err != nil {
+		t.Errorf("RunAccessible should not error when innerPicker is nil, got %v", err)
+	}
+}
+
+// TestEnhancedFilePicker_GetKey tests the GetKey method.
+func TestEnhancedFilePicker_GetKey(t *testing.T) {
+	picker := NewEnhancedFilePicker()
+
+	key := picker.GetKey()
+
+	if key != "" {
+		t.Errorf("GetKey should return empty string, got %q", key)
 	}
 }
 

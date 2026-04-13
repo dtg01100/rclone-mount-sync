@@ -28,7 +28,7 @@ GOGET=$(GOCMD) get
 GOMOD=$(GOCMD) mod
 
 # Build flags
-LDFLAGS=-ldflags "-X main.version=$(VERSION)"
+LDFLAGS=-ldflags "-X main.version=$(VERSION)" -buildvcs=false
 
 # Default target
 .PHONY: all

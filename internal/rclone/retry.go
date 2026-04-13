@@ -182,22 +182,32 @@ func classifyExitError(err error) error {
 		}
 	}
 
-	if exitCode == 1 && strings.Contains(stderr, "error") {
-		return err
-	}
-
+	// Check for retryable patterns BEFORE defaulting to permanent on exit code 1.
+	// Some network errors return exit code 1 but are transient.
 	retryablePatterns := []string{
 		"timeout",
+		"timed out",
 		"connection refused",
+		"connection reset",
+		"connection closed",
 		"network",
 		"dns",
 		"temporary",
+		"no such host",
+		"i/o timeout",
+		"deadline exceeded",
 	}
 
 	for _, pattern := range retryablePatterns {
 		if strings.Contains(stderr, pattern) {
 			return NewRetryableError(err)
 		}
+	}
+
+	// Exit code 1 with "error" in stderr is treated as permanent if no
+	// retryable pattern was found above.
+	if exitCode == 1 && strings.Contains(stderr, "error") {
+		return NewPermanentError(err)
 	}
 
 	return err

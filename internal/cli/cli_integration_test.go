@@ -45,7 +45,10 @@ func TestMountCreateAndDeleteFlow(t *testing.T) {
 
 	// Verify unit file exists
 	// Generator.ServiceName uses random ID; find created file in tmp dir
-	files, _ := os.ReadDir(tmp)
+	files, err := os.ReadDir(tmp)
+	if err != nil {
+		t.Fatalf("failed to read dir %q: %v", tmp, err)
+	}
 	found := false
 	for _, f := range files {
 		if f.Type().IsRegular() && (filepath.Ext(f.Name()) == ".service" || filepath.Ext(f.Name()) == ".timer") {
@@ -62,7 +65,9 @@ func TestMountCreateAndDeleteFlow(t *testing.T) {
 	cfg.Mounts = append(cfg.Mounts, m)
 
 	// Create a fake unit file matching generator.ServiceName
-	_ = os.WriteFile(filepath.Join(tmp, "rclone-mount-abc12345.service"), []byte("[Unit]\n"), 0644)
+	if err := os.WriteFile(filepath.Join(tmp, "rclone-mount-abc12345.service"), []byte("[Unit]\n"), 0644); err != nil {
+		t.Fatalf("failed to write service file: %v", err)
+	}
 
 	// Run delete
 	if err := runMountDelete(nil, []string{mountCreateName}); err != nil {
@@ -76,7 +81,7 @@ func TestServicesCommandsWithMockManager(t *testing.T) {
 	defer func() { loadManager = oldLoadManager }()
 
 	mock := &systemd.MockManager{
-		ListServicesResult: []systemd.ServiceStatus{
+		ListServicesResult: []systemd.UnitStatus{
 			{Name: "rclone-mount-abc.service", Enabled: true, Active: true, State: "active"},
 		},
 		GetDetailedStatusResult: &models.ServiceStatus{

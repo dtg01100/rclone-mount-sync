@@ -27,7 +27,7 @@ func TestServicesListWithServices(t *testing.T) {
 	defer func() { loadManager = oldLoadManager }()
 
 	mock := &systemd.MockManager{
-		ListServicesResult: []systemd.ServiceStatus{
+		ListServicesResult: []systemd.UnitStatus{
 			{Name: "rclone-mount-abc123.service", Enabled: true, Active: true, State: "active"},
 			{Name: "rclone-mount-def456.service", Enabled: false, Active: false, State: "inactive"},
 			{Name: "rclone-sync-xyz789.service", Enabled: true, Active: true, State: "active"},
@@ -50,7 +50,7 @@ func TestServicesListWithServicesJSON(t *testing.T) {
 	}()
 
 	mock := &systemd.MockManager{
-		ListServicesResult: []systemd.ServiceStatus{
+		ListServicesResult: []systemd.UnitStatus{
 			{Name: "rclone-mount-abc.service", Enabled: true, Active: true, State: "active"},
 		},
 	}
@@ -68,7 +68,7 @@ func TestServicesListNoServices(t *testing.T) {
 	defer func() { loadManager = oldLoadManager }()
 
 	mock := &systemd.MockManager{
-		ListServicesResult: []systemd.ServiceStatus{},
+		ListServicesResult: []systemd.UnitStatus{},
 	}
 	loadManager = func() systemd.ServiceManager { return mock }
 

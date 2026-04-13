@@ -198,13 +198,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, tea.Quit
 		case "up", "k":
 			// Handle scrolling in help screen
-			if a.showHelp && a.helpScrollY > 0 {
+			if a.showHelp && a.helpScrollY > 0 && a.helpContentLen > 0 {
 				a.helpScrollY--
 				return a, nil
 			}
 		case "down", "j":
 			// Handle scrolling in help screen
-			if a.showHelp {
+			if a.showHelp && a.helpContentLen > 0 {
 				maxScroll := a.helpContentLen - (a.height - 6)
 				if maxScroll > 0 && a.helpScrollY < maxScroll {
 					a.helpScrollY++

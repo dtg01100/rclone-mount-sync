@@ -1,0 +1,24 @@
+{
+  "name": "rclone-mount-sync",
+  "image": "mcr.microsoft.com/devcontainers/go:1.23",
+  "postCreateCommand": "make deps",
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "go.toolsManagement.autoUpdate": true,
+        "go.useLanguageServer": true,
+        "go.lintTool": "golangci-lint",
+        "go.lintOnSave": "package",
+        "go.formatTool": "gofmt"
+      },
+      "extensions": [
+        "golang.go",
+        "ms-vscode.makefile-tools",
+        "charliermarsh.ruff"
+      ]
+    }
+  },
+  "mounts": [
+    "type=bind,source=${localEnv:HOME}/.config/rclone-mount-sync,target=/root/.config/rclone-mount-sync"
+  ]
+}

@@ -14,10 +14,11 @@ import (
 
 // Generator generates systemd unit files.
 type Generator struct {
-	systemdDir string // Full path to user systemd directory
-	rclonePath string // Path to rclone binary
-	configPath string // Path to rclone config file
-	logDir     string // Directory for log files
+	systemdDir     string // Full path to user systemd directory
+	rclonePath     string // Path to rclone binary
+	configPath     string // Path to rclone config file
+	logDir         string // Directory for log files
+	fusermountPath string // Path to fusermount binary (prefers fusermount3)
 }
 
 // NewGenerator creates a new unit file generator.
@@ -45,17 +46,32 @@ func NewGenerator() (*Generator, error) {
 		logDir = "/tmp" // Fallback
 	}
 
+	// Find fusermount - prefer fusermount3 (newer) over fusermount
+	fusermountPath := findFusermount()
+
 	return &Generator{
-		systemdDir: systemdDir,
-		rclonePath: rclonePath,
-		configPath: configPath,
-		logDir:     logDir,
+		systemdDir:     systemdDir,
+		rclonePath:     rclonePath,
+		configPath:     configPath,
+		logDir:         logDir,
+		fusermountPath: fusermountPath,
 	}, nil
 }
 
 // GetSystemdDir returns the systemd user directory path.
 func (g *Generator) GetSystemdDir() string {
 	return g.systemdDir
+}
+
+// findFusermount locates fusermount3 or fusermount binary, preferring fusermount3.
+func findFusermount() string {
+	if path, err := exec.LookPath("fusermount3"); err == nil {
+		return path
+	}
+	if path, err := exec.LookPath("fusermount"); err == nil {
+		return path
+	}
+	return "/bin/fusermount" // Default fallback
 }
 
 // GenerateMountService generates a systemd service unit for an rclone mount.
@@ -65,13 +81,16 @@ func (g *Generator) GenerateMountService(mount *models.MountConfig) (string, err
 	logPath := filepath.Join(g.logDir, fmt.Sprintf("rclone-mount-%s.log", mount.ID))
 
 	data := MountUnitData{
-		Name:         mount.Name,
-		Remote:       mount.Remote,
-		RemotePath:   mount.RemotePath,
-		MountPoint:   mountPoint,
-		MountOptions: mountOptions,
-		LogPath:      logPath,
-		RclonePath:   g.rclonePath,
+		Name:           mount.Name,
+		Remote:         mount.Remote,
+		RemotePath:     mount.RemotePath,
+		MountPoint:     mountPoint,
+		MountOptions:   mountOptions,
+		LogPath:        logPath,
+		RclonePath:     g.rclonePath,
+		FusermountPath: g.fusermountPath,
+		MemoryMax:      "1G",    // Default, configurable via MountOptions
+		CPUQuota:       "50%",   // Default, configurable via MountOptions
 	}
 
 	tmpl, err := template.New("mount-service").Parse(MountServiceTemplate)
@@ -128,6 +147,8 @@ func (g *Generator) GenerateSyncService(job *models.SyncJobConfig) (string, erro
 		RequireACPower:   job.Schedule.RequireACPower,
 		RequireUnmetered: job.Schedule.RequireUnmetered,
 		ExecCondition:    execCondition,
+		MemoryMax:        "1G",
+		CPUQuota:         "50%",
 	}
 
 	tmpl, err := template.New("sync-service").Parse(SyncServiceTemplate)

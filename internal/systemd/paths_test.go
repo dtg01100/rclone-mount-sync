@@ -313,10 +313,15 @@ func TestGetLogDir_UsesHomeWhenNoXdgStateHome(t *testing.T) {
 }
 
 func TestExpandPath_TildeOnly(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("Cannot determine home directory")
+	}
+
 	got := expandPath("~")
 
-	if got != "~" {
-		t.Errorf("expandPath(\"~\") = %q, want \"~\" (unchanged, function only handles ~/)", got)
+	if got != home {
+		t.Errorf("expandPath(\"~\") = %q, want %q", got, home)
 	}
 }
 

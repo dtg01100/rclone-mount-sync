@@ -51,7 +51,10 @@ func TestSyncCreateAndDeleteFlow(t *testing.T) {
 		t.Fatalf("runSyncCreate failed: %v", err)
 	}
 
-	files, _ := os.ReadDir(tmp)
+	files, err := os.ReadDir(tmp)
+	if err != nil {
+		t.Fatalf("failed to read dir %q: %v", tmp, err)
+	}
 	found := false
 	for _, f := range files {
 		if f.Type().IsRegular() && (filepath.Ext(f.Name()) == ".service" || filepath.Ext(f.Name()) == ".timer") {
@@ -70,8 +73,12 @@ func TestSyncCreateAndDeleteFlow(t *testing.T) {
 
 	serviceName := "rclone-sync-" + job.ID + ".service"
 	timerName := "rclone-sync-" + job.ID + ".timer"
-	_ = os.WriteFile(filepath.Join(tmp, serviceName), []byte("[Unit]\n"), 0644)
-	_ = os.WriteFile(filepath.Join(tmp, timerName), []byte("[Unit]\n"), 0644)
+	if err := os.WriteFile(filepath.Join(tmp, serviceName), []byte("[Unit]\n"), 0644); err != nil {
+		t.Fatalf("failed to write service file: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(tmp, timerName), []byte("[Unit]\n"), 0644); err != nil {
+		t.Fatalf("failed to write timer file: %v", err)
+	}
 
 	if err := runSyncDelete(nil, []string{job.Name}); err != nil {
 		t.Fatalf("runSyncDelete failed: %v", err)

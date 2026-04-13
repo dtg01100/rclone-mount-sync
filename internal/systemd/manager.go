@@ -27,8 +27,9 @@ func NewManager() *Manager {
 	return &Manager{systemctlPath: systemctlPath}
 }
 
-// ServiceStatus represents the status of a systemd service.
-type ServiceStatus struct {
+// UnitStatus represents the lightweight status of a systemd unit.
+// Distinct from models.ServiceStatus which contains detailed status information.
+type UnitStatus struct {
 	Name     string
 	Active   bool
 	State    string // active, inactive, failed, activating
@@ -128,8 +129,8 @@ func (m *Manager) Restart(name string) error {
 }
 
 // Status returns the status of a systemd user unit.
-func (m *Manager) Status(name string) (*ServiceStatus, error) {
-	status := &ServiceStatus{
+func (m *Manager) Status(name string) (*UnitStatus, error) {
+	status := &UnitStatus{
 		Name: name,
 	}
 
@@ -174,9 +175,9 @@ func (m *Manager) IsEnabled(name string) (bool, error) {
 	cmd.Env = append(cmd.Env, "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
-		return false, nil
+		return false, fmt.Errorf("failed to check enabled status for %s: %w", name, err)
 	}
-	return strings.TrimSpace(string(output)) == "enabled", nil
+	return isEnabledState(strings.TrimSpace(string(output))), nil
 }
 
 // IsActive checks if a unit is currently active.
@@ -206,13 +207,22 @@ func parseServiceListLine(line string) (name string, enabled bool, ok bool) {
 
 	unitName := parts[0]
 	name = strings.TrimSuffix(unitName, ".service")
-	enabled = len(parts) > 1 && parts[1] == "enabled"
+	enabled = len(parts) > 1 && isEnabledState(parts[1])
 
 	return name, enabled, true
 }
 
+func isEnabledState(state string) bool {
+	switch strings.TrimSpace(state) {
+	case "enabled", "enabled-runtime":
+		return true
+	default:
+		return false
+	}
+}
+
 // ListServices lists all rclone services (mounts and sync jobs).
-func (m *Manager) ListServices() ([]ServiceStatus, error) {
+func (m *Manager) ListServices() ([]UnitStatus, error) {
 	// 1. Get all unit files (to find both enabled and disabled services)
 	cmd := exec.Command(m.systemctlPath, "--user", "list-unit-files",
 		"--type=service", "--no-legend", "rclone-*.service")
@@ -220,10 +230,10 @@ func (m *Manager) ListServices() ([]ServiceStatus, error) {
 	output, err := cmd.Output()
 	if err != nil {
 		// If command fails, it might be because no units match the pattern
-		return []ServiceStatus{}, nil
+		return []UnitStatus{}, nil
 	}
 
-	servicesMap := make(map[string]*ServiceStatus)
+	servicesMap := make(map[string]*UnitStatus)
 	lines := strings.Split(string(output), "\n")
 	for _, line := range lines {
 		name, enabled, ok := parseServiceListLine(line)
@@ -236,7 +246,7 @@ func (m *Manager) ListServices() ([]ServiceStatus, error) {
 			continue
 		}
 
-		servicesMap[name] = &ServiceStatus{
+		servicesMap[name] = &UnitStatus{
 			Name:    name,
 			Enabled: enabled,
 			State:   "inactive", // Default
@@ -244,7 +254,7 @@ func (m *Manager) ListServices() ([]ServiceStatus, error) {
 	}
 
 	if len(servicesMap) == 0 {
-		return []ServiceStatus{}, nil
+		return []UnitStatus{}, nil
 	}
 
 	// 2. Get active status for all rclone services in one go
@@ -282,7 +292,7 @@ func (m *Manager) ListServices() ([]ServiceStatus, error) {
 	}
 
 	// Convert map to slice
-	services := make([]ServiceStatus, 0, len(servicesMap))
+	services := make([]UnitStatus, 0, len(servicesMap))
 	for _, s := range servicesMap {
 		services = append(services, *s)
 	}
@@ -385,25 +395,29 @@ func (m *Manager) GetDetailedStatus(name string) (*models.ServiceStatus, error) 
 // GetTimerNextRun returns the next run time for a timer.
 func (m *Manager) GetTimerNextRun(timerName string) (time.Time, error) {
 	cmd := exec.Command(m.systemctlPath, "--user", "show", timerName,
-		"--property=NextElapseUSecMonotonic")
+		"--property=NextElapseUSec")
 	cmd.Env = append(cmd.Env, "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to get timer info for %s: %w", timerName, err)
 	}
 
-	// Parse output
-	lines := strings.Split(string(output), "\n")
+	return parseTimerNextRunOutput(string(output))
+}
+
+func parseTimerNextRunOutput(output string) (time.Time, error) {
+	lines := strings.Split(output, "\n")
 	for _, line := range lines {
-		if strings.HasPrefix(line, "NextElapseUSecMonotonic=") {
-			value := strings.TrimPrefix(line, "NextElapseUSecMonotonic=")
+		if strings.HasPrefix(line, "NextElapseUSec=") {
+			value := strings.TrimPrefix(line, "NextElapseUSec=")
 			value = strings.TrimSpace(value)
 			if value == "" || value == "0" {
 				continue
 			}
-			// Parse microseconds
 			if micros, err := strconv.ParseInt(value, 10, 64); err == nil {
-				return time.Now().Add(time.Duration(micros) * time.Microsecond), nil
+				seconds := micros / 1000000
+				nanos := (micros % 1000000) * 1000
+				return time.Unix(seconds, nanos), nil
 			}
 		}
 	}
@@ -483,6 +497,10 @@ func (m *Manager) StopContext(ctx context.Context, name string) error {
 	return nil
 }
 
+func (m *Manager) SystemctlPath() string {
+	return m.systemctlPath
+}
+
 // ParseUnitID extracts the ID from a unit name like "rclone-mount-a1b2c3d4.service".
 // Returns the ID and unit type ("mount" or "sync"). Returns empty strings if parsing fails.
 func ParseUnitID(unitName string) (id string, unitType string) {
@@ -539,10 +557,10 @@ type ServiceManager interface {
 	Start(name string) error
 	Stop(name string) error
 	Restart(name string) error
-	Status(name string) (*ServiceStatus, error)
+	Status(name string) (*UnitStatus, error)
 	IsEnabled(name string) (bool, error)
 	IsActive(name string) (bool, error)
-	ListServices() ([]ServiceStatus, error)
+	ListServices() ([]UnitStatus, error)
 	GetLogs(name string, lines int) (string, error)
 	GetDetailedStatus(name string) (*models.ServiceStatus, error)
 	GetTimerNextRun(timerName string) (time.Time, error)
@@ -552,6 +570,7 @@ type ServiceManager interface {
 	DisableTimer(name string) error
 	RunSyncNow(name string) error
 	ResetFailed(name string) error
+	SystemctlPath() string
 }
 
 // MockManager is a mock implementation of ServiceManager for testing.
@@ -563,13 +582,13 @@ type MockManager struct {
 	StartErr                 error
 	StopErr                  error
 	RestartErr               error
-	StatusResult             *ServiceStatus
+	StatusResult             *UnitStatus
 	StatusErr                error
 	IsEnabledResult          bool
 	IsEnabledErr             error
 	IsActiveResult           bool
 	IsActiveErr              error
-	ListServicesResult       []ServiceStatus
+	ListServicesResult       []UnitStatus
 	ListServicesErr          error
 	GetLogsResult            string
 	GetLogsErr               error
@@ -621,7 +640,7 @@ func (m *MockManager) Restart(name string) error {
 }
 
 // Status mocks the Status method.
-func (m *MockManager) Status(name string) (*ServiceStatus, error) {
+func (m *MockManager) Status(name string) (*UnitStatus, error) {
 	return m.StatusResult, m.StatusErr
 }
 
@@ -636,7 +655,7 @@ func (m *MockManager) IsActive(name string) (bool, error) {
 }
 
 // ListServices mocks the ListServices method.
-func (m *MockManager) ListServices() ([]ServiceStatus, error) {
+func (m *MockManager) ListServices() ([]UnitStatus, error) {
 	return m.ListServicesResult, m.ListServicesErr
 }
 
@@ -678,6 +697,11 @@ func (m *MockManager) DisableTimer(name string) error {
 // RunSyncNow mocks the RunSyncNow method.
 func (m *MockManager) RunSyncNow(name string) error {
 	return m.RunSyncNowErr
+}
+
+// SystemctlPath mocks the SystemctlPath method.
+func (m *MockManager) SystemctlPath() string {
+	return "/usr/bin/systemctl"
 }
 
 // ResetFailed mocks the ResetFailed method.

@@ -205,12 +205,16 @@ func (c *Config) Save() error {
 	tempPath := configPath + ".tmp.yaml"
 
 	if err := v.WriteConfigAs(tempPath); err != nil {
-		os.Remove(tempPath)
+		if rmErr := os.Remove(tempPath); rmErr != nil && !os.IsNotExist(rmErr) {
+			return fmt.Errorf("failed to write config file: %w; cleanup failed: %v", err, rmErr)
+		}
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
 	if err := os.Rename(tempPath, configPath); err != nil {
-		os.Remove(tempPath)
+		if rmErr := os.Remove(tempPath); rmErr != nil && !os.IsNotExist(rmErr) {
+			return fmt.Errorf("failed to rename temp file: %w; cleanup failed: %v", err, rmErr)
+		}
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
 

@@ -31,7 +31,7 @@ const (
 type MountsScreen struct {
 	// State
 	mounts   []models.MountConfig
-	statuses map[string]*systemd.ServiceStatus
+	statuses map[string]*systemd.UnitStatus
 	cursor   int
 	width    int
 	height   int
@@ -60,7 +60,7 @@ func NewMountsScreen() *MountsScreen {
 	return &MountsScreen{
 		mode:     MountsModeList,
 		loading:  true,
-		statuses: make(map[string]*systemd.ServiceStatus),
+		statuses: make(map[string]*systemd.UnitStatus),
 	}
 }
 
@@ -412,7 +412,7 @@ func (s *MountsScreen) toggleMount() (tea.Model, tea.Cmd) {
 				if err := s.manager.Stop(serviceName); err != nil {
 					return MountsErrorMsg{Err: fmt.Errorf("failed to stop mount: %w", err)}
 				}
-				return MountStatusMsg{Name: mount.Name, Status: &systemd.ServiceStatus{Active: false}}
+				return MountStatusMsg{Name: mount.Name, Status: &systemd.UnitStatus{Active: false}}
 			},
 		)
 	} else {
@@ -422,7 +422,7 @@ func (s *MountsScreen) toggleMount() (tea.Model, tea.Cmd) {
 				if err := s.manager.Start(serviceName); err != nil {
 					return MountsErrorMsg{Err: fmt.Errorf("failed to start mount: %w", err)}
 				}
-				return MountStatusMsg{Name: mount.Name, Status: &systemd.ServiceStatus{Active: true}}
+				return MountStatusMsg{Name: mount.Name, Status: &systemd.UnitStatus{Active: true}}
 			},
 		)
 	}
@@ -443,7 +443,7 @@ func (s *MountsScreen) startMount() (tea.Model, tea.Cmd) {
 		if err := s.manager.Start(serviceName); err != nil {
 			return MountsErrorMsg{Err: fmt.Errorf("failed to start mount: %w", err)}
 		}
-		return MountStatusMsg{Name: mount.Name, Status: &systemd.ServiceStatus{Active: true}}
+		return MountStatusMsg{Name: mount.Name, Status: &systemd.UnitStatus{Active: true}}
 	}
 }
 
@@ -462,7 +462,7 @@ func (s *MountsScreen) stopMount() (tea.Model, tea.Cmd) {
 		if err := s.manager.Stop(serviceName); err != nil {
 			return MountsErrorMsg{Err: fmt.Errorf("failed to stop mount: %w", err)}
 		}
-		return MountStatusMsg{Name: mount.Name, Status: &systemd.ServiceStatus{Active: false}}
+		return MountStatusMsg{Name: mount.Name, Status: &systemd.UnitStatus{Active: false}}
 	}
 }
 
@@ -681,7 +681,7 @@ type MountDeletedMsg struct {
 // MountStatusMsg is sent when mount status is updated.
 type MountStatusMsg struct {
 	Name   string
-	Status *systemd.ServiceStatus
+	Status *systemd.UnitStatus
 }
 
 // MountsErrorMsg is sent when an error occurs.
@@ -906,7 +906,7 @@ func (d *DeleteConfirm) View() string {
 // MountDetails displays detailed mount information.
 type MountDetails struct {
 	mount     models.MountConfig
-	status    *systemd.ServiceStatus
+	status    *systemd.UnitStatus
 	logs      string
 	manager   systemd.ServiceManager
 	generator *systemd.Generator

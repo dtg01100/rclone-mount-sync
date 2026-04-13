@@ -199,14 +199,6 @@ func main() {
 		os.Exit(runMain(args, os.Stdout, os.Stderr))
 	}
 
-	// Handle --version flag
-	for _, arg := range args {
-		if arg == "--version" || arg == "-v" {
-			printVersion(os.Stdout, version)
-			os.Exit(0)
-		}
-	}
-
 	cliCommands := map[string]bool{
 		"mount":      true,
 		"sync":       true,
@@ -237,7 +229,7 @@ func main() {
 		"--version":     true,
 		"-v":            true,
 	}
-	if tuiFlags[firstArg] || firstArg == "-v" {
+	if tuiFlags[firstArg] {
 		os.Exit(runMain(args, os.Stdout, os.Stderr))
 	}
 

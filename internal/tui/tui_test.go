@@ -107,6 +107,16 @@ func TestApp_Init(t *testing.T) {
 	}
 }
 
+func TestApp_initializeServices(t *testing.T) {
+	app := NewApp()
+	msg := app.initializeServices()
+
+	// initializeServices should return a message (AppInitDone or AppInitError or ReconciliationMsg)
+	if msg == nil {
+		t.Error("initializeServices() should return a message")
+	}
+}
+
 func TestApp_Update_QuitKey(t *testing.T) {
 	app := NewApp()
 	app.width = 80
