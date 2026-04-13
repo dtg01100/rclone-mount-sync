@@ -1,0 +1,14 @@
+                              Initialization Error                              
+
+                      ✗ Failed to initialize application:                       
+                                                                                
+                      failed to initialize rclone                               
+
+                              Possible solutions:                               
+
+                 • Ensure rclone is installed and in your PATH                  
+             • Run 'rclone config' to configure at least one remote             
+                 • Check that systemd user session is available                 
+         • Verify you have proper permissions for the config directory          
+
+                           Press q or Ctrl+C to quit                            

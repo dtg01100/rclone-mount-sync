@@ -1,0 +1,24 @@
+ Rclone Mount Sync                                      vdev  [?] Help  [q] Quit
+╭────────────────────────────────────────────────────────────────────────────╮  
+│   Help & Keybindings                                                       │  
+│                                                                            │  
+│ Global Keybindings                                                         │  
+│   ↑/k  Move up                                                             │  
+│   ↓/j  Move down                                                           │  
+│   Enter  Select/confirm                                                    │  
+│   Esc  Go back/cancel                                                      │  
+│   q  Quit (from main menu) or go back                                      │  
+│   Ctrl+C  Force quit                                                       │  
+│   ?  Toggle this help screen                                               │  
+│                                                                            │  
+│ Screen Navigation                                                          │  
+│   M  Mount Management                                                      │  
+│   S  Sync Job Management                                                   │  
+│   V  Service Status                                                        │  
+│   T  Settings                                                              │  
+│                                                                            │  
+│ Mount Management                                                           │  
+│                                                                            │  
+│ [1/24] ↑/↓ to scroll                                                       │  
+╰────────────────────────────────────────────────────────────────────────────╯  
+ Press Esc or q to close help                                                   
