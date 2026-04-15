@@ -361,8 +361,6 @@ func TestApp_Invariants(t *testing.T) {
 	})
 
 	t.Run("View never panics with any state", func(t *testing.T) {
-		app := NewApp()
-
 		// Test with various states
 		states := []func(*App){
 			func(a *App) { a.width = 0; a.height = 0 },
@@ -373,7 +371,7 @@ func TestApp_Invariants(t *testing.T) {
 		}
 
 		for i, setup := range states {
-			app = NewApp()
+			app := NewApp()
 			setup(app)
 
 			// Should not panic
