@@ -834,19 +834,19 @@ func TestParseRemotePath(t *testing.T) {
 		{
 			name:       "remote with path",
 			remotePath: "gdrive:/Photos/2024",
-			wantRemote: "gdrive:",
+			wantRemote: "gdrive",
 			wantPath:   "/Photos/2024",
 		},
 		{
 			name:       "remote with root path",
 			remotePath: "gdrive:/",
-			wantRemote: "gdrive:",
+			wantRemote: "gdrive",
 			wantPath:   "/",
 		},
 		{
 			name:       "remote without path",
 			remotePath: "gdrive:",
-			wantRemote: "gdrive:",
+			wantRemote: "gdrive",
 			wantPath:   "",
 		},
 		{
