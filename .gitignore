@@ -47,3 +47,4 @@ temp/
 # Configuration files with sensitive data
 config.local.yaml
 config.local.yml
+coverage.html
