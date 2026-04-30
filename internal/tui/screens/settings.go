@@ -44,21 +44,21 @@ type SettingsScreen struct {
 
 // ActionItem represents an action item in settings.
 type ActionItem struct {
-	Name        string
+	Name string
 	Description string
-	Key         string
-	actionType  string
+	Key string
+	ActionType string
 }
 
 // SettingItem represents a setting item.
 type SettingItem struct {
-	Name        string
+	Name string
 	Description string
-	Value       string
-	Key         string
-	settingType string // "string", "int", "select"
-	selectOpts  []string
-	configKey   string // Key path in config (e.g., "defaults.mount.vfs_cache_mode")
+	Value string
+	Key string
+	SettingType string // "string", "int", "select"
+	SelectOpts []string
+ConfigKey string // Key path in config (e.g., "defaults.mount.vfs_cache_mode")
 }
 
 // NewSettingsScreen creates a new settings screen.
@@ -69,67 +69,67 @@ func NewSettingsScreen() *SettingsScreen {
 				Name:        "Default VFS Cache Mode",
 				Description: "VFS cache mode for new mounts",
 				Key:         "v",
-				settingType: "select",
-				selectOpts:  []string{"off", "writes", "full"},
-				configKey:   "defaults.mount.vfs_cache_mode",
+				SettingType: "select",
+				SelectOpts:  []string{"off", "writes", "full"},
+				ConfigKey:   "defaults.mount.vfs_cache_mode",
 			},
 			{
 				Name:        "Default Buffer Size",
 				Description: "Buffer size for rclone operations (e.g., 16M)",
 				Key:         "b",
-				settingType: "string",
-				configKey:   "defaults.mount.buffer_size",
+				SettingType: "string",
+				ConfigKey:   "defaults.mount.buffer_size",
 			},
 			{
 				Name:        "Default Mount Log Level",
 				Description: "Logging verbosity for mounts",
 				Key:         "l",
-				settingType: "select",
-				selectOpts:  []string{"ERROR", "NOTICE", "INFO", "DEBUG"},
-				configKey:   "defaults.mount.log_level",
+				SettingType: "select",
+				SelectOpts:  []string{"ERROR", "NOTICE", "INFO", "DEBUG"},
+				ConfigKey:   "defaults.mount.log_level",
 			},
 			{
 				Name:        "Default Sync Log Level",
 				Description: "Logging verbosity for sync jobs",
 				Key:         "sl",
-				settingType: "select",
-				selectOpts:  []string{"ERROR", "NOTICE", "INFO", "DEBUG"},
-				configKey:   "defaults.sync.log_level",
+				SettingType: "select",
+				SelectOpts:  []string{"ERROR", "NOTICE", "INFO", "DEBUG"},
+				ConfigKey:   "defaults.sync.log_level",
 			},
 			{
 				Name:        "Default Transfers",
 				Description: "Number of parallel transfers for sync jobs",
 				Key:         "t",
-				settingType: "int",
-				configKey:   "defaults.sync.transfers",
+				SettingType: "int",
+				ConfigKey:   "defaults.sync.transfers",
 			},
 			{
 				Name:        "Default Checkers",
 				Description: "Number of checkers for sync jobs",
 				Key:         "c",
-				settingType: "int",
-				configKey:   "defaults.sync.checkers",
+				SettingType: "int",
+				ConfigKey:   "defaults.sync.checkers",
 			},
 			{
 				Name:        "Rclone Binary Path",
 				Description: "Path to rclone binary (empty for system default)",
 				Key:         "r",
-				settingType: "string",
-				configKey:   "settings.rclone_binary_path",
+				SettingType: "string",
+				ConfigKey:   "settings.rclone_binary_path",
 			},
 			{
 				Name:        "Default Mount Directory",
 				Description: "Default directory for mount points",
 				Key:         "m",
-				settingType: "string",
-				configKey:   "settings.default_mount_dir",
+				SettingType: "string",
+				ConfigKey:   "settings.default_mount_dir",
 			},
 			{
 				Name:        "Editor",
 				Description: "Text editor for editing config files",
 				Key:         "e",
-				settingType: "string",
-				configKey:   "settings.editor",
+				SettingType: "string",
+				ConfigKey:   "settings.editor",
 			},
 		},
 		actions: []ActionItem{
@@ -137,13 +137,13 @@ func NewSettingsScreen() *SettingsScreen {
 				Name:        "Export Configuration",
 				Description: "Save mounts and sync jobs to a file",
 				Key:         "x",
-				actionType:  "export",
+				ActionType:  "export",
 			},
 			{
 				Name:        "Import Configuration",
 				Description: "Load mounts and sync jobs from a file",
 				Key:         "i",
-				actionType:  "import",
+				ActionType:  "import",
 			},
 		},
 	}
@@ -162,7 +162,7 @@ func (s *SettingsScreen) updateSettingValues() {
 	}
 
 	for i := range s.settings {
-		s.settings[i].Value = s.getConfigValue(s.settings[i].configKey)
+		s.settings[i].Value = s.getConfigValue(s.settings[i].ConfigKey)
 	}
 }
 
@@ -357,10 +357,10 @@ func (s *SettingsScreen) startEditing() (tea.Model, tea.Cmd) {
 	// Build the form based on setting type
 	var formField huh.Field
 
-	switch setting.settingType {
+	switch setting.SettingType {
 	case "select":
-		options := make([]huh.Option[string], len(setting.selectOpts))
-		for i, opt := range setting.selectOpts {
+		options := make([]huh.Option[string], len(setting.SelectOpts))
+		for i, opt := range setting.SelectOpts {
 			options[i] = huh.NewOption(opt, opt)
 		}
 		selectField := huh.NewSelect[string]().
@@ -412,7 +412,7 @@ func (s *SettingsScreen) submitForm() (tea.Model, tea.Cmd) {
 	setting := s.settings[s.editIndex]
 
 	// Update the config
-	if err := s.setConfigValue(setting.configKey, setting.Value); err != nil {
+	if err := s.setConfigValue(setting.ConfigKey, setting.Value); err != nil {
 		s.message = fmt.Sprintf("Error: %v", err)
 		s.messageType = "error"
 	} else {
@@ -672,7 +672,7 @@ func (s *SettingsScreen) executeAction() (tea.Model, tea.Cmd) {
 	action := s.actions[s.actionCursor]
 	s.showingActions = false
 
-	switch action.actionType {
+	switch action.ActionType {
 	case "export":
 		return s.startExport()
 	case "import":

@@ -3,6 +3,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -286,14 +287,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				)
 			}
 
-			if a.orphanSelected >= len(a.orphans.OrphanedUnits) {
+	if len(a.orphans.OrphanedUnits) == 0 {
+		a.orphanSelected = -1
+		a.showOrphanPrompt = false
+	} else if a.orphanSelected >= len(a.orphans.OrphanedUnits) {
 				a.orphanSelected = len(a.orphans.OrphanedUnits) - 1
 			}
-			a.orphanMode = 0
+	a.orphanMode = 0
 
-			if len(a.orphans.OrphanedUnits) == 0 {
-				a.showOrphanPrompt = false
-			}
 
 			// Refresh screens
 			cmds = append(cmds, a.mounts.Init(), a.syncJobs.Init(), a.services.Init())
@@ -744,13 +745,14 @@ func (a *App) importSelectedOrphan() (tea.Model, tea.Cmd) {
 		}
 
 		if writeErr != nil {
-			// Rollback config change
 			if imported.Mount != nil {
 				a.config.RemoveMount(imported.Mount.Name)
 			} else if imported.SyncJob != nil {
 				a.config.RemoveSyncJob(imported.SyncJob.Name)
 			}
-			a.config.Save()
+			if saveErr := a.config.Save(); saveErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to rollback config: %v\n", saveErr)
+			}
 			return OrphanActionMsg{Err: fmt.Errorf("failed to write service file: %w", writeErr)}
 		}
 

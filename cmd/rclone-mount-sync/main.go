@@ -63,6 +63,7 @@ func parseFlags(args []string) (*Config, error) {
 	fs.SetOutput(io.Discard)
 
 	showVersion := fs.Bool("version", false, "Print version and exit")
+	fs.BoolVar(showVersion, "v", false, "Print version and exit (shorthand)")
 	skipChecks := fs.Bool("skip-checks", false, "Skip pre-flight validation checks")
 	configDir := fs.String("config", "", "Custom config directory (overrides XDG_CONFIG_HOME)")
 

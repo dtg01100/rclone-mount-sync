@@ -71,13 +71,13 @@ func TestSettingsScreen_SettingItems(t *testing.T) {
 			t.Errorf("setting %d key = %q, want %q", i, screen.settings[i].Key, expected.key)
 		}
 
-		if screen.settings[i].settingType != expected.settingType {
-			t.Errorf("setting %d settingType = %q, want %q", i, screen.settings[i].settingType, expected.settingType)
-		}
+			if screen.settings[i].SettingType != expected.settingType {
+				t.Errorf("setting %d SettingType = %q, want %q", i, screen.settings[i].SettingType, expected.settingType)
+			}
 
-		if screen.settings[i].configKey != expected.configKey {
-			t.Errorf("setting %d configKey = %q, want %q", i, screen.settings[i].configKey, expected.configKey)
-		}
+			if screen.settings[i].ConfigKey != expected.configKey {
+				t.Errorf("setting %d ConfigKey = %q, want %q", i, screen.settings[i].ConfigKey, expected.configKey)
+			}
 	}
 }
 
@@ -568,7 +568,7 @@ func TestSettingsScreen_UpdateSettingValues(t *testing.T) {
 
 	// Verify all settings have been updated with config values
 	for _, setting := range screen.settings {
-		if setting.Value == "" && setting.configKey != "settings.rclone_binary_path" {
+		if setting.Value == "" && setting.ConfigKey != "settings.rclone_binary_path" {
 			// rclone_binary_path can be empty by default
 			t.Errorf("setting %q has empty value after SetConfig", setting.Name)
 		}
@@ -581,7 +581,7 @@ func TestSettingsScreen_SelectTypeOptions(t *testing.T) {
 	// Find VFS Cache Mode setting (it's a select type)
 	var vfsSetting *SettingItem
 	for i := range screen.settings {
-		if screen.settings[i].configKey == "defaults.mount.vfs_cache_mode" {
+		if screen.settings[i].ConfigKey == "defaults.mount.vfs_cache_mode" {
 			vfsSetting = &screen.settings[i]
 			break
 		}
@@ -592,19 +592,19 @@ func TestSettingsScreen_SelectTypeOptions(t *testing.T) {
 	}
 
 	// Verify it's a select type
-	if vfsSetting.settingType != "select" {
-		t.Errorf("VFS Cache Mode setting type = %q, want 'select'", vfsSetting.settingType)
+	if vfsSetting.SettingType != "select" {
+		t.Errorf("VFS Cache Mode setting type = %q, want 'select'", vfsSetting.SettingType)
 	}
 
 	// Verify select options
 	expectedOpts := []string{"off", "writes", "full"}
 	for i, opt := range expectedOpts {
-		if i >= len(vfsSetting.selectOpts) {
+		if i >= len(vfsSetting.SelectOpts) {
 			t.Errorf("missing select option at index %d", i)
 			continue
 		}
-		if vfsSetting.selectOpts[i] != opt {
-			t.Errorf("select option %d = %q, want %q", i, vfsSetting.selectOpts[i], opt)
+		if vfsSetting.SelectOpts[i] != opt {
+			t.Errorf("select option %d = %q, want %q", i, vfsSetting.SelectOpts[i], opt)
 		}
 	}
 }

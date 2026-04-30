@@ -4,6 +4,7 @@ package screens
 import (
 	"fmt"
 	"os/exec"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -92,6 +93,7 @@ type SystemdStatus struct {
 	SessionType    string
 	ActiveServices int
 	ActiveTimers   int
+	SystemdError   string
 }
 
 // ServiceInfo represents display information about a service.
@@ -282,38 +284,47 @@ func (s *ServicesScreen) loadSystemdStatus() SystemdStatus {
 
 	// Get failed units count
 	cmd := exec.Command("systemctl", "--user", "list-units", "--state=failed", "--no-legend")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
-	if err == nil {
-		lines := strings.Split(string(output), "\n")
-		count := 0
-		for _, line := range lines {
-			if strings.TrimSpace(line) != "" {
-				count++
-			}
-		}
-		status.FailedUnits = count
+	if err != nil {
+		status.SystemdError = fmt.Sprintf("failed to query failed units: %v", err)
+		return status
 	}
+	lines := strings.Split(string(output), "\n")
+	count := 0
+	for _, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			count++
+		}
+	}
+	status.FailedUnits = count
 
 	// Count active services and timers
 	cmd = exec.Command("systemctl", "--user", "list-units", "--type=service", "--state=active", "--no-legend")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err = cmd.Output()
-	if err == nil {
-		serviceLines := strings.Split(string(output), "\n")
-		for _, line := range serviceLines {
-			if strings.Contains(line, "rclone-") {
-				status.ActiveServices++
-			}
+	if err != nil {
+		status.SystemdError = fmt.Sprintf("failed to query active services: %v", err)
+		return status
+	}
+	serviceLines := strings.Split(string(output), "\n")
+	for _, line := range serviceLines {
+		if strings.Contains(line, "rclone-") {
+			status.ActiveServices++
 		}
 	}
 
 	cmd = exec.Command("systemctl", "--user", "list-units", "--type=timer", "--state=active", "--no-legend")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err = cmd.Output()
-	if err == nil {
-		timerLines := strings.Split(string(output), "\n")
-		for _, line := range timerLines {
-			if strings.Contains(line, "rclone-") {
-				status.ActiveTimers++
-			}
+	if err != nil {
+		status.SystemdError = fmt.Sprintf("failed to query active timers: %v", err)
+		return status
+	}
+	timerLines := strings.Split(string(output), "\n")
+	for _, line := range timerLines {
+		if strings.Contains(line, "rclone-") {
+			status.ActiveTimers++
 		}
 	}
 
@@ -1166,7 +1177,7 @@ func (s *ServicesScreen) renderLogsView() string {
 	lines := strings.Split(logs, "\n")
 	logHeight := s.height - 12
 
-	if len(lines) > logHeight {
+	if logHeight > 0 && len(lines) > logHeight {
 		lines = lines[len(lines)-logHeight:]
 	}
 

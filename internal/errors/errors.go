@@ -4,6 +4,7 @@
 package errors
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 )
@@ -112,9 +113,16 @@ var (
 
 	// ErrMountPointExists indicates that the mount point is already in use.
 	ErrMountPointExists = &AppError{
-		Code:       "VAL_001",
-		Message:    "Mount point is already in use",
+		Code: "VAL_001",
+		Message: "Mount point is already in use",
 		Suggestion: "Choose a different mount point or unmount the existing mount first using 'fusermount -u <mount-point>'",
+	}
+
+	// ErrMountPointNotDirectory indicates that the mount point is not a directory.
+	ErrMountPointNotDirectory = &AppError{
+		Code: "VAL_002",
+		Message: "Mount point is not a directory",
+		Suggestion: "Remove the existing file or choose a different mount point.",
 	}
 
 	// ErrMountPointNotFound indicates that the mount point does not exist.
@@ -195,10 +203,20 @@ func NewNoRemotesConfiguredError(cause error) *AppError {
 // NewMountPointExistsError creates a new ErrMountPointExists error with mount point details.
 func NewMountPointExistsError(mountPoint string, cause error) *AppError {
 	return &AppError{
-		Code:       ErrMountPointExists.Code,
-		Message:    fmt.Sprintf("Mount point %q is already in use", mountPoint),
+		Code: ErrMountPointExists.Code,
+		Message: fmt.Sprintf("Mount point %q is already in use", mountPoint),
 		Suggestion: ErrMountPointExists.Suggestion,
-		Cause:      cause,
+		Cause: cause,
+	}
+}
+
+// NewMountPointNotDirectoryError creates a new ErrMountPointNotDirectory error with mount point details.
+func NewMountPointNotDirectoryError(mountPoint string, cause error) *AppError {
+	return &AppError{
+		Code: ErrMountPointNotDirectory.Code,
+		Message: fmt.Sprintf("Mount point %q is not a directory", mountPoint),
+		Suggestion: ErrMountPointNotDirectory.Suggestion,
+		Cause: cause,
 	}
 }
 
@@ -264,19 +282,21 @@ func NewRcloneError(command string, cause error) *AppError {
 
 // --- Helper Functions ---
 
-// IsAppError checks if an error is an AppError type.
+// IsAppError checks if an error is or wraps an AppError type.
 func IsAppError(err error) bool {
-	_, ok := err.(*AppError)
-	return ok
+	var appErr *AppError
+	return errors.As(err, &appErr)
 }
 
 // GetAppError attempts to extract an AppError from an error.
+// It traverses the error chain using errors.As to find wrapped AppErrors.
 // Returns the AppError if found, or nil otherwise.
 func GetAppError(err error) *AppError {
 	if err == nil {
 		return nil
 	}
-	if appErr, ok := err.(*AppError); ok {
+	var appErr *AppError
+	if errors.As(err, &appErr) {
 		return appErr
 	}
 	return nil
@@ -284,18 +304,19 @@ func GetAppError(err error) *AppError {
 
 // Wrap wraps an existing error with additional context.
 // If the error is already an AppError, it returns a new AppError with the same code
-// but with the additional message context.
+// but with the additional message context, preserving the error chain.
 func Wrap(err error, message string) *AppError {
 	if err == nil {
 		return nil
 	}
 
-	if appErr, ok := err.(*AppError); ok {
+	var appErr *AppError
+	if errors.As(err, &appErr) {
 		return &AppError{
 			Code:       appErr.Code,
 			Message:    message + ": " + appErr.Message,
 			Suggestion: appErr.Suggestion,
-			Cause:      appErr.Cause,
+			Cause:      appErr,
 		}
 	}
 
@@ -308,14 +329,15 @@ func Wrap(err error, message string) *AppError {
 }
 
 // FormatErrorForTUI formats any error for display in the TUI.
-// If the error is an AppError, it uses FormatForTUI(). Otherwise, it provides
+// If the error is or wraps an AppError, it uses FormatForTUI(). Otherwise, it provides
 // a generic formatted output.
 func FormatErrorForTUI(err error) string {
 	if err == nil {
 		return ""
 	}
 
-	if appErr, ok := err.(*AppError); ok {
+	var appErr *AppError
+	if errors.As(err, &appErr) {
 		return appErr.FormatForTUI()
 	}
 

@@ -2,6 +2,7 @@ package rclone
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"os/exec"
@@ -31,18 +32,11 @@ func (c *Client) ListRemotes(ctx context.Context) ([]Remote, error) {
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	args := []string{"listremotes"}
-	if c.configPath != "" {
-		args = append([]string{"--config", c.configPath}, args...)
-	}
-
-	output, err := doRetryBytes(ctx, c.retryConfig, func() ([]byte, error) {
-		cmd := exec.CommandContext(ctx, c.binaryPath, args...)
-		return cmd.Output()
-	})
+	output, err := c.runCommandWithRetry(ctx, "listremotes")
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("failed to list remotes: %s", string(exitErr.Stderr))
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return nil, fmt.Errorf("failed to list remotes: %w", err)
 		}
 		return nil, fmt.Errorf("failed to list remotes: %w", err)
 	}
@@ -92,18 +86,11 @@ func (c *Client) GetRemoteType(ctx context.Context, remote string) (string, erro
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 
-	args := []string{"config", "show", remote}
-	if c.configPath != "" {
-		args = append([]string{"--config", c.configPath}, args...)
-	}
-
-	output, err := doRetryBytes(ctx, c.retryConfig, func() ([]byte, error) {
-		cmd := exec.CommandContext(ctx, c.binaryPath, args...)
-		return cmd.Output()
-	})
+	output, err := c.runCommandWithRetry(ctx, "config", "show", remote)
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("failed to get remote type: %s", string(exitErr.Stderr))
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return "", fmt.Errorf("failed to get remote type: %w", err)
 		}
 		return "", fmt.Errorf("failed to get remote type: %w", err)
 	}
@@ -138,18 +125,11 @@ func (c *Client) ListRemotePath(ctx context.Context, remote, path string) ([]str
 
 	remotePath := remote + ":" + path
 
-	args := []string{"lsf", remotePath}
-	if c.configPath != "" {
-		args = append([]string{"--config", c.configPath}, args...)
-	}
-
-	output, err := doRetryBytes(ctx, c.retryConfig, func() ([]byte, error) {
-		cmd := exec.CommandContext(ctx, c.binaryPath, args...)
-		return cmd.Output()
-	})
+	output, err := c.runCommandWithRetry(ctx, "lsf", remotePath)
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("failed to list remote path: %s", string(exitErr.Stderr))
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return nil, fmt.Errorf("failed to list remote path: %w", err)
 		}
 		return nil, fmt.Errorf("failed to list remote path: %w", err)
 	}
@@ -180,18 +160,11 @@ func (c *Client) ListRemoteDirectories(ctx context.Context, remote, path string)
 
 	remotePath := remote + ":" + path
 
-	args := []string{"lsf", remotePath, "--dirs-only"}
-	if c.configPath != "" {
-		args = append([]string{"--config", c.configPath}, args...)
-	}
-
-	output, err := doRetryBytes(ctx, c.retryConfig, func() ([]byte, error) {
-		cmd := exec.CommandContext(ctx, c.binaryPath, args...)
-		return cmd.Output()
-	})
+	output, err := c.runCommandWithRetry(ctx, "lsf", remotePath, "--dirs-only")
 	if err != nil {
-		if exitErr, ok := err.(*exec.ExitError); ok {
-			return nil, fmt.Errorf("failed to list remote directories: %s", string(exitErr.Stderr))
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			return nil, fmt.Errorf("failed to list remote directories: %w", err)
 		}
 		return nil, fmt.Errorf("failed to list remote directories: %w", err)
 	}
@@ -242,21 +215,7 @@ func (c *Client) TestRemoteAccess(ctx context.Context, remote, path string) erro
 
 	remotePath := remote + ":" + path
 
-	args := []string{"lsf", remotePath, "--max-depth", "1"}
-	if c.configPath != "" {
-		args = append([]string{"--config", c.configPath}, args...)
-	}
-
-	_, err := doRetryBytes(ctx, c.retryConfig, func() ([]byte, error) {
-		cmd := exec.CommandContext(ctx, c.binaryPath, args...)
-		output, err := cmd.Output()
-		if err != nil {
-			if exitErr, ok := err.(*exec.ExitError); ok {
-				exitErr.Stderr = []byte(string(exitErr.Stderr) + " " + string(output))
-			}
-		}
-		return output, err
-	})
+	_, err := c.runCommandWithRetry(ctx, "lsf", remotePath, "--max-depth", "1")
 	if err != nil {
 		return fmt.Errorf("failed to access remote path %q: %w", remotePath, err)
 	}

@@ -48,9 +48,7 @@ func SetVersion(v string) {
 }
 
 func ExecuteWithVersion(version string) error {
-	cliVersion = version
-	rootCmd.Version = version
-	rootCmd.SetVersionTemplate("{{.Version}}\n")
+	SetVersion(version)
 	return rootCmd.Execute()
 }
 
@@ -155,7 +153,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 			continue
 		}
 
-		unitName := fields[1]
+		unitName := fields[0]
 
 		if !strings.HasPrefix(unitName, "rclone-mount-") && !strings.HasPrefix(unitName, "rclone-sync-") {
 			continue

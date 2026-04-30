@@ -1205,7 +1205,7 @@ func TestSyncJobForm_ConfigRestoreAfterFailure(t *testing.T) {
 
 	err := mgr.RollbackSyncJob(data, true)
 	if err != nil {
-		t.Logf("RollbackSyncJob returned: %v", err)
+		t.Errorf("RollbackSyncJob failed: %v", err)
 	}
 
 	if len(cfg.SyncJobs) != 1 {

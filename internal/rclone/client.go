@@ -56,21 +56,16 @@ func (c *Client) GetRetryConfig() RetryConfig {
 
 // IsInstalled checks if rclone is available in the system PATH.
 func (c *Client) IsInstalled() bool {
-	// If binaryPath is just "rclone", check PATH
 	if c.binaryPath == "rclone" {
 		_, err := exec.LookPath("rclone")
 		return err == nil
 	}
-	// Otherwise check if the specific path exists and is executable
 	_, err := exec.LookPath(c.binaryPath)
 	return err == nil
 }
 
-// IsInstalled checks if rclone is available in the system PATH.
-// This is a package-level convenience function that uses the default client
-// configuration (honoring RCLONE_BINARY_PATH). Keeping this wrapper ensures
-// the behaviour matches the Client method while still providing a simple
-// helper for callers that don't need a full Client instance.
+// IsInstalled checks if rclone is available in the system PATH
+// using the default client configuration (honoring RCLONE_BINARY_PATH).
 func IsInstalled() bool {
 	return NewClient().IsInstalled()
 }

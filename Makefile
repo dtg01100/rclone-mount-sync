@@ -84,6 +84,17 @@ test:
 	@echo "Running tests..."
 	$(GOTEST) -v ./...
 
+# Run tests with coverage
+.PHONY: test-coverage
+test-coverage:
+	@echo "Running tests with coverage..."
+	$(GOTEST) -v -race -coverprofile=coverage.out ./...
+	@echo "Generating coverage report..."
+	$(GOCMD) tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report saved to coverage.html"
+	@echo "Summary:"
+	$(GOCMD) tool cover -func=coverage.out | tail -20
+
 # Test install/uninstall targets
 .PHONY: test-install
 test-install:

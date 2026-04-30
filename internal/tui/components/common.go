@@ -203,6 +203,9 @@ func (m *Menu) Up() {
 
 // Down moves the cursor down.
 func (m *Menu) Down() {
+	if len(m.Items) == 0 {
+		return
+	}
 	if m.Cursor < len(m.Items)-1 {
 		m.Cursor++
 	}
@@ -373,14 +376,16 @@ func StatusIndicator(status string) string {
 }
 
 // Truncate truncates text to fit within maxLen characters.
+// It uses rune-aware truncation to avoid breaking multibyte UTF-8 characters.
 func Truncate(text string, maxLen int) string {
-	if len(text) <= maxLen {
+	runes := []rune(text)
+	if len(runes) <= maxLen {
 		return text
 	}
 	if maxLen <= 3 {
-		return text[:maxLen]
+		return string(runes[:maxLen])
 	}
-	return text[:maxLen-3] + "..."
+	return string(runes[:maxLen-3]) + "..."
 }
 
 // RenderTitle renders a title with consistent styling.

@@ -225,7 +225,11 @@ func (g *Generator) ServiceName(id, unitType string) string {
 }
 
 // RemoveUnit removes a unit file from the systemd directory.
+// The name must not contain path separators or ".." to prevent path traversal.
 func (g *Generator) RemoveUnit(name string) error {
+	if err := validateUnitFilename(name); err != nil {
+		return fmt.Errorf("invalid unit filename: %w", err)
+	}
 	path := filepath.Join(g.systemdDir, name)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		return nil // File doesn't exist, nothing to remove
@@ -234,7 +238,11 @@ func (g *Generator) RemoveUnit(name string) error {
 }
 
 // WriteUnitFile writes a unit file to the systemd user directory.
+// The filename must not contain path separators or ".." to prevent path traversal.
 func (g *Generator) WriteUnitFile(filename, content string) error {
+	if err := validateUnitFilename(filename); err != nil {
+		return fmt.Errorf("invalid unit filename: %w", err)
+	}
 	// Ensure directory exists
 	if err := os.MkdirAll(g.systemdDir, 0755); err != nil {
 		return fmt.Errorf("failed to create systemd directory: %w", err)
@@ -242,6 +250,17 @@ func (g *Generator) WriteUnitFile(filename, content string) error {
 
 	path := filepath.Join(g.systemdDir, filename)
 	return os.WriteFile(path, []byte(content), 0644)
+}
+
+// validateUnitFilename ensures a unit filename doesn't contain path traversal.
+func validateUnitFilename(name string) error {
+	if strings.Contains(name, "..") {
+		return fmt.Errorf("filename must not contain '..'")
+	}
+	if strings.ContainsAny(name, "/\\") {
+		return fmt.Errorf("filename must not contain path separators")
+	}
+	return nil
 }
 
 // buildMountOptions builds the mount options string for rclone.
@@ -325,12 +344,12 @@ func (g *Generator) buildMountOptions(opts *models.MountOptions) string {
 		args = append(args, fmt.Sprintf("--log-level=%s", opts.LogLevel))
 	}
 
-	// Extra arguments
+	// Extra arguments (sanitized to prevent systemd directive injection)
 	if opts.ExtraArgs != "" {
-		args = append(args, opts.ExtraArgs)
+		args = append(args, sanitizeExtraArgs(opts.ExtraArgs))
 	}
 
-	return strings.Join(args, " \\\n    ")
+	return strings.Join(args, " \\\n ")
 }
 
 // buildSyncOptions builds the sync options string for rclone.
@@ -395,12 +414,12 @@ func (g *Generator) buildSyncOptions(opts *models.SyncOptions) string {
 	// Create empty source dirs
 	args = append(args, "--create-empty-src-dirs")
 
-	// Extra arguments
+	// Extra arguments (sanitized to prevent systemd directive injection)
 	if opts.ExtraArgs != "" {
-		args = append(args, opts.ExtraArgs)
+		args = append(args, sanitizeExtraArgs(opts.ExtraArgs))
 	}
 
-	return strings.Join(args, " \\\n    ")
+	return strings.Join(args, " \\\n ")
 }
 
 // buildTimerDirectives builds timer directives from schedule configuration.
@@ -439,6 +458,15 @@ func (g *Generator) buildTimerDirectives(schedule *models.ScheduleConfig) string
 	}
 
 	return strings.Join(directives, "\n")
+}
+
+// sanitizeExtraArgs removes newlines and escapes percent signs to prevent
+// systemd unit file directive injection.
+func sanitizeExtraArgs(args string) string {
+	args = strings.ReplaceAll(args, "\r", " ")
+	args = strings.ReplaceAll(args, "\n", " ")
+	args = strings.ReplaceAll(args, "%", "%%")
+	return strings.TrimSpace(args)
 }
 
 // NewTestGenerator creates a generator for use in tests.

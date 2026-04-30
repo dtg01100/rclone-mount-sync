@@ -1334,8 +1334,8 @@ func TestRestoreFromBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("HasBackup() after restore error = %v", err)
 	}
-	if hasBackup {
-		t.Error("HasBackup() should return false after restore (backup consumed)")
+	if !hasBackup {
+		t.Error("HasBackup() should return true after restore (backup is preserved, not consumed)")
 	}
 }
 

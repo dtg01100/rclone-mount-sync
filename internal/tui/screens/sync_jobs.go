@@ -4,6 +4,7 @@ package screens
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -354,8 +355,12 @@ func (s *SyncJobsScreen) startEditForm() (tea.Model, tea.Cmd) {
 	// Stop timer if running before editing (only if services are available)
 	if s.generator != nil && s.manager != nil {
 		timerName := s.generator.ServiceName(job.ID, "sync") + ".timer"
-		_ = s.manager.StopTimer(timerName)
-		_ = s.manager.DisableTimer(timerName)
+		if err := s.manager.StopTimer(timerName); err != nil {
+			s.err = fmt.Errorf("failed to stop timer before edit: %w", err)
+		}
+		if err := s.manager.DisableTimer(timerName); err != nil && s.err == nil {
+			s.err = fmt.Errorf("failed to disable timer before edit: %w", err)
+		}
 	}
 
 	// Check if rclone client is available
@@ -424,12 +429,20 @@ func (s *SyncJobsScreen) toggleTimer() (tea.Model, tea.Cmd) {
 
 	if isActive {
 		// Stop and disable timer
-		_ = s.manager.StopTimer(timerName)
-		_ = s.manager.DisableTimer(timerName)
+		if err := s.manager.StopTimer(timerName); err != nil {
+			return s, s.loadSyncJobs
+		}
+		if err := s.manager.DisableTimer(timerName); err != nil {
+			return s, s.loadSyncJobs
+		}
 	} else {
 		// Enable and start timer
-		_ = s.manager.EnableTimer(timerName)
-		_ = s.manager.StartTimer(timerName)
+		if err := s.manager.EnableTimer(timerName); err != nil {
+			return s, s.loadSyncJobs
+		}
+		if err := s.manager.StartTimer(timerName); err != nil {
+			return s, s.loadSyncJobs
+		}
 	}
 
 	// Refresh status
@@ -739,6 +752,7 @@ type SyncJobDetails struct {
 	width     int
 	height    int
 	tab       int // 0: details, 1: logs
+	lastErr   error
 }
 
 // NewSyncJobDetails creates a new sync job details view.
@@ -756,6 +770,9 @@ func NewSyncJobDetails(job models.SyncJobConfig, manager systemd.ServiceManager,
 
 // loadStatus loads the service and timer status.
 func (d *SyncJobDetails) loadStatus() {
+	if d.generator == nil || d.manager == nil {
+		return
+	}
 	serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
 	status, err := d.manager.GetDetailedStatus(serviceName)
 	if err == nil {
@@ -768,6 +785,9 @@ func (d *SyncJobDetails) loadStatus() {
 
 // loadLogs loads the service logs.
 func (d *SyncJobDetails) loadLogs() {
+	if d.generator == nil || d.manager == nil {
+		return
+	}
 	serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
 	logs, err := d.manager.GetLogs(serviceName, 30)
 	if err == nil {
@@ -798,37 +818,48 @@ func (d *SyncJobDetails) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "tab":
 			d.tab = (d.tab + 1) % 2
 		case "r":
-			// Run sync job now
-			serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
-			_ = d.manager.RunSyncNow(serviceName)
-			d.loadStatus()
-			d.loadLogs()
-		case "t":
-			// Toggle timer
-			timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
-			isActive, _ := d.manager.IsActive(timerName)
-			if isActive {
-				_ = d.manager.StopTimer(timerName)
-				_ = d.manager.DisableTimer(timerName)
-			} else {
-				_ = d.manager.EnableTimer(timerName)
-				_ = d.manager.StartTimer(timerName)
+			if d.generator != nil && d.manager != nil {
+				serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
+				d.lastErr = d.manager.RunSyncNow(serviceName)
+				d.loadStatus()
+				d.loadLogs()
 			}
-			d.loadStatus()
+		case "t":
+			if d.generator != nil && d.manager != nil {
+				timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
+				isActive, _ := d.manager.IsActive(timerName)
+				if isActive {
+					d.lastErr = d.manager.StopTimer(timerName)
+					if d.lastErr == nil {
+						d.lastErr = d.manager.DisableTimer(timerName)
+					}
+				} else {
+					d.lastErr = d.manager.EnableTimer(timerName)
+					if d.lastErr == nil {
+						d.lastErr = d.manager.StartTimer(timerName)
+					}
+				}
+				d.loadStatus()
+			}
 		case "e":
-			// Enable timer
-			timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
-			_ = d.manager.EnableTimer(timerName)
-			_ = d.manager.StartTimer(timerName)
-			d.loadStatus()
+			if d.generator != nil && d.manager != nil {
+				timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
+				d.lastErr = d.manager.EnableTimer(timerName)
+				if d.lastErr == nil {
+					d.lastErr = d.manager.StartTimer(timerName)
+				}
+				d.loadStatus()
+			}
 		case "d":
-			// Disable timer
-			timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
-			_ = d.manager.StopTimer(timerName)
-			_ = d.manager.DisableTimer(timerName)
-			d.loadStatus()
+			if d.generator != nil && d.manager != nil {
+				timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
+				d.lastErr = d.manager.StopTimer(timerName)
+				if d.lastErr == nil {
+					d.lastErr = d.manager.DisableTimer(timerName)
+				}
+				d.loadStatus()
+			}
 		case "R":
-			// Refresh
 			d.loadStatus()
 			d.loadLogs()
 		}
@@ -853,6 +884,12 @@ func (d *SyncJobDetails) View() string {
 		Align(lipgloss.Center).
 		Render(title))
 	b.WriteString("\n\n")
+
+	if d.lastErr != nil {
+		b.WriteString(components.RenderError(d.lastErr.Error()))
+		b.WriteString("\n\n")
+		d.lastErr = nil
+	}
 
 	// Tabs
 	tabs := []string{"Details", "Logs"}
@@ -1047,19 +1084,31 @@ func (d *SyncJobDeleteConfirm) deleteServiceOnly() tea.Cmd {
 		timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
 
 		// Stop the service if running
-		_ = d.manager.Stop(serviceName)
+		if err := d.manager.Stop(serviceName); err != nil {
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to stop sync service: %w", err)}
+		}
 
 		// Stop and disable the timer if running
-		_ = d.manager.StopTimer(timerName)
-		_ = d.manager.DisableTimer(timerName)
+		if err := d.manager.StopTimer(timerName); err != nil {
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to stop timer: %w", err)}
+		}
+		if err := d.manager.DisableTimer(timerName); err != nil {
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to disable timer: %w", err)}
+		}
 
 		// Disable the service
-		_ = d.manager.Disable(serviceName)
+		if err := d.manager.Disable(serviceName); err != nil {
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to disable sync service: %w", err)}
+		}
 		_ = d.manager.ResetFailed(serviceName)
 
 		// Remove the unit files
-		_ = d.generator.RemoveUnit(serviceName)
-		_ = d.generator.RemoveUnit(timerName)
+		if err := d.generator.RemoveUnit(serviceName); err != nil {
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to remove service unit: %w", err)}
+		}
+		if err := d.generator.RemoveUnit(timerName); err != nil {
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to remove timer unit: %w", err)}
+		}
 
 		// Reload daemon
 		if err := d.manager.DaemonReload(); err != nil {
@@ -1082,11 +1131,21 @@ func (d *SyncJobDeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 		serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
 		timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
 
-		_ = d.manager.Stop(serviceName)
-		_ = d.manager.StopTimer(timerName)
-		_ = d.manager.DisableTimer(timerName)
-		_ = d.manager.Disable(serviceName)
-		_ = d.manager.ResetFailed(serviceName)
+		if err := d.manager.Stop(serviceName); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop service %s: %v\n", serviceName, err)
+		}
+		if err := d.manager.StopTimer(timerName); err != nil {
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to stop timer: %w", err)}
+		}
+		if err := d.manager.DisableTimer(timerName); err != nil {
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to disable timer: %w", err)}
+		}
+		if err := d.manager.Disable(serviceName); err != nil {
+			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to disable sync service: %w", err)}
+		}
+		if err := d.manager.ResetFailed(serviceName); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to reset failed state for %s: %v\n", serviceName, err)
+		}
 
 		if err := d.generator.RemoveUnit(serviceName); err != nil {
 			if d.config != nil {

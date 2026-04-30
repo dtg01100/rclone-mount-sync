@@ -3,7 +3,9 @@ package systemd
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -21,7 +23,6 @@ type Manager struct {
 func NewManager() *Manager {
 	systemctlPath, err := exec.LookPath("systemctl")
 	if err != nil {
-		// Return a manager with default path - operations will fail gracefully
 		return &Manager{systemctlPath: "/usr/bin/systemctl"}
 	}
 	return &Manager{systemctlPath: systemctlPath}
@@ -42,7 +43,7 @@ type UnitStatus struct {
 // regardless of individual service states.
 func (m *Manager) IsSystemdAvailable() bool {
 	cmd := exec.Command(m.systemctlPath, "--user", "is-system-running")
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
 		return false
@@ -54,7 +55,7 @@ func (m *Manager) IsSystemdAvailable() bool {
 // DaemonReload reloads the systemd daemon to pick up unit file changes.
 func (m *Manager) DaemonReload() error {
 	cmd := exec.Command(m.systemctlPath, "--user", "daemon-reload")
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("daemon-reload failed: %w, output: %s", err, string(output))
@@ -65,7 +66,7 @@ func (m *Manager) DaemonReload() error {
 // Enable enables a systemd user unit.
 func (m *Manager) Enable(name string) error {
 	cmd := exec.Command(m.systemctlPath, "--user", "enable", name)
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("enable %s failed: %w, output: %s", name, err, string(output))
@@ -76,7 +77,7 @@ func (m *Manager) Enable(name string) error {
 // Disable disables a systemd user unit.
 func (m *Manager) Disable(name string) error {
 	cmd := exec.Command(m.systemctlPath, "--user", "disable", name)
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("disable %s failed: %w, output: %s", name, err, string(output))
@@ -87,7 +88,7 @@ func (m *Manager) Disable(name string) error {
 // Start starts a systemd user unit.
 func (m *Manager) Start(name string) error {
 	cmd := exec.Command(m.systemctlPath, "--user", "start", name)
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("start %s failed: %w, output: %s", name, err, string(output))
@@ -98,7 +99,7 @@ func (m *Manager) Start(name string) error {
 // Stop stops a systemd user unit.
 func (m *Manager) Stop(name string) error {
 	cmd := exec.Command(m.systemctlPath, "--user", "stop", name)
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("stop %s failed: %w, output: %s", name, err, string(output))
@@ -109,7 +110,7 @@ func (m *Manager) Stop(name string) error {
 // ResetFailed resets the failed state of a unit.
 func (m *Manager) ResetFailed(name string) error {
 	cmd := exec.Command(m.systemctlPath, "--user", "reset-failed", name)
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("reset-failed failed: %w, output: %s", err, string(output))
@@ -120,7 +121,7 @@ func (m *Manager) ResetFailed(name string) error {
 // Restart restarts a systemd user unit.
 func (m *Manager) Restart(name string) error {
 	cmd := exec.Command(m.systemctlPath, "--user", "restart", name)
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("restart %s failed: %w, output: %s", name, err, string(output))
@@ -137,7 +138,7 @@ func (m *Manager) Status(name string) (*UnitStatus, error) {
 	// Get active state
 	cmd := exec.Command(m.systemctlPath, "--user", "show", name,
 		"--property=ActiveState,SubState,LoadState")
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get status for %s: %w", name, err)
@@ -172,7 +173,7 @@ func (m *Manager) Status(name string) (*UnitStatus, error) {
 // IsEnabled checks if a unit is enabled.
 func (m *Manager) IsEnabled(name string) (bool, error) {
 	cmd := exec.Command(m.systemctlPath, "--user", "is-enabled", name)
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
 		return false, fmt.Errorf("failed to check enabled status for %s: %w", name, err)
@@ -181,12 +182,23 @@ func (m *Manager) IsEnabled(name string) (bool, error) {
 }
 
 // IsActive checks if a unit is currently active.
+// Returns (false, err) if the check itself fails, allowing callers
+// to distinguish "inactive" from "check failed".
 func (m *Manager) IsActive(name string) (bool, error) {
 	cmd := exec.Command(m.systemctlPath, "--user", "is-active", name)
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
-		return false, nil
+		// systemctl is-active returns non-zero for inactive/failed units,
+		// which manifests as an *exec.ExitError. Distinguish real errors
+		// from expected "inactive" status.
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
+			// Normal non-success exit: unit is not active
+			return false, nil
+		}
+		// Unexpected error (e.g., systemctl not found)
+		return false, fmt.Errorf("failed to check active status for %s: %w", name, err)
 	}
 	return strings.TrimSpace(string(output)) == "active", nil
 }
@@ -226,7 +238,7 @@ func (m *Manager) ListServices() ([]UnitStatus, error) {
 	// 1. Get all unit files (to find both enabled and disabled services)
 	cmd := exec.Command(m.systemctlPath, "--user", "list-unit-files",
 		"--type=service", "--no-legend", "rclone-*.service")
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
 		// If command fails, it might be because no units match the pattern
@@ -261,7 +273,7 @@ func (m *Manager) ListServices() ([]UnitStatus, error) {
 	// systemctl list-units only shows units that are currently loaded/active
 	cmd = exec.Command(m.systemctlPath, "--user", "list-units",
 		"--type=service", "--no-legend", "--all", "rclone-*.service")
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err = cmd.Output()
 	if err == nil {
 		lines = strings.Split(string(output), "\n")
@@ -302,9 +314,12 @@ func (m *Manager) ListServices() ([]UnitStatus, error) {
 
 // GetLogs returns the last N lines of logs for a service.
 func (m *Manager) GetLogs(name string, lines int) (string, error) {
-	cmd := exec.Command(m.systemctlPath, "--user", "journalctl",
-		"-u", name, "-n", strconv.Itoa(lines), "--no-pager")
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	journalctlPath, err := exec.LookPath("journalctl")
+	if err != nil {
+		return "", fmt.Errorf("journalctl not found: %w", err)
+	}
+	cmd := exec.Command(journalctlPath, "--user", "-u", name, "-n", strconv.Itoa(lines), "--no-pager")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get logs for %s: %w", name, err)
@@ -328,7 +343,7 @@ func (m *Manager) GetDetailedStatus(name string) (*models.ServiceStatus, error) 
 	// Get properties
 	cmd := exec.Command(m.systemctlPath, "--user", "show", name,
 		"--property=LoadState,ActiveState,SubState,MainPID,ExecMainStatus,ActiveEnterTimestamp,InactiveEnterTimestamp")
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get detailed status for %s: %w", name, err)
@@ -377,7 +392,12 @@ func (m *Manager) GetDetailedStatus(name string) (*models.ServiceStatus, error) 
 
 	// For sync jobs, check timer status
 	if status.Type == "sync" {
-		timerName := strings.Replace(name, ".service", ".timer", 1)
+		timerName := name
+		if strings.HasSuffix(timerName, ".service") {
+			timerName = strings.TrimSuffix(timerName, ".service") + ".timer"
+		} else if !strings.HasSuffix(timerName, ".timer") {
+			timerName = timerName + ".timer"
+		}
 		if isActive, _ := m.IsActive(timerName); isActive {
 			status.TimerActive = true
 		}
@@ -396,7 +416,7 @@ func (m *Manager) GetDetailedStatus(name string) (*models.ServiceStatus, error) 
 func (m *Manager) GetTimerNextRun(timerName string) (time.Time, error) {
 	cmd := exec.Command(m.systemctlPath, "--user", "show", timerName,
 		"--property=NextElapseUSec")
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
 		return time.Time{}, fmt.Errorf("failed to get timer info for %s: %w", timerName, err)
@@ -478,7 +498,7 @@ func (m *Manager) RunSyncNow(name string) error {
 // StartContext starts a systemd user unit with context for cancellation.
 func (m *Manager) StartContext(ctx context.Context, name string) error {
 	cmd := exec.CommandContext(ctx, m.systemctlPath, "--user", "start", name)
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("start %s failed: %w, output: %s", name, err, string(output))
@@ -489,7 +509,7 @@ func (m *Manager) StartContext(ctx context.Context, name string) error {
 // StopContext stops a systemd user unit with context for cancellation.
 func (m *Manager) StopContext(ctx context.Context, name string) error {
 	cmd := exec.CommandContext(ctx, m.systemctlPath, "--user", "stop", name)
-	cmd.Env = append(cmd.Env, "LC_ALL=C")
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("stop %s failed: %w, output: %s", name, err, string(output))
@@ -576,32 +596,35 @@ type ServiceManager interface {
 // MockManager is a mock implementation of ServiceManager for testing.
 type MockManager struct {
 	IsSystemdAvailableResult bool
-	DaemonReloadErr          error
-	EnableErr                error
-	DisableErr               error
-	StartErr                 error
-	StopErr                  error
-	RestartErr               error
-	StatusResult             *UnitStatus
-	StatusErr                error
-	IsEnabledResult          bool
-	IsEnabledErr             error
-	IsActiveResult           bool
-	IsActiveErr              error
-	ListServicesResult       []UnitStatus
-	ListServicesErr          error
-	GetLogsResult            string
-	GetLogsErr               error
-	GetDetailedStatusResult  *models.ServiceStatus
-	GetDetailedStatusErr     error
-	GetTimerNextRunResult    time.Time
-	GetTimerNextRunErr       error
-	StartTimerErr            error
-	StopTimerErr             error
-	EnableTimerErr           error
-	DisableTimerErr          error
-	RunSyncNowErr            error
-	ResetFailedErr           error
+	DaemonReloadErr error
+	EnableErr error
+	DisableErr error
+	StartErr error
+	StopErr error
+	RestartErr error
+	StatusResult *UnitStatus
+	StatusErr error
+	IsEnabledResult bool
+	IsEnabledErr error
+	IsActiveResult bool
+	IsActiveErr error
+	ListServicesResult []UnitStatus
+	ListServicesErr error
+	GetLogsResult string
+	GetLogsErr error
+	GetDetailedStatusResult *models.ServiceStatus
+	GetDetailedStatusErr error
+	GetTimerNextRunResult time.Time
+	GetTimerNextRunErr error
+	StartTimerErr error
+	StopTimerErr error
+	EnableTimerErr error
+	DisableTimerErr error
+	RunSyncNowErr error
+	ResetFailedErr error
+
+	// LastOpName records the name argument of the most recent operation.
+	LastOpName string
 }
 
 // IsSystemdAvailable mocks the IsSystemdAvailable method.
@@ -616,41 +639,49 @@ func (m *MockManager) DaemonReload() error {
 
 // Enable mocks the Enable method.
 func (m *MockManager) Enable(name string) error {
+	m.LastOpName = name
 	return m.EnableErr
 }
 
 // Disable mocks the Disable method.
 func (m *MockManager) Disable(name string) error {
+	m.LastOpName = name
 	return m.DisableErr
 }
 
 // Start mocks the Start method.
 func (m *MockManager) Start(name string) error {
+	m.LastOpName = name
 	return m.StartErr
 }
 
 // Stop mocks the Stop method.
 func (m *MockManager) Stop(name string) error {
+	m.LastOpName = name
 	return m.StopErr
 }
 
 // Restart mocks the Restart method.
 func (m *MockManager) Restart(name string) error {
+	m.LastOpName = name
 	return m.RestartErr
 }
 
 // Status mocks the Status method.
 func (m *MockManager) Status(name string) (*UnitStatus, error) {
+	m.LastOpName = name
 	return m.StatusResult, m.StatusErr
 }
 
 // IsEnabled mocks the IsEnabled method.
 func (m *MockManager) IsEnabled(name string) (bool, error) {
+	m.LastOpName = name
 	return m.IsEnabledResult, m.IsEnabledErr
 }
 
 // IsActive mocks the IsActive method.
 func (m *MockManager) IsActive(name string) (bool, error) {
+	m.LastOpName = name
 	return m.IsActiveResult, m.IsActiveErr
 }
 
@@ -661,41 +692,49 @@ func (m *MockManager) ListServices() ([]UnitStatus, error) {
 
 // GetLogs mocks the GetLogs method.
 func (m *MockManager) GetLogs(name string, lines int) (string, error) {
+	m.LastOpName = name
 	return m.GetLogsResult, m.GetLogsErr
 }
 
 // GetDetailedStatus mocks the GetDetailedStatus method.
 func (m *MockManager) GetDetailedStatus(name string) (*models.ServiceStatus, error) {
+	m.LastOpName = name
 	return m.GetDetailedStatusResult, m.GetDetailedStatusErr
 }
 
 // GetTimerNextRun mocks the GetTimerNextRun method.
 func (m *MockManager) GetTimerNextRun(timerName string) (time.Time, error) {
+	m.LastOpName = timerName
 	return m.GetTimerNextRunResult, m.GetTimerNextRunErr
 }
 
 // StartTimer mocks the StartTimer method.
 func (m *MockManager) StartTimer(name string) error {
+	m.LastOpName = name
 	return m.StartTimerErr
 }
 
 // StopTimer mocks the StopTimer method.
 func (m *MockManager) StopTimer(name string) error {
+	m.LastOpName = name
 	return m.StopTimerErr
 }
 
 // EnableTimer mocks the EnableTimer method.
 func (m *MockManager) EnableTimer(name string) error {
+	m.LastOpName = name
 	return m.EnableTimerErr
 }
 
 // DisableTimer mocks the DisableTimer method.
 func (m *MockManager) DisableTimer(name string) error {
+	m.LastOpName = name
 	return m.DisableTimerErr
 }
 
 // RunSyncNow mocks the RunSyncNow method.
 func (m *MockManager) RunSyncNow(name string) error {
+	m.LastOpName = name
 	return m.RunSyncNowErr
 }
 
@@ -706,5 +745,6 @@ func (m *MockManager) SystemctlPath() string {
 
 // ResetFailed mocks the ResetFailed method.
 func (m *MockManager) ResetFailed(name string) error {
+	m.LastOpName = name
 	return m.ResetFailedErr
 }

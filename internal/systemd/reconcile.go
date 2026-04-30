@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 )
 
+var descriptionRegex = regexp.MustCompile(`(?i)^Description=Rclone\s+(?:mount|sync):\s*(.+)$`)
+
 // OrphanedUnit represents a unit file that exists in systemd but has no corresponding config entry.
 type OrphanedUnit struct {
 	Name     string // Unit filename (e.g., "rclone-mount-mydrive.service")
@@ -172,9 +174,13 @@ func (r *Reconciler) RemoveOrphan(orphan OrphanedUnit) error {
 		if _, err := os.Stat(timerPath); err == nil {
 			timerUnitName := strings.TrimSuffix(timerName, ".timer")
 			if isEnabled, _ := r.manager.IsEnabled(timerUnitName); isEnabled {
-				r.manager.Disable(timerUnitName)
+				if err := r.manager.Disable(timerUnitName); err != nil {
+					return fmt.Errorf("failed to disable orphan timer: %w", err)
+				}
 			}
-			r.generator.RemoveUnit(timerName)
+			if err := r.generator.RemoveUnit(timerName); err != nil {
+				return fmt.Errorf("failed to remove orphan timer unit: %w", err)
+			}
 		}
 	}
 
@@ -272,11 +278,10 @@ func (r *Reconciler) parseSyncUnit(content string, orphan OrphanedUnit) (*models
 }
 
 func extractNameFromDescription(content, unitType string) string {
-	re := regexp.MustCompile(`(?i)^Description=Rclone\s+(?:mount|sync):\s*(.+)$`)
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if matches := re.FindStringSubmatch(line); len(matches) > 1 {
+		if matches := descriptionRegex.FindStringSubmatch(line); len(matches) > 1 {
 			return strings.TrimSpace(matches[1])
 		}
 	}

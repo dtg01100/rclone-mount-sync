@@ -133,8 +133,14 @@ func runSyncCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := cfg.Save(); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
 	generator, err := loadGenerator()
 	if err != nil {
+		_ = cfg.RemoveSyncJob(job.Name)
+		_ = cfg.Save()
 		return err
 	}
 
@@ -144,23 +150,35 @@ func runSyncCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	if _, _, err := generator.WriteSyncUnits(savedJob); err != nil {
+		_ = cfg.RemoveSyncJob(job.Name)
+		_ = cfg.Save()
 		return fmt.Errorf("failed to write systemd units: %w", err)
 	}
 
 	manager := loadManager()
 	if err := manager.DaemonReload(); err != nil {
+		serviceName := generator.ServiceName(savedJob.ID, "sync") + ".service"
+		timerName := generator.ServiceName(savedJob.ID, "sync") + ".timer"
+		if remErr := generator.RemoveUnit(serviceName); remErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove service %s: %v\n", serviceName, remErr)
+		}
+		if remErr := generator.RemoveUnit(timerName); remErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove timer %s: %v\n", timerName, remErr)
+		}
+		if remErr := cfg.RemoveSyncJob(job.Name); remErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove sync job from config: %v\n", remErr)
+		}
+		if saveErr := cfg.Save(); saveErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to save config: %v\n", saveErr)
+		}
 		return fmt.Errorf("failed to reload systemd daemon: %w", err)
 	}
 
 	if syncCreateEnabled && savedJob.Schedule.Type != "manual" {
 		timerName := generator.ServiceName(savedJob.ID, "sync") + ".timer"
 		if err := manager.Enable(timerName); err != nil {
-			return fmt.Errorf("failed to enable timer: %w", err)
+			fmt.Fprintf(os.Stderr, "Warning: failed to enable timer: %v\n", err)
 		}
-	}
-
-	if err := cfg.Save(); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
 	}
 
 	fmt.Printf("Sync job '%s' created successfully (ID: %s)\n", savedJob.Name, savedJob.ID)

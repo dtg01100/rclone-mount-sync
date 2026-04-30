@@ -559,8 +559,8 @@ func TestEnhancedFilePicker_MaxRecentPaths(t *testing.T) {
 	}
 
 	paths := GetRecentPaths()
-	if len(paths) > maxRecentPaths {
-		t.Errorf("Expected at most %d recent paths, got %d", maxRecentPaths, len(paths))
+	if len(paths) > DefaultRecentPathsStore().Max() {
+		t.Errorf("Expected at most %d recent paths, got %d", DefaultRecentPathsStore().Max(), len(paths))
 	}
 
 	ClearRecentPaths()

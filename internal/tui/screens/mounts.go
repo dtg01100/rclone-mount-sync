@@ -4,6 +4,7 @@ package screens
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -782,14 +783,20 @@ func (d *DeleteConfirm) deleteServiceOnly() tea.Cmd {
 		serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 
 		// Stop the service if running
-		_ = d.manager.Stop(serviceName)
+		if err := d.manager.Stop(serviceName); err != nil {
+			return MountsErrorMsg{Err: fmt.Errorf("failed to stop mount: %w", err)}
+		}
 
 		// Disable the service
-		_ = d.manager.Disable(serviceName)
+		if err := d.manager.Disable(serviceName); err != nil {
+			return MountsErrorMsg{Err: fmt.Errorf("failed to disable mount: %w", err)}
+		}
 		_ = d.manager.ResetFailed(serviceName)
 
 		// Remove the unit file
-		_ = d.generator.RemoveUnit(serviceName)
+		if err := d.generator.RemoveUnit(serviceName); err != nil {
+			return MountsErrorMsg{Err: fmt.Errorf("failed to remove unit file: %w", err)}
+		}
 
 		// Reload daemon
 		if err := d.manager.DaemonReload(); err != nil {
@@ -811,9 +818,15 @@ func (d *DeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 
 		serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 
-		_ = d.manager.Stop(serviceName)
-		_ = d.manager.Disable(serviceName)
-		_ = d.manager.ResetFailed(serviceName)
+		if err := d.manager.Stop(serviceName); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop service %s: %v\n", serviceName, err)
+		}
+		if err := d.manager.Disable(serviceName); err != nil {
+			return MountsErrorMsg{Err: fmt.Errorf("failed to disable mount: %w", err)}
+		}
+		if err := d.manager.ResetFailed(serviceName); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to reset failed state for %s: %v\n", serviceName, err)
+		}
 
 		if err := d.generator.RemoveUnit(serviceName); err != nil {
 			if d.config != nil {
@@ -914,6 +927,7 @@ type MountDetails struct {
 	width     int
 	height    int
 	tab       int // 0: details, 1: logs
+	lastErr   error
 }
 
 // NewMountDetails creates a new mount details view.
@@ -931,6 +945,9 @@ func NewMountDetails(mount models.MountConfig, manager systemd.ServiceManager, g
 
 // loadStatus loads the service status.
 func (d *MountDetails) loadStatus() {
+	if d.generator == nil || d.manager == nil {
+		return
+	}
 	serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 	status, err := d.manager.Status(serviceName)
 	if err == nil {
@@ -940,6 +957,9 @@ func (d *MountDetails) loadStatus() {
 
 // loadLogs loads the service logs.
 func (d *MountDetails) loadLogs() {
+	if d.generator == nil || d.manager == nil {
+		return
+	}
 	serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 	logs, err := d.manager.GetLogs(serviceName, 20)
 	if err == nil {
@@ -970,27 +990,30 @@ func (d *MountDetails) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "tab":
 			d.tab = (d.tab + 1) % 2
 		case "s":
-			// Start service
-			serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
-			_ = d.manager.Start(serviceName)
-			d.loadStatus()
+			if d.generator != nil && d.manager != nil {
+				serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
+				d.lastErr = d.manager.Start(serviceName)
+				d.loadStatus()
+			}
 		case "x":
-			// Stop service
-			serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
-			_ = d.manager.Stop(serviceName)
-			d.loadStatus()
+			if d.generator != nil && d.manager != nil {
+				serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
+				d.lastErr = d.manager.Stop(serviceName)
+				d.loadStatus()
+			}
 		case "e":
-			// Enable service
-			serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
-			_ = d.manager.Enable(serviceName)
-			d.loadStatus()
+			if d.generator != nil && d.manager != nil {
+				serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
+				d.lastErr = d.manager.Enable(serviceName)
+				d.loadStatus()
+			}
 		case "d":
-			// Disable service
-			serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
-			_ = d.manager.Disable(serviceName)
-			d.loadStatus()
+			if d.generator != nil && d.manager != nil {
+				serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
+				d.lastErr = d.manager.Disable(serviceName)
+				d.loadStatus()
+			}
 		case "r":
-			// Refresh
 			d.loadStatus()
 			d.loadLogs()
 		}
@@ -1015,6 +1038,12 @@ func (d *MountDetails) View() string {
 		Align(lipgloss.Center).
 		Render(title))
 	b.WriteString("\n\n")
+
+	if d.lastErr != nil {
+		b.WriteString(components.RenderError(d.lastErr.Error()))
+		b.WriteString("\n\n")
+		d.lastErr = nil
+	}
 
 	// Tabs
 	tabs := []string{"Details", "Logs"}

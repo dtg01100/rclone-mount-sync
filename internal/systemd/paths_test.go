@@ -166,9 +166,8 @@ func TestGetRcloneConfigPath_NoHomeDir(t *testing.T) {
 
 	path := getRcloneConfigPath()
 
-	expected := filepath.Join("/home", "testuser", ".config", "rclone", "rclone.conf")
-	if path != expected {
-		t.Errorf("getRcloneConfigPath() = %q, want %q", path, expected)
+	if path != "" {
+		t.Errorf("getRcloneConfigPath() = %q, want empty string when HOME is unset (no USER fallback for safety)", path)
 	}
 }
 
@@ -188,11 +187,8 @@ func TestGetRcloneConfigPath_NoHomeDirNoUser(t *testing.T) {
 
 	path := getRcloneConfigPath()
 
-	if !strings.Contains(path, "rclone.conf") {
-		t.Errorf("getRcloneConfigPath() = %q, should contain 'rclone.conf'", path)
-	}
-	if !strings.Contains(path, ".config") {
-		t.Errorf("getRcloneConfigPath() = %q, should contain '.config'", path)
+	if path != "" {
+		t.Errorf("getRcloneConfigPath() = %q, want empty string when HOME and USER are unset", path)
 	}
 }
 

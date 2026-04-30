@@ -23,12 +23,87 @@ type FileEntry struct {
 	Selected bool
 }
 
-// recentPaths stores recently visited paths for the quick jump feature.
-var (
-	recentPaths    []string
-	recentPathsMu  sync.Mutex
-	maxRecentPaths = 10
-)
+// recentPathsStore stores recently visited paths for the quick jump feature.
+// It is managed per-instance through RecentPathsStore for thread safety.
+var defaultRecentStore = &RecentPathsStore{
+	paths: make([]string, 0),
+	max:   10,
+}
+
+// RecentPathsStore manages recently visited paths with thread safety.
+type RecentPathsStore struct {
+	paths []string
+	max   int
+	mu    sync.Mutex
+}
+
+// DefaultRecentPathsStore returns the global default store.
+func DefaultRecentPathsStore() *RecentPathsStore {
+	return defaultRecentStore
+}
+
+// NewRecentPathsStore creates a new RecentPathsStore with the given max capacity.
+func NewRecentPathsStore(max int) *RecentPathsStore {
+	return &RecentPathsStore{
+		paths: make([]string, 0),
+		max:   max,
+	}
+}
+
+// Max returns the maximum number of recent paths the store can hold.
+func (s *RecentPathsStore) Max() int {
+	return s.max
+}
+
+// Get returns a copy of the recent paths list.
+func (s *RecentPathsStore) Get() []string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	result := make([]string, len(s.paths))
+	copy(result, s.paths)
+	return result
+}
+
+// Add adds a path to the recent paths list.
+func (s *RecentPathsStore) Add(path string) {
+	if path == "" {
+		return
+	}
+
+	expandedPath := ExpandHome(path)
+	displayPath := ContractHome(expandedPath)
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	for i, rp := range s.paths {
+		if ExpandHome(rp) == expandedPath {
+			s.paths = append(s.paths[:i], s.paths[i+1:]...)
+			break
+		}
+	}
+
+	s.paths = append([]string{displayPath}, s.paths...)
+
+	if len(s.paths) > s.max {
+		s.paths = s.paths[:s.max]
+	}
+}
+
+// Clear removes all recent paths.
+func (s *RecentPathsStore) Clear() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.paths = nil
+}
+
+// Set replaces the recent paths list.
+func (s *RecentPathsStore) Set(paths []string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.paths = make([]string, len(paths))
+	copy(s.paths, paths)
+}
 
 // EnhancedFilePicker provides an improved file browsing experience with:
 // - Visual indicators for files and folders
@@ -58,7 +133,10 @@ type EnhancedFilePicker struct {
 
 	// Quick jump state
 	showRecentMenu bool
-	recentCursor   int
+	recentCursor int
+
+	// Recent paths store
+	recentStore *RecentPathsStore
 
 	// Internal file picker
 	innerPicker *huh.FilePicker
@@ -67,10 +145,11 @@ type EnhancedFilePicker struct {
 // NewEnhancedFilePicker creates a new enhanced file picker.
 func NewEnhancedFilePicker() *EnhancedFilePicker {
 	return &EnhancedFilePicker{
-		dirAllowed:  true,
+		dirAllowed: true,
 		fileAllowed: true,
-		showHidden:  false,
-		focused:     true,
+		showHidden: false,
+		focused: true,
+		recentStore: defaultRecentStore,
 	}
 }
 
@@ -119,6 +198,12 @@ func (p *EnhancedFilePicker) Validate(validate func(string) error) *EnhancedFile
 // ShowHidden sets whether to show hidden files.
 func (p *EnhancedFilePicker) ShowHidden(show bool) *EnhancedFilePicker {
 	p.showHidden = show
+	return p
+}
+
+// WithRecentStore sets the recent paths store for the file picker.
+func (p *EnhancedFilePicker) WithRecentStore(store *RecentPathsStore) *EnhancedFilePicker {
+	p.recentStore = store
 	return p
 }
 
@@ -192,9 +277,9 @@ func (p *EnhancedFilePicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if _, err := os.Stat("/media"); err == nil {
 					return p, p.jumpToDirectory("/media")
 				}
-			case "r":
-				// Toggle recent locations menu
-				if len(GetRecentPaths()) > 0 {
+		case "r":
+			// Toggle recent locations menu
+			if len(p.recentStore.Get()) > 0 {
 					p.showRecentMenu = true
 					p.recentCursor = 0
 					return p, nil
@@ -212,7 +297,7 @@ func (p *EnhancedFilePicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Handle recent menu navigation
 	if p.showRecentMenu {
 		if keyMsg, ok := msg.(tea.KeyMsg); ok {
-			recentPathsList := GetRecentPaths()
+			recentPathsList := p.recentStore.Get()
 			switch keyMsg.String() {
 			case "up", "k":
 				if p.recentCursor > 0 {
@@ -249,7 +334,7 @@ func (p *EnhancedFilePicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // jumpToDirectory creates a command to jump to a specific directory.
 func (p *EnhancedFilePicker) jumpToDirectory(dir string) tea.Cmd {
 	p.currentDir = dir
-	AddRecentPath(dir)
+	p.recentStore.Add(dir)
 	p.initInnerPicker()
 	return p.innerPicker.Init()
 }
@@ -336,7 +421,7 @@ func (p *EnhancedFilePicker) renderQuickJumpBar() string {
 	buttons = append(buttons, p.renderQuickJumpButton("M", "media"))
 
 	// Recent button (only if there are recent paths)
-	if len(GetRecentPaths()) > 0 {
+	if len(p.recentStore.Get()) > 0 {
 		buttons = append(buttons, p.renderQuickJumpButton("r", "Recent"))
 	}
 
@@ -354,7 +439,7 @@ func (p *EnhancedFilePicker) renderQuickJumpButton(keyStr, label string) string 
 
 // renderRecentMenu renders the recent locations dropdown menu.
 func (p *EnhancedFilePicker) renderRecentMenu() string {
-	recentPathsList := GetRecentPaths()
+	recentPathsList := p.recentStore.Get()
 	if len(recentPathsList) == 0 {
 		return ""
 	}
@@ -397,7 +482,7 @@ func (p *EnhancedFilePicker) renderHelpBar() string {
 		{Key: "Backspace", Desc: "parent"},
 	}
 
-	if len(GetRecentPaths()) > 0 {
+	if len(p.recentStore.Get()) > 0 {
 		items = append(items, HelpItem{Key: "r", Desc: "recent"})
 	}
 
@@ -526,64 +611,26 @@ func (p *EnhancedFilePicker) RunAccessible(w io.Writer, r io.Reader) error {
 // Ensure EnhancedFilePicker implements huh.Field interface
 var _ huh.Field = (*EnhancedFilePicker)(nil)
 
-// Recent path management functions
+// Recent path management functions (package-level convenience wrappers)
 
-// GetRecentPaths returns the list of recently visited paths.
+// GetRecentPaths returns the list of recently visited paths from the default store.
 func GetRecentPaths() []string {
-	recentPathsMu.Lock()
-	defer recentPathsMu.Unlock()
-
-	// Return a copy to avoid race conditions
-	result := make([]string, len(recentPaths))
-	copy(result, recentPaths)
-	return result
+	return defaultRecentStore.Get()
 }
 
-// AddRecentPath adds a path to the recent paths list.
+// AddRecentPath adds a path to the default recent paths list.
 func AddRecentPath(path string) {
-	if path == "" {
-		return
-	}
-
-	// Expand the path
-	expandedPath := ExpandHome(path)
-
-	// Contract for display
-	displayPath := ContractHome(expandedPath)
-
-	recentPathsMu.Lock()
-	defer recentPathsMu.Unlock()
-
-	// Remove if already exists
-	for i, rp := range recentPaths {
-		if ExpandHome(rp) == expandedPath {
-			recentPaths = append(recentPaths[:i], recentPaths[i+1:]...)
-			break
-		}
-	}
-
-	// Add to front
-	recentPaths = append([]string{displayPath}, recentPaths...)
-
-	// Trim to max size
-	if len(recentPaths) > maxRecentPaths {
-		recentPaths = recentPaths[:maxRecentPaths]
-	}
+	defaultRecentStore.Add(path)
 }
 
-// ClearRecentPaths clears all recent paths.
+// ClearRecentPaths clears all recent paths in the default store.
 func ClearRecentPaths() {
-	recentPathsMu.Lock()
-	defer recentPathsMu.Unlock()
-	recentPaths = nil
+	defaultRecentStore.Clear()
 }
 
-// SetRecentPaths sets the recent paths list (used for loading from config).
+// SetRecentPaths sets the default recent paths list (used for loading from config).
 func SetRecentPaths(paths []string) {
-	recentPathsMu.Lock()
-	defer recentPathsMu.Unlock()
-	recentPaths = make([]string, len(paths))
-	copy(recentPaths, paths)
+	defaultRecentStore.Set(paths)
 }
 
 // FormatPathForDisplay formats a path for display in the UI.

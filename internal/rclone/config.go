@@ -32,9 +32,11 @@ func (c *Client) GetConfigPath() (string, error) {
 	}
 
 	lines := strings.Split(strings.TrimSpace(string(output)), "\n")
-	for i, line := range lines {
+	for _, line := range lines {
 		line = strings.TrimSpace(line)
-		if line != "" && i == len(lines)-1 {
+		// rclone config file output: first line is "Configuration file:" header,
+		// subsequent lines may contain the path. Skip the header line.
+		if line != "" && !strings.HasPrefix(line, "Configuration") {
 			return line, nil
 		}
 	}

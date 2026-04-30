@@ -2,8 +2,19 @@
 package models
 
 import (
+	"fmt"
+	"strings"
 	"time"
 )
+
+// ValidateExtraArgs checks that extra args don't contain newlines
+// which could inject arbitrary directives into systemd unit files.
+func ValidateExtraArgs(args string) error {
+	if strings.ContainsAny(args, "\r\n") {
+		return fmt.Errorf("extra args must not contain newlines")
+	}
+	return nil
+}
 
 // MountConfig represents the configuration for an rclone mount.
 type MountConfig struct {
@@ -146,30 +157,30 @@ type ScheduleConfig struct {
 
 // ServiceStatus represents the status of a systemd service.
 type ServiceStatus struct {
-	Name     string `json:"name" mapstructure:"name"`
-	Type     string `json:"type" mapstructure:"type"` // "mount" or "sync"
-	UnitFile string `json:"unit_file" mapstructure:"unit_file"`
+	Name string `json:"name" yaml:"name" mapstructure:"name"`
+	Type string `json:"type" yaml:"type" mapstructure:"type"` // "mount" or "sync"
+	UnitFile string `json:"unit_file" yaml:"unit_file" mapstructure:"unit_file"`
 
 	// Systemd Status
-	LoadState   string `json:"load_state" mapstructure:"load_state"`     // "loaded", "not-found", etc.
-	ActiveState string `json:"active_state" mapstructure:"active_state"` // "active", "inactive", "failed"
-	SubState    string `json:"sub_state" mapstructure:"sub_state"`       // "running", "exited", "dead", etc.
+	LoadState string `json:"load_state" yaml:"load_state" mapstructure:"load_state"` // "loaded", "not-found", etc.
+	ActiveState string `json:"active_state" yaml:"active_state" mapstructure:"active_state"` // "active", "inactive", "failed"
+	SubState string `json:"sub_state" yaml:"sub_state" mapstructure:"sub_state"` // "running", "exited", "dead", etc.
 
 	// Service Details
-	Enabled  bool `json:"enabled" mapstructure:"enabled"`
-	MainPID  int  `json:"main_pid,omitempty" mapstructure:"main_pid,omitempty"`
-	ExitCode int  `json:"exit_code,omitempty" mapstructure:"exit_code,omitempty"`
+	Enabled bool `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
+	MainPID int `json:"main_pid,omitempty" yaml:"main_pid,omitempty" mapstructure:"main_pid,omitempty"`
+	ExitCode int `json:"exit_code,omitempty" yaml:"exit_code,omitempty" mapstructure:"exit_code,omitempty"`
 
 	// Timestamps
-	ActivatedAt time.Time `json:"activated_at,omitempty" mapstructure:"activated_at,omitempty"`
-	InactiveAt  time.Time `json:"inactive_at,omitempty" mapstructure:"inactive_at,omitempty"`
+	ActivatedAt time.Time `json:"activated_at,omitempty" yaml:"activated_at,omitempty" mapstructure:"activated_at,omitempty"`
+	InactiveAt time.Time `json:"inactive_at,omitempty" yaml:"inactive_at,omitempty" mapstructure:"inactive_at,omitempty"`
 
 	// For mounts
-	MountPoint string `json:"mount_point,omitempty" mapstructure:"mount_point,omitempty"`
-	IsMounted  bool   `json:"is_mounted,omitempty" mapstructure:"is_mounted,omitempty"`
+	MountPoint string `json:"mount_point,omitempty" yaml:"mount_point,omitempty" mapstructure:"mount_point,omitempty"`
+	IsMounted bool `json:"is_mounted,omitempty" yaml:"is_mounted,omitempty" mapstructure:"is_mounted,omitempty"`
 
 	// For sync jobs
-	LastRun     time.Time `json:"last_run,omitempty" mapstructure:"last_run,omitempty"`
-	NextRun     time.Time `json:"next_run,omitempty" mapstructure:"next_run,omitempty"`
-	TimerActive bool      `json:"timer_active,omitempty" mapstructure:"timer_active,omitempty"`
+	LastRun time.Time `json:"last_run,omitempty" yaml:"last_run,omitempty" mapstructure:"last_run,omitempty"`
+	NextRun time.Time `json:"next_run,omitempty" yaml:"next_run,omitempty" mapstructure:"next_run,omitempty"`
+	TimerActive bool `json:"timer_active,omitempty" yaml:"timer_active,omitempty" mapstructure:"timer_active,omitempty"`
 }

@@ -32,11 +32,11 @@ func TestExpandHome(t *testing.T) {
 			input:    "",
 			expected: "",
 		},
-		{
-			name:     "tilde only",
-			input:    "~",
-			expected: "~",
-		},
+	{
+		name:     "tilde only",
+		input:    "~",
+		expected: home,
+	},
 		{
 			name:     "tilde in middle",
 			input:    "/home/user~/test",

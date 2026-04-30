@@ -91,9 +91,6 @@ func IsRetryableError(err error) bool {
 
 	var netErr net.Error
 	if errors.As(err, &netErr) {
-		if netErr.Timeout() {
-			return true
-		}
 		return true
 	}
 
@@ -263,47 +260,14 @@ func doRetry(ctx context.Context, config RetryConfig, op Operation) error {
 type bytesOperation func() ([]byte, error)
 
 func doRetryBytes(ctx context.Context, config RetryConfig, op bytesOperation) ([]byte, error) {
-	var lastErr error
 	var result []byte
-	delay := config.InitialDelay
-
-	for attempt := 0; attempt <= config.MaxRetries; attempt++ {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		res, err := op()
-		if err == nil {
-			return res, nil
-		}
-
-		err = classifyExitError(err)
-		lastErr = err
-
-		if !IsRetryableError(err) {
-			return result, err
-		}
-
-		if attempt == config.MaxRetries {
-			break
-		}
-
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-time.After(delay):
-		}
-
-		delay = time.Duration(float64(delay) * config.RetryMultiplier)
-		if delay > config.MaxDelay {
-			delay = config.MaxDelay
-		}
+	err := doRetry(ctx, config, func() error {
+		var err error
+		result, err = op()
+		return err
+	})
+	if err != nil {
+		return result, err
 	}
-
-	if lastErr != nil {
-		return result, fmt.Errorf("operation failed after %d attempts: %w", config.MaxRetries+1, lastErr)
-	}
-	return result, errors.New("operation failed")
+	return result, nil
 }

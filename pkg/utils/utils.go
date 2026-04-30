@@ -9,16 +9,50 @@ import (
 )
 
 // ExpandHome expands ~ to the user's home directory in a path.
-// This is a convenience function that returns the expanded path without error.
+// Supports ~, ~/path, and ~username/path.
 // If expansion fails, the original path is returned.
 func ExpandHome(path string) string {
-	if strings.HasPrefix(path, "~/") {
-		usr, err := user.Current()
+	if path == "" {
+		return path
+	}
+
+	if path == "~" {
+		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return path
 		}
-		return filepath.Join(usr.HomeDir, path[2:])
+		return homeDir
 	}
+
+	if strings.HasPrefix(path, "~/") {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			return path
+		}
+		return filepath.Join(homeDir, path[2:])
+	}
+
+	if strings.HasPrefix(path, "~") {
+		end := strings.Index(path, "/")
+		username := path[1:]
+		rest := ""
+		if end != -1 {
+			username = path[1:end]
+			rest = path[end:]
+		}
+		if username == "" {
+			return path
+		}
+		u, err := user.Lookup(username)
+		if err != nil {
+			return path
+		}
+		if rest == "" {
+			return u.HomeDir
+		}
+		return filepath.Join(u.HomeDir, rest)
+	}
+
 	return path
 }
 
@@ -26,11 +60,11 @@ func ExpandHome(path string) string {
 // Returns an error if the home directory cannot be determined.
 func ExpandPath(path string) (string, error) {
 	if strings.HasPrefix(path, "~/") {
-		usr, err := user.Current()
+		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			return "", err
 		}
-		return filepath.Join(usr.HomeDir, path[2:]), nil
+		return filepath.Join(homeDir, path[2:]), nil
 	}
 	return path, nil
 }
@@ -64,11 +98,11 @@ func EnsureDir(path string) error {
 
 // GetHomeDir returns the current user's home directory.
 func GetHomeDir() (string, error) {
-	usr, err := user.Current()
+	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
 	}
-	return usr.HomeDir, nil
+	return homeDir, nil
 }
 
 // GetConfigDir returns the user's config directory.

@@ -2,9 +2,10 @@ package components
 
 import (
 	"os"
-	"os/user"
 	"path/filepath"
 	"strings"
+
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 func GetCommonDirectories() []string {
@@ -58,44 +59,7 @@ func GetPathSuggestions(recentPaths []string, existingPaths []string) []string {
 }
 
 func ExpandHome(path string) string {
-	if path == "" {
-		return path
-	}
-
-	if strings.HasPrefix(path, "~/") {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return filepath.Join(homeDir, path[2:])
-	}
-
-	if path == "~" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return path
-		}
-		return homeDir
-	}
-
-	if strings.HasPrefix(path, "~") {
-		end := strings.Index(path, "/")
-		if end == -1 {
-			end = len(path)
-		}
-		username := path[1:end]
-		u, err := user.Lookup(username)
-		if err != nil {
-			return path
-		}
-		rest := ""
-		if end < len(path) {
-			rest = path[end:]
-		}
-		return filepath.Join(u.HomeDir, rest)
-	}
-
-	return path
+	return utils.ExpandHome(path)
 }
 
 func ContractHome(path string) string {
@@ -154,7 +118,7 @@ func GetBreadcrumbSegments(path string) []string {
 	homeDir, _ := os.UserHomeDir()
 	var segments []string
 
-	if homeDir != "" && strings.HasPrefix(expandedPath, homeDir) {
+	if homeDir != "" && (expandedPath == homeDir || strings.HasPrefix(expandedPath, homeDir+string(filepath.Separator))) {
 		segments = append(segments, "~")
 		remaining := strings.TrimPrefix(expandedPath, homeDir)
 		remaining = strings.Trim(remaining, string(filepath.Separator))
@@ -221,13 +185,13 @@ func GetDisplayPath(path string, maxLen int) string {
 	// Contract home directory first
 	displayPath := ContractHome(ExpandHome(path))
 
-	// Truncate if necessary
-	if maxLen > 0 && len(displayPath) > maxLen {
-		// Try to keep the end of the path (more relevant)
+	// Truncate if necessary (rune-aware to preserve multibyte characters)
+	if maxLen > 0 && len([]rune(displayPath)) > maxLen {
+		runes := []rune(displayPath)
 		if maxLen <= 3 {
-			return displayPath[:maxLen]
+			return string(runes[:maxLen])
 		}
-		return "..." + displayPath[len(displayPath)-maxLen+3:]
+		return "..." + string(runes[len(runes)-maxLen+3:])
 	}
 
 	return displayPath

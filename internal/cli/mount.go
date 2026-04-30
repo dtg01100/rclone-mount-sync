@@ -117,12 +117,12 @@ func runMountCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	mount := models.MountConfig{
-		Name:       mountCreateName,
-		Remote:     mountCreateRemote,
-		RemotePath: mountCreateRemotePath,
-		MountPoint: mountCreateMountPoint,
-		Enabled:    mountCreateEnabled,
-		AutoStart:  mountCreateAutoStart,
+		Name:         mountCreateName,
+		Remote:       mountCreateRemote,
+		RemotePath:   mountCreateRemotePath,
+		MountPoint:   mountCreateMountPoint,
+		Enabled:      mountCreateEnabled,
+		AutoStart:    mountCreateAutoStart,
 		MountOptions: models.MountOptions{
 			VFSCacheMode: cfg.Defaults.Mount.VFSCacheMode,
 			BufferSize:   cfg.Defaults.Mount.BufferSize,
@@ -134,8 +134,14 @@ func runMountCreate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	if err := cfg.Save(); err != nil {
+		return fmt.Errorf("failed to save config: %w", err)
+	}
+
 	generator, err := loadGenerator()
 	if err != nil {
+		_ = cfg.RemoveMount(mount.Name)
+		_ = cfg.Save()
 		return err
 	}
 
@@ -145,11 +151,23 @@ func runMountCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	if _, err := generator.WriteMountService(savedMount); err != nil {
+		_ = cfg.RemoveMount(mount.Name)
+		_ = cfg.Save()
 		return fmt.Errorf("failed to write systemd unit: %w", err)
 	}
 
 	manager := loadManager()
 	if err := manager.DaemonReload(); err != nil {
+		serviceName := generator.ServiceName(savedMount.ID, "mount") + ".service"
+		if remErr := generator.RemoveUnit(serviceName); remErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove unit %s: %v\n", serviceName, remErr)
+		}
+		if remErr := cfg.RemoveMount(mount.Name); remErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove mount from config: %v\n", remErr)
+		}
+		if saveErr := cfg.Save(); saveErr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to save config: %v\n", saveErr)
+		}
 		return fmt.Errorf("failed to reload systemd daemon: %w", err)
 	}
 
@@ -157,18 +175,14 @@ func runMountCreate(cmd *cobra.Command, args []string) error {
 
 	if mountCreateEnabled {
 		if err := manager.Enable(serviceName); err != nil {
-			return fmt.Errorf("failed to enable service: %w", err)
+			fmt.Fprintf(os.Stderr, "Warning: failed to enable service: %v\n", err)
 		}
 	}
 
 	if mountCreateAutoStart {
 		if err := manager.Start(serviceName); err != nil {
-			return fmt.Errorf("failed to start service: %w", err)
+			fmt.Fprintf(os.Stderr, "Warning: failed to start service: %v\n", err)
 		}
-	}
-
-	if err := cfg.Save(); err != nil {
-		return fmt.Errorf("failed to save config: %w", err)
 	}
 
 	fmt.Printf("Mount '%s' created successfully (ID: %s)\n", savedMount.Name, savedMount.ID)

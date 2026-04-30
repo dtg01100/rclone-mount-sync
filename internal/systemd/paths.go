@@ -74,7 +74,7 @@ func getRcloneConfigPath() string {
 	// Default location
 	home, err := os.UserHomeDir()
 	if err != nil {
-		return filepath.Join("/home", os.Getenv("USER"), ".config", "rclone", "rclone.conf")
+		return ""
 	}
 	return filepath.Join(home, ".config", "rclone", "rclone.conf")
 }

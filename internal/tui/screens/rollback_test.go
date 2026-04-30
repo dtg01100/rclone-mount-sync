@@ -229,7 +229,11 @@ mounts:
 
 	err = mgr.RollbackMount(data, true)
 	if err != nil {
-		t.Logf("RollbackMount returned error (expected in test env): %v", err)
+		t.Errorf("RollbackMount failed: %v", err)
+	}
+
+	if len(cfg.Mounts) != 1 {
+		t.Errorf("after rollback, Mounts length = %d, want 1", len(cfg.Mounts))
 	}
 }
 
@@ -253,7 +257,12 @@ func TestRollbackSyncJob_WithBackup(t *testing.T) {
 
 	err := mgr.RollbackSyncJob(data, true)
 	if err != nil {
-		t.Logf("RollbackSyncJob returned error (expected in test env): %v", err)
+		t.Errorf("RollbackSyncJob failed: %v", err)
+	}
+
+	// Verify jobs were restored
+	if len(cfg.SyncJobs) != 1 {
+		t.Errorf("after rollback, SyncJobs length = %d, want 1", len(cfg.SyncJobs))
 	}
 }
 
@@ -363,7 +372,7 @@ func TestRollbackSyncJob_SystemdFailed(t *testing.T) {
 
 	err := mgr.RollbackSyncJob(data, true)
 	if err != nil {
-		t.Logf("RollbackSyncJob returned error (expected in test env): %v", err)
+		t.Errorf("RollbackSyncJob failed: %v", err)
 	}
 
 	// Verify jobs were restored
@@ -423,7 +432,7 @@ func TestRollbackMount_SystemdFailed(t *testing.T) {
 
 	err := mgr.RollbackMount(data, true)
 	if err != nil {
-		t.Logf("RollbackMount returned error (expected in test env): %v", err)
+		t.Errorf("RollbackMount failed: %v", err)
 	}
 
 	// Verify mounts were restored

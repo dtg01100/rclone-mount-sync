@@ -34,6 +34,8 @@ Description=Rclone sync: {{.Name}}
 Documentation=man:rclone(1)
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=30
+StartLimitBurst=5
 {{if .RequireACPower}}ConditionACPower=true
 {{end}}
 [Service]

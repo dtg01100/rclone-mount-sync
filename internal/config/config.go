@@ -162,8 +162,8 @@ func (c *Config) Reload() error {
 // It uses an atomic write pattern: writes to a temp file first, then renames.
 // A backup of the existing config is created before overwriting.
 func (c *Config) Save() error {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
+	c.mu.Lock()
+	defer c.mu.Unlock()
 
 	configDir, err := getConfigDir()
 	if err != nil {
@@ -222,6 +222,7 @@ func (c *Config) Save() error {
 }
 
 // RestoreFromBackup restores the configuration from the backup file.
+// It copies the backup to the config path so the backup is preserved.
 // Returns an error if no backup exists.
 func RestoreFromBackup() error {
 	configDir, err := getConfigDir()
@@ -236,8 +237,37 @@ func RestoreFromBackup() error {
 		return fmt.Errorf("no backup file found")
 	}
 
-	if err := os.Rename(backupPath, configPath); err != nil {
-		return fmt.Errorf("failed to restore from backup: %w", err)
+	src, err := os.Open(backupPath)
+	if err != nil {
+		return fmt.Errorf("failed to open backup file: %w", err)
+	}
+	defer func() {
+		if cerr := src.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to close backup file: %v\n", cerr)
+		}
+	}()
+
+	srcInfo, err := src.Stat()
+	if err != nil {
+		return fmt.Errorf("failed to stat backup file: %w", err)
+	}
+
+	dst, err := os.OpenFile(configPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
+	if err != nil {
+		return fmt.Errorf("failed to create config file: %w", err)
+	}
+	defer func() {
+		if cerr := dst.Close(); cerr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to close config file: %v\n", cerr)
+		}
+	}()
+
+	if _, err := dst.ReadFrom(src); err != nil {
+		return fmt.Errorf("failed to copy backup to config: %w", err)
+	}
+
+	if err := dst.Sync(); err != nil {
+		return fmt.Errorf("failed to sync config file: %w", err)
 	}
 
 	return nil
