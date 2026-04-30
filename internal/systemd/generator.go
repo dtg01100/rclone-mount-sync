@@ -12,6 +12,11 @@ import (
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
 )
 
+const (
+	DefaultMemoryMax = "1G"
+	DefaultCPUQuota  = "50%"
+)
+
 // Generator generates systemd unit files.
 type Generator struct {
 	systemdDir     string // Full path to user systemd directory
@@ -89,8 +94,8 @@ func (g *Generator) GenerateMountService(mount *models.MountConfig) (string, err
 		LogPath:        logPath,
 		RclonePath:     g.rclonePath,
 		FusermountPath: g.fusermountPath,
-		MemoryMax:      "1G",    // Default, configurable via MountOptions
-		CPUQuota:       "50%",   // Default, configurable via MountOptions
+		MemoryMax:      DefaultMemoryMax,
+		CPUQuota:       DefaultCPUQuota,
 	}
 
 	tmpl, err := template.New("mount-service").Parse(MountServiceTemplate)

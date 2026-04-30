@@ -26,22 +26,12 @@ func GetUserSystemdPath() (string, error) {
 // IDs are already clean 8-character alphanumeric strings (truncated UUIDs).
 // Kept for potential legacy compatibility.
 func sanitizeName(name string) string {
-	// Convert to lowercase
 	name = strings.ToLower(name)
-
-	// Replace spaces and special characters with dashes
 	reg := regexp.MustCompile(`[^a-z0-9_-]`)
 	name = reg.ReplaceAllString(name, "-")
-
-	// Remove consecutive dashes
-	for strings.Contains(name, "--") {
-		name = strings.ReplaceAll(name, "--", "-")
-	}
-
-	// Trim leading and trailing dashes
-	name = strings.Trim(name, "-")
-
-	return name
+	reg2 := regexp.MustCompile(`-+`)
+	name = reg2.ReplaceAllString(name, "-")
+	return strings.Trim(name, "-")
 }
 
 // expandPath expands ~ to the user's home directory.

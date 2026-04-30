@@ -279,7 +279,6 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Err != nil {
 			a.orphanError = msg.Err
 		} else {
-			// Success - remove the orphan
 			if a.orphans != nil && msg.Index >= 0 && msg.Index < len(a.orphans.OrphanedUnits) {
 				a.orphans.OrphanedUnits = append(
 					a.orphans.OrphanedUnits[:msg.Index],
@@ -287,16 +286,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				)
 			}
 
-	if len(a.orphans.OrphanedUnits) == 0 {
-		a.orphanSelected = -1
-		a.showOrphanPrompt = false
-	} else if a.orphanSelected >= len(a.orphans.OrphanedUnits) {
+			if len(a.orphans.OrphanedUnits) == 0 {
+				a.orphanSelected = -1
+				a.showOrphanPrompt = false
+			} else if a.orphanSelected >= len(a.orphans.OrphanedUnits) {
 				a.orphanSelected = len(a.orphans.OrphanedUnits) - 1
 			}
-	a.orphanMode = 0
+			a.orphanMode = 0
 
-
-			// Refresh screens
 			cmds = append(cmds, a.mounts.Init(), a.syncJobs.Init(), a.services.Init())
 		}
 	}
