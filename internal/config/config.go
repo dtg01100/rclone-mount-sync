@@ -13,7 +13,6 @@ import (
 
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
 	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
-	"github.com/google/uuid"
 	"github.com/spf13/viper"
 	"gopkg.in/yaml.v3"
 )
@@ -461,11 +460,49 @@ func (c *Config) SetMounts(mounts []models.MountConfig) {
 	c.Mounts = mounts
 }
 
+// UpdateMount updates an existing mount configuration by ID.
+// Returns an error if the mount is not found.
+func (c *Config) UpdateMount(updated models.MountConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for i, m := range c.Mounts {
+		if m.ID == updated.ID {
+			updated.ModifiedAt = time.Now()
+			if updated.CreatedAt.IsZero() {
+				updated.CreatedAt = m.CreatedAt
+			}
+			c.Mounts[i] = updated
+			return nil
+		}
+	}
+	return fmt.Errorf("mount with ID %q not found", updated.ID)
+}
+
 // SetSyncJobs replaces all sync job configurations atomically.
 func (c *Config) SetSyncJobs(jobs []models.SyncJobConfig) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.SyncJobs = jobs
+}
+
+// UpdateSyncJob updates an existing sync job configuration by ID.
+// Returns an error if the sync job is not found.
+func (c *Config) UpdateSyncJob(updated models.SyncJobConfig) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	for i, j := range c.SyncJobs {
+		if j.ID == updated.ID {
+			updated.ModifiedAt = time.Now()
+			if updated.CreatedAt.IsZero() {
+				updated.CreatedAt = j.CreatedAt
+			}
+			c.SyncJobs[i] = updated
+			return nil
+		}
+	}
+	return fmt.Errorf("sync job with ID %q not found", updated.ID)
 }
 
 // GetSyncJob returns a sync job configuration by name.
@@ -558,7 +595,7 @@ func newConfigWithDefaults() *Config {
 
 // generateID generates a unique ID for mounts and sync jobs.
 func generateID() string {
-	return uuid.New().String()[:8]
+	return utils.GenerateID()
 }
 
 // ExportConfig exports the current mounts and sync jobs to a file.

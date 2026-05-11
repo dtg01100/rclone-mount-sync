@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -18,7 +17,7 @@ import (
 	"github.com/dtg01100/rclone-mount-sync/internal/rclone"
 	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
 	"github.com/dtg01100/rclone-mount-sync/internal/tui/components"
-	"github.com/google/uuid"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 // SyncJobForm handles sync job creation and editing using huh.
@@ -564,16 +563,11 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 		Enabled: f.enabled,
 	}
 
-	// Set timestamps
-	now := time.Now()
 	if f.isEdit && f.job != nil {
 		job.ID = f.job.ID
-		job.CreatedAt = f.job.CreatedAt
 	} else {
-		job.ID = uuid.New().String()[:8]
-		job.CreatedAt = now
+		job.ID = utils.GenerateID()
 	}
-	job.ModifiedAt = now
 
 	op := OperationCreate
 	if f.isEdit {
@@ -589,15 +583,13 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 	// Save to config
 	if f.config != nil {
 		if f.isEdit {
-			// Remove old job and add updated one
-			for i, j := range f.config.SyncJobs {
-				if j.ID == job.ID {
-					f.config.SyncJobs[i] = job
-					break
-				}
+			if err := f.config.UpdateSyncJob(job); err != nil {
+				return SyncJobsErrorMsg{Err: fmt.Errorf("failed to update sync job: %w", err)}
 			}
 		} else {
-			f.config.SyncJobs = append(f.config.SyncJobs, job)
+			if err := f.config.AddSyncJob(job); err != nil {
+				return SyncJobsErrorMsg{Err: fmt.Errorf("failed to add sync job: %w", err)}
+			}
 		}
 		if err := f.config.Save(); err != nil {
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to save config: %w", err)}

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
-	"github.com/google/uuid"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 var descriptionRegex = regexp.MustCompile(`(?i)^Description=Rclone\s+(?:mount|sync):\s*(.+)$`)
@@ -420,5 +420,5 @@ func (r *Reconciler) parseTimerSchedule(content string) models.ScheduleConfig {
 }
 
 func generateNewID() string {
-	return uuid.New().String()[:8]
+	return utils.GenerateID()
 }

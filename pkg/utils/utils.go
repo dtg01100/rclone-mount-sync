@@ -6,6 +6,8 @@ import (
 	"os/user"
 	"path/filepath"
 	"strings"
+
+	"github.com/google/uuid"
 )
 
 // ExpandHome expands ~ to the user's home directory in a path.
@@ -130,6 +132,11 @@ func SanitizeName(name string) string {
 	}
 
 	return cleaned.String()
+}
+
+// GenerateID generates a short unique identifier (8 characters, alphanumeric).
+func GenerateID() string {
+	return uuid.New().String()[:8]
 }
 
 // ValidateMountPath validates that a path is suitable for mounting.

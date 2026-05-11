@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -17,7 +16,7 @@ import (
 	"github.com/dtg01100/rclone-mount-sync/internal/rclone"
 	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
 	"github.com/dtg01100/rclone-mount-sync/internal/tui/components"
-	"github.com/google/uuid"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 // MountForm handles mount creation and editing using huh.
@@ -294,7 +293,13 @@ func (f *MountForm) buildForm() {
 				Title("Extra Arguments").
 				Description("Additional rclone arguments").
 				Placeholder("--option value").
-				Value(&f.extraArgs),
+				Value(&f.extraArgs).
+				Validate(func(v string) error {
+					if v == "" {
+						return nil
+					}
+					return models.ValidateExtraArgs(v)
+				}),
 		).Title("Step 4: Advanced Options"),
 
 		// Step 5: Service Options
@@ -426,6 +431,11 @@ func (f *MountForm) submitForm() tea.Msg {
 		return MountsErrorMsg{Err: fmt.Errorf("no remote selected.\n\nTo add remotes:\n  1. Open a terminal and run: rclone config\n  2. Press 'n' to create a new remote\n  3. Follow the prompts to configure your cloud storage\n  4. Restart this application")}
 	}
 
+	// Validate extra args for systemd directive injection
+	if err := models.ValidateExtraArgs(f.extraArgs); err != nil {
+		return MountsErrorMsg{Err: fmt.Errorf("invalid extra arguments: %w", err)}
+	}
+
 	// Build the mount configuration
 	mount := models.MountConfig{
 		Name:       f.name,
@@ -451,16 +461,11 @@ func (f *MountForm) submitForm() tea.Msg {
 		Enabled:   f.enabled,
 	}
 
-	// Set timestamps
-	now := time.Now()
 	if f.isEdit && f.mount != nil {
 		mount.ID = f.mount.ID
-		mount.CreatedAt = f.mount.CreatedAt
 	} else {
-		mount.ID = uuid.New().String()[:8]
-		mount.CreatedAt = now
+		mount.ID = utils.GenerateID()
 	}
-	mount.ModifiedAt = now
 
 	op := OperationCreate
 	if f.isEdit {
@@ -476,14 +481,13 @@ func (f *MountForm) submitForm() tea.Msg {
 	// Save to config
 	if f.config != nil {
 		if f.isEdit {
-			for i, m := range f.config.Mounts {
-				if m.ID == mount.ID {
-					f.config.Mounts[i] = mount
-					break
-				}
+			if err := f.config.UpdateMount(mount); err != nil {
+				return MountsErrorMsg{Err: fmt.Errorf("failed to update mount: %w", err)}
 			}
 		} else {
-			f.config.Mounts = append(f.config.Mounts, mount)
+			if err := f.config.AddMount(mount); err != nil {
+				return MountsErrorMsg{Err: fmt.Errorf("failed to add mount: %w", err)}
+			}
 		}
 		if err := f.config.Save(); err != nil {
 			return MountsErrorMsg{Err: fmt.Errorf("failed to save config: %w", err)}
