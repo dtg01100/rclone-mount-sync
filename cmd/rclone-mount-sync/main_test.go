@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -274,8 +273,8 @@ func TestHandleConfigDir(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			originalXDG := os.Getenv("XDG_CONFIG_HOME")
-			defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
-			os.Unsetenv("XDG_CONFIG_HOME")
+			defer func() { _ = os.Setenv("XDG_CONFIG_HOME", originalXDG) }()
+			_ = os.Unsetenv("XDG_CONFIG_HOME")
 
 			var inputPath string
 			if tt.setupFile && tt.input != "" {
@@ -283,7 +282,7 @@ func TestHandleConfigDir(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				defer os.RemoveAll(tempDir)
+				defer func() { _ = os.RemoveAll(tempDir) }()
 
 				testFile := filepath.Join(tempDir, "config.yaml")
 				if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
@@ -327,7 +326,7 @@ func TestHandleConfigDir_WithFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	testFile := filepath.Join(tempDir, "config.yaml")
 	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
@@ -335,8 +334,8 @@ func TestHandleConfigDir_WithFile(t *testing.T) {
 	}
 
 	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
-	os.Unsetenv("XDG_CONFIG_HOME")
+	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", originalXDG) }()
+	_ = os.Unsetenv("XDG_CONFIG_HOME")
 
 	err = handleConfigDir(testFile)
 	if err != nil {
@@ -625,8 +624,8 @@ func TestRunMainWithDeps_Version(t *testing.T) {
 
 func TestRunMainWithDeps_ConfigDir(t *testing.T) {
 	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer os.Setenv("XDG_CONFIG_HOME", originalXDG)
-	os.Unsetenv("XDG_CONFIG_HOME")
+	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", originalXDG) }()
+	_ = os.Unsetenv("XDG_CONFIG_HOME")
 
 	originalVersion := version
 	version = "config-test"
@@ -816,11 +815,11 @@ func TestRunPreflightChecks_Wrapper(t *testing.T) {
 
 	err := runPreflightChecks()
 
-	w.Close()
+	_ = w.Close()
 	os.Stdout = originalStdout
 
 	var buf bytes.Buffer
-	buf.ReadFrom(r)
+	_, _ = buf.ReadFrom(r)
 	output := buf.String()
 
 	if !strings.Contains(output, "Running pre-flight checks") {
@@ -884,20 +883,4 @@ func BenchmarkPrintVersion(b *testing.B) {
 	}
 }
 
-type capturingWriter struct {
-	buf bytes.Buffer
-}
 
-func (w *capturingWriter) Write(p []byte) (n int, err error) {
-	return w.buf.Write(p)
-}
-
-func (w *capturingWriter) String() string {
-	return w.buf.String()
-}
-
-type noopWriteCloser struct {
-	io.Writer
-}
-
-func (n *noopWriteCloser) Close() error { return nil }

@@ -16,11 +16,6 @@ import (
 // Test errors for sync jobs
 var errTestSyncJobNotFound = errors.New("sync job not found")
 
-// Helper function to create a test sync jobs screen
-func createTestSyncJobsScreen() *SyncJobsScreen {
-	return NewSyncJobsScreen()
-}
-
 // Helper function to create test sync job configurations
 func createTestSyncJobs() []models.SyncJobConfig {
 	return []models.SyncJobConfig{

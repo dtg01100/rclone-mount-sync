@@ -13,10 +13,10 @@ import (
 )
 
 func TestNewClientUsesEnv(t *testing.T) {
-	os.Setenv("RCLONE_BINARY_PATH", "/custom/bin/rclone")
-	os.Setenv("RCLONE_CONFIG", "/tmp/rclone.conf")
-	defer os.Unsetenv("RCLONE_BINARY_PATH")
-	defer os.Unsetenv("RCLONE_CONFIG")
+	_ = os.Setenv("RCLONE_BINARY_PATH", "/custom/bin/rclone")
+	_ = os.Setenv("RCLONE_CONFIG", "/tmp/rclone.conf")
+	defer func() { _ = os.Unsetenv("RCLONE_BINARY_PATH") }()
+	defer func() { _ = os.Unsetenv("RCLONE_CONFIG") }()
 
 	c := NewClient()
 	if c.binaryPath != "/custom/bin/rclone" {
@@ -28,8 +28,8 @@ func TestNewClientUsesEnv(t *testing.T) {
 }
 
 func TestNewClientWithPath(t *testing.T) {
-	os.Setenv("RCLONE_CONFIG", "/tmp/rc.conf")
-	defer os.Unsetenv("RCLONE_CONFIG")
+	_ = os.Setenv("RCLONE_CONFIG", "/tmp/rc.conf")
+	defer func() { _ = os.Unsetenv("RCLONE_CONFIG") }()
 
 	c := NewClientWithPath("/usr/bin/foobar")
 	if c.binaryPath != "/usr/bin/foobar" {
@@ -41,8 +41,8 @@ func TestNewClientWithPath(t *testing.T) {
 }
 
 func TestNewClientDefaultValues(t *testing.T) {
-	os.Unsetenv("RCLONE_BINARY_PATH")
-	os.Unsetenv("RCLONE_CONFIG")
+	_ = os.Unsetenv("RCLONE_BINARY_PATH")
+	_ = os.Unsetenv("RCLONE_CONFIG")
 
 	c := NewClient()
 	if c.binaryPath != "rclone" {
@@ -66,8 +66,8 @@ func TestClientIsInstalledCustomBinary(t *testing.T) {
 
 func TestIsInstalledPackageUsesPathEnv(t *testing.T) {
 	oldPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", oldPath)
-	os.Setenv("PATH", "")
+	defer func() { _ = os.Setenv("PATH", oldPath) }()
+	_ = os.Setenv("PATH", "")
 
 	if IsInstalled() {
 		t.Error("IsInstalled() = true with empty PATH, want false")

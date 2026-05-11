@@ -17,11 +17,6 @@ import (
 // Test errors for mounts
 var errTestMountNotFound = errors.New("mount not found")
 
-// Helper function to create a test mounts screen with services
-func createTestMountsScreen() *MountsScreen {
-	return NewMountsScreen()
-}
-
 // Helper function to create test mount configurations
 func createTestMounts() []models.MountConfig {
 	return []models.MountConfig{

@@ -1142,7 +1142,7 @@ func TestReconciler_RemoveOrphan_RemoveUnitFileError(t *testing.T) {
 	if err := os.Chmod(roDir, 0555); err != nil {
 		t.Fatalf("Failed to make directory read-only: %v", err)
 	}
-	defer os.Chmod(roDir, 0755)
+	defer func() { _ = os.Chmod(roDir, 0755) }()
 
 	mockSystemctl := filepath.Join(tmpDir, "mock-systemctl")
 	mockScript := `#!/bin/bash

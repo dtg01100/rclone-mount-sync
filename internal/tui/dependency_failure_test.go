@@ -24,10 +24,10 @@ func TestApp_InitError_ConfigLoadFailure(t *testing.T) {
 
 	// Save and restore XDG_CONFIG_HOME
 	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer os.Setenv("XDG_CONFIG_HOME", oldXDG)
+	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
 
 	// Point to restricted directory
-	os.Setenv("XDG_CONFIG_HOME", restrictedDir)
+	_ = os.Setenv("XDG_CONFIG_HOME", restrictedDir)
 
 	app := NewApp()
 	msg := app.initializeServices()
@@ -50,10 +50,10 @@ func TestApp_InitError_ConfigLoadFailure(t *testing.T) {
 func TestApp_InitError_SystemdGeneratorFailure(t *testing.T) {
 	// Point to a non-existent, non-creatable path
 	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer os.Setenv("XDG_CONFIG_HOME", oldXDG)
+	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
 
 	// Use a path that will fail to create
-	os.Setenv("XDG_CONFIG_HOME", "/proc/nonexistent")
+	_ = os.Setenv("XDG_CONFIG_HOME", "/proc/nonexistent")
 
 	app := NewApp()
 	msg := app.initializeServices()
@@ -75,11 +75,11 @@ func TestApp_InitError_SystemdGeneratorFailure(t *testing.T) {
 func TestApp_InitError_RcloneNotAvailable(t *testing.T) {
 	// Save and restore PATH
 	oldPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", oldPath)
+	defer func() { _ = os.Setenv("PATH", oldPath) }()
 
 	// Set PATH to only include non-existent directory
 	tmpDir := t.TempDir()
-	os.Setenv("PATH", tmpDir)
+	_ = os.Setenv("PATH", tmpDir)
 
 	app := NewApp()
 	msg := app.initializeServices()
@@ -117,8 +117,8 @@ func TestApp_InitError_ConfigEmpty(t *testing.T) {
 	}
 
 	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer os.Setenv("XDG_CONFIG_HOME", oldXDG)
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
+	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	app := NewApp()
 	msg := app.initializeServices()
@@ -159,8 +159,8 @@ sync_jobs: []
 	}
 
 	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer os.Setenv("XDG_CONFIG_HOME", oldXDG)
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
+	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	app := NewApp()
 	msg := app.initializeServices()
@@ -403,8 +403,8 @@ func TestApp_Services_SetServices(t *testing.T) {
 	}
 
 	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer os.Setenv("XDG_CONFIG_HOME", oldXDG)
-	os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
+	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	app := NewApp()
 	msg := app.initializeServices()

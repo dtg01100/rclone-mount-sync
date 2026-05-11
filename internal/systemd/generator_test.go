@@ -1343,9 +1343,9 @@ func TestGetRcloneConfigPath(t *testing.T) {
 // TestGetRcloneConfigPath_WithEnv tests getRcloneConfigPath with RCLONE_CONFIG env var.
 func TestGetRcloneConfigPath_WithEnv(t *testing.T) {
 	originalEnv := os.Getenv("RCLONE_CONFIG")
-	defer os.Setenv("RCLONE_CONFIG", originalEnv)
+	defer func() { _ = os.Setenv("RCLONE_CONFIG", originalEnv) }()
 
-	os.Setenv("RCLONE_CONFIG", "/custom/path/rclone.conf")
+	_ = os.Setenv("RCLONE_CONFIG", "/custom/path/rclone.conf")
 	path := getRcloneConfigPath()
 	if path != "/custom/path/rclone.conf" {
 		t.Errorf("getRcloneConfigPath() = %q, want %q", path, "/custom/path/rclone.conf")
@@ -1369,10 +1369,10 @@ func TestGetLogDir(t *testing.T) {
 // TestGetLogDir_WithXdgStateHome tests getLogDir with XDG_STATE_HOME env var.
 func TestGetLogDir_WithXdgStateHome(t *testing.T) {
 	originalEnv := os.Getenv("XDG_STATE_HOME")
-	defer os.Setenv("XDG_STATE_HOME", originalEnv)
+	defer func() { _ = os.Setenv("XDG_STATE_HOME", originalEnv) }()
 
 	tmpDir := t.TempDir()
-	os.Setenv("XDG_STATE_HOME", tmpDir)
+	_ = os.Setenv("XDG_STATE_HOME", tmpDir)
 
 	dir, err := getLogDir()
 	if err != nil {

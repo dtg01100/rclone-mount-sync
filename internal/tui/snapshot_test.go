@@ -57,7 +57,7 @@ func assertSnapshot(t *testing.T, name string, content string) {
 
 		// Write actual to .actual file for easy comparison
 		actualPath := filepath.Join(snapshotDir, name+".actual")
-		os.WriteFile(actualPath, []byte(content), 0644)
+		_ = os.WriteFile(actualPath, []byte(content), 0644)
 		t.Logf("Actual output written to: %s", actualPath)
 		t.Logf("Run UPDATE_SNAPSHOTS=1 go test to update if change is intentional")
 	}

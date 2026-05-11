@@ -1101,7 +1101,7 @@ func TestSettingsScreen_CompleteImportFileSelection_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	// Write valid export data
 	exportData := `version: "1.0"
@@ -1112,7 +1112,7 @@ exported: "2024-01-01T00:00:00Z"
 	if _, err := tmpFile.WriteString(exportData); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	screen := NewSettingsScreen()
 	screen.SetSize(80, 24)
@@ -1274,7 +1274,7 @@ func TestSettingsScreen_ExecuteImport_Success(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	// Write valid export data
 	exportData := `version: "1.0"
@@ -1291,7 +1291,7 @@ exported: "2024-01-01T00:00:00Z"
 	if _, err := tmpFile.WriteString(exportData); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	screen := NewSettingsScreen()
 	screen.SetSize(80, 24)
@@ -1331,7 +1331,7 @@ func TestSettingsScreen_ExecuteImport_ReplaceMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp file: %v", err)
 	}
-	defer os.Remove(tmpFile.Name())
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
 
 	// Write valid export data
 	exportData := `version: "1.0"
@@ -1345,7 +1345,7 @@ exported: "2024-01-01T00:00:00Z"
 	if _, err := tmpFile.WriteString(exportData); err != nil {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	screen := NewSettingsScreen()
 	screen.SetSize(80, 24)

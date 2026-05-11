@@ -119,7 +119,7 @@ func TestConfigRemoveMount(t *testing.T) {
 		MountPoint: "/mnt/test",
 	}
 
-	cfg.AddMount(mount)
+	_ = cfg.AddMount(mount)
 
 	if err := cfg.RemoveMount("test-mount"); err != nil {
 		t.Errorf("RemoveMount() error = %v", err)
@@ -147,7 +147,7 @@ func TestConfigGetMount(t *testing.T) {
 		MountPoint: "/mnt/test",
 	}
 
-	cfg.AddMount(mount)
+	_ = cfg.AddMount(mount)
 
 	result := cfg.GetMount("test-mount")
 	if result == nil {
@@ -247,7 +247,7 @@ func TestConfigRemoveSyncJob(t *testing.T) {
 		Destination: "/home/user/Backup",
 	}
 
-	cfg.AddSyncJob(job)
+	_ = cfg.AddSyncJob(job)
 
 	if err := cfg.RemoveSyncJob("test-sync"); err != nil {
 		t.Errorf("RemoveSyncJob() error = %v", err)
@@ -275,7 +275,7 @@ func TestConfigGetSyncJob(t *testing.T) {
 		Destination: "/home/user/Backup",
 	}
 
-	cfg.AddSyncJob(job)
+	_ = cfg.AddSyncJob(job)
 
 	result := cfg.GetSyncJob("test-sync")
 	if result == nil {
@@ -314,8 +314,8 @@ func TestConfigIDGeneration(t *testing.T) {
 		MountPoint: "/mnt/2",
 	}
 
-	cfg.AddMount(mount1)
-	cfg.AddMount(mount2)
+	_ = cfg.AddMount(mount1)
+	_ = cfg.AddMount(mount2)
 
 	if cfg.Mounts[0].ID == cfg.Mounts[1].ID {
 		t.Error("Mount IDs should be unique")
@@ -336,8 +336,8 @@ func TestConfigSyncJobIDGeneration(t *testing.T) {
 		Destination: "/backup/b",
 	}
 
-	cfg.AddSyncJob(job1)
-	cfg.AddSyncJob(job2)
+	_ = cfg.AddSyncJob(job1)
+	_ = cfg.AddSyncJob(job2)
 
 	if cfg.SyncJobs[0].ID == cfg.SyncJobs[1].ID {
 		t.Error("SyncJob IDs should be unique")
@@ -354,7 +354,7 @@ func TestConfigPreservesExistingID(t *testing.T) {
 		ID:         "custom-id-123",
 	}
 
-	cfg.AddMount(mount)
+	_ = cfg.AddMount(mount)
 
 	if cfg.Mounts[0].ID != "custom-id-123" {
 		t.Errorf("Mount.ID = %q, want %q", cfg.Mounts[0].ID, "custom-id-123")
@@ -944,7 +944,7 @@ func TestSaveAndLoadWithRecentPaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -1002,7 +1002,7 @@ func TestSaveWithMountsAndSyncJobs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -1010,13 +1010,13 @@ func TestSaveWithMountsAndSyncJobs(t *testing.T) {
 
 	cfg := newConfigWithDefaults()
 
-	cfg.AddMount(models.MountConfig{
+	_ = cfg.AddMount(models.MountConfig{
 		Name:       "test-mount",
 		Remote:     "gdrive:",
 		MountPoint: "/mnt/gdrive",
 	})
 
-	cfg.AddSyncJob(models.SyncJobConfig{
+	_ = cfg.AddSyncJob(models.SyncJobConfig{
 		Name:        "test-sync",
 		Source:      "gdrive:/Photos",
 		Destination: "/backup/photos",
@@ -1049,7 +1049,7 @@ func TestSaveCreatesDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	configDir := filepath.Join(tmpDir, "nested", "config", "dir")
 
@@ -1079,7 +1079,7 @@ func TestLoadNonExistentConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -1108,7 +1108,7 @@ func TestLoadExistingConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -1140,7 +1140,7 @@ func TestTimestampsSetOnAdd(t *testing.T) {
 	cfg := newConfigWithDefaults()
 
 	beforeAdd := time.Now()
-	cfg.AddMount(models.MountConfig{
+	_ = cfg.AddMount(models.MountConfig{
 		Name:       "test",
 		Remote:     "gdrive:",
 		MountPoint: "/mnt/test",
@@ -1165,7 +1165,7 @@ func TestSyncJobTimestampsSetOnAdd(t *testing.T) {
 	cfg := newConfigWithDefaults()
 
 	beforeAdd := time.Now()
-	cfg.AddSyncJob(models.SyncJobConfig{
+	_ = cfg.AddSyncJob(models.SyncJobConfig{
 		Name:        "test",
 		Source:      "gdrive:/src",
 		Destination: "/dst",
@@ -1191,7 +1191,7 @@ func TestSaveCreatesBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -1241,7 +1241,7 @@ func TestAtomicWriteTempFileCleanup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -1292,7 +1292,7 @@ func TestRestoreFromBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -1344,7 +1344,7 @@ func TestRestoreFromBackupNoBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -1369,7 +1369,7 @@ func TestBackupOnlyKeepsMostRecent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -1415,7 +1415,7 @@ func TestHasBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -1459,15 +1459,15 @@ func TestExportConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := newConfigWithDefaults()
-	cfg.AddMount(models.MountConfig{
+	_ = cfg.AddMount(models.MountConfig{
 		Name:       "test-mount",
 		Remote:     "gdrive:",
 		MountPoint: "/mnt/test",
 	})
-	cfg.AddSyncJob(models.SyncJobConfig{
+	_ = cfg.AddSyncJob(models.SyncJobConfig{
 		Name:        "test-sync",
 		Source:      "gdrive:/Photos",
 		Destination: "/backup/photos",
@@ -1509,7 +1509,7 @@ func TestExportConfigUnsupportedFormat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := newConfigWithDefaults()
 
@@ -1524,7 +1524,7 @@ func TestExportConfigCreatesDirectory(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	cfg := newConfigWithDefaults()
 
@@ -1543,7 +1543,7 @@ func TestImportConfigYAML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	exportPath := filepath.Join(tmpDir, "test-export.yaml")
 	exportContent := `version: "1.0"
@@ -1589,7 +1589,7 @@ func TestImportConfigJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	exportPath := filepath.Join(tmpDir, "test-export.json")
 	exportContent := `{
@@ -1637,7 +1637,7 @@ func TestImportConfigInvalidFormat(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	exportPath := filepath.Join(tmpDir, "invalid.txt")
 	if err := os.WriteFile(exportPath, []byte("invalid content"), 0644); err != nil {
@@ -1656,7 +1656,7 @@ func TestImportConfigInvalidContent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	exportPath := filepath.Join(tmpDir, "empty.yaml")
 	if err := os.WriteFile(exportPath, []byte("{}"), 0644); err != nil {
@@ -1675,7 +1675,7 @@ func TestImportConfigMergeMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	exportPath := filepath.Join(tmpDir, "merge-test.yaml")
 	exportContent := `version: "1.0"
@@ -1699,12 +1699,12 @@ exported: "2024-01-01T00:00:00Z"
 	}
 
 	cfg := newConfigWithDefaults()
-	cfg.AddMount(models.MountConfig{
+	_ = cfg.AddMount(models.MountConfig{
 		Name:       "existing-mount",
 		Remote:     "dropbox:",
 		MountPoint: "/mnt/existing",
 	})
-	cfg.AddSyncJob(models.SyncJobConfig{
+	_ = cfg.AddSyncJob(models.SyncJobConfig{
 		Name:        "existing-sync",
 		Source:      "dropbox:/Docs",
 		Destination: "/backup/docs",
@@ -1736,7 +1736,7 @@ func TestImportConfigMergeModeDuplicateNames(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	exportPath := filepath.Join(tmpDir, "dup-test.yaml")
 	exportContent := `version: "1.0"
@@ -1755,7 +1755,7 @@ exported: "2024-01-01T00:00:00Z"
 	}
 
 	cfg := newConfigWithDefaults()
-	cfg.AddMount(models.MountConfig{
+	_ = cfg.AddMount(models.MountConfig{
 		Name:       "duplicate-name",
 		Remote:     "dropbox:",
 		MountPoint: "/mnt/existing",
@@ -1779,7 +1779,7 @@ func TestImportConfigReplaceMode(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	exportPath := filepath.Join(tmpDir, "replace-test.yaml")
 	exportContent := `version: "1.0"
@@ -1803,12 +1803,12 @@ exported: "2024-01-01T00:00:00Z"
 	}
 
 	cfg := newConfigWithDefaults()
-	cfg.AddMount(models.MountConfig{
+	_ = cfg.AddMount(models.MountConfig{
 		Name:       "old-mount",
 		Remote:     "dropbox:",
 		MountPoint: "/mnt/old",
 	})
-	cfg.AddSyncJob(models.SyncJobConfig{
+	_ = cfg.AddSyncJob(models.SyncJobConfig{
 		Name:        "old-sync",
 		Source:      "dropbox:/Old",
 		Destination: "/backup/old",
@@ -1840,20 +1840,20 @@ func TestExportImportRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origConfig := newConfigWithDefaults()
-	origConfig.AddMount(models.MountConfig{
+	_ = origConfig.AddMount(models.MountConfig{
 		Name:       "mount1",
 		Remote:     "gdrive:",
 		MountPoint: "/mnt/gdrive",
 	})
-	origConfig.AddMount(models.MountConfig{
+	_ = origConfig.AddMount(models.MountConfig{
 		Name:       "mount2",
 		Remote:     "dropbox:",
 		MountPoint: "/mnt/dropbox",
 	})
-	origConfig.AddSyncJob(models.SyncJobConfig{
+	_ = origConfig.AddSyncJob(models.SyncJobConfig{
 		Name:        "sync1",
 		Source:      "gdrive:/Photos",
 		Destination: "/backup/photos",
@@ -1892,7 +1892,7 @@ func TestImportConfigGeneratesMissingIDs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	exportPath := filepath.Join(tmpDir, "no-ids.yaml")
 	exportContent := `version: "1.0"
@@ -1944,7 +1944,7 @@ func TestCreateBackupSourcePermissionDenied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	srcPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(srcPath, []byte("test content"), 0644); err != nil {
@@ -1954,7 +1954,7 @@ func TestCreateBackupSourcePermissionDenied(t *testing.T) {
 	if err := os.Chmod(srcPath, 0000); err != nil {
 		t.Fatalf("Failed to chmod source file: %v", err)
 	}
-	defer os.Chmod(srcPath, 0644)
+	defer func() { _ = os.Chmod(srcPath, 0644) }()
 
 	backupPath := filepath.Join(tmpDir, "config.yaml.bak")
 	err = createBackup(srcPath, backupPath)
@@ -1975,7 +1975,7 @@ func TestCreateBackupDestPermissionDenied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	srcPath := filepath.Join(tmpDir, "config.yaml")
 	if err := os.WriteFile(srcPath, []byte("test content"), 0644); err != nil {
@@ -1986,7 +1986,7 @@ func TestCreateBackupDestPermissionDenied(t *testing.T) {
 	if err := os.Mkdir(destDir, 0555); err != nil {
 		t.Fatalf("Failed to create readonly dir: %v", err)
 	}
-	defer os.Chmod(destDir, 0755)
+	defer func() { _ = os.Chmod(destDir, 0755) }()
 
 	backupPath := filepath.Join(destDir, "config.yaml.bak")
 	err = createBackup(srcPath, backupPath)
@@ -2003,7 +2003,7 @@ func TestCreateBackupSuccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	srcContent := "test config content\nwith multiple lines\n"
 	srcPath := filepath.Join(tmpDir, "config.yaml")
@@ -2037,7 +2037,7 @@ func TestReloadConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -2077,7 +2077,7 @@ func TestReloadConfigNoConfigFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -2103,7 +2103,7 @@ func TestReloadConfigModifiedFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }
@@ -2158,7 +2158,7 @@ func TestReloadConfigWithSyncJobs(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origGetConfigDir := getConfigDir
 	getConfigDir = func() (string, error) { return tmpDir, nil }

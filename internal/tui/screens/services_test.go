@@ -14,13 +14,6 @@ import (
 
 // Test errors for services
 var errTestServiceNotFound = errors.New("service not found")
-var errTestServiceFailed = errors.New("service failed")
-
-// Helper function to create a test services screen
-func createTestServicesScreen() *ServicesScreen {
-	return NewServicesScreen()
-}
-
 // Helper function to create test service info
 func createTestServices() []ServiceInfo {
 	return []ServiceInfo{

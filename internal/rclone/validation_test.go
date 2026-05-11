@@ -658,8 +658,8 @@ exit 1
 
 func TestCheckSystemdUserSessionSystemctlNotFound(t *testing.T) {
 	oldPath := os.Getenv("PATH")
-	os.Setenv("PATH", "")
-	defer os.Setenv("PATH", oldPath)
+	_ = os.Setenv("PATH", "")
+	defer func() { _ = os.Setenv("PATH", oldPath) }()
 
 	result := checkSystemdUserSession()
 
@@ -686,8 +686,8 @@ func TestCheckFusermountFound(t *testing.T) {
 
 func TestCheckFusermountNotFound(t *testing.T) {
 	oldPath := os.Getenv("PATH")
-	os.Setenv("PATH", "")
-	defer os.Setenv("PATH", oldPath)
+	_ = os.Setenv("PATH", "")
+	defer func() { _ = os.Setenv("PATH", oldPath) }()
 
 	result := checkFusermount()
 
@@ -818,8 +818,8 @@ echo "rclone v2.0.0"
 
 func TestCheckRcloneBinaryWithDefaultPath(t *testing.T) {
 	oldPath := os.Getenv("PATH")
-	os.Setenv("PATH", "")
-	defer os.Setenv("PATH", oldPath)
+	_ = os.Setenv("PATH", "")
+	defer func() { _ = os.Setenv("PATH", oldPath) }()
 
 	c := NewClient()
 	result := checkRcloneBinary(c)
@@ -1881,7 +1881,7 @@ func TestValidateOnCalendarErrorMessages(t *testing.T) {
 func TestCheckRcloneBinaryWithEnvVar(t *testing.T) {
 	// Save original PATH
 	oldPath := os.Getenv("PATH")
-	defer os.Setenv("PATH", oldPath)
+	defer func() { _ = os.Setenv("PATH", oldPath) }()
 
 	// Create a temporary directory with a fake rclone
 	tmpDir := t.TempDir()
@@ -1894,7 +1894,7 @@ func TestCheckRcloneBinaryWithEnvVar(t *testing.T) {
 	}
 
 	// Set PATH to include our temp directory
-	os.Setenv("PATH", tmpDir)
+	_ = os.Setenv("PATH", tmpDir)
 
 	c := NewClient()
 	result := checkRcloneBinary(c)
