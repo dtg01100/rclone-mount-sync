@@ -282,8 +282,10 @@ func (s *ServicesScreen) loadSystemdStatus() SystemdStatus {
 		return status
 	}
 
+	systemctlPath := s.manager.SystemctlPath()
+
 	// Get failed units count
-	cmd := exec.Command("systemctl", "--user", "list-units", "--state=failed", "--no-legend")
+	cmd := exec.Command(systemctlPath, "--user", "list-units", "--state=failed", "--no-legend")
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
@@ -300,7 +302,7 @@ func (s *ServicesScreen) loadSystemdStatus() SystemdStatus {
 	status.FailedUnits = count
 
 	// Count active services and timers
-	cmd = exec.Command("systemctl", "--user", "list-units", "--type=service", "--state=active", "--no-legend")
+	cmd = exec.Command(systemctlPath, "--user", "list-units", "--type=service", "--state=active", "--no-legend")
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err = cmd.Output()
 	if err != nil {
@@ -314,7 +316,7 @@ func (s *ServicesScreen) loadSystemdStatus() SystemdStatus {
 		}
 	}
 
-	cmd = exec.Command("systemctl", "--user", "list-units", "--type=timer", "--state=active", "--no-legend")
+	cmd = exec.Command(systemctlPath, "--user", "list-units", "--type=timer", "--state=active", "--no-legend")
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err = cmd.Output()
 	if err != nil {

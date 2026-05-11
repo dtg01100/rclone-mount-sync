@@ -176,6 +176,13 @@ func (m *Manager) IsEnabled(name string) (bool, error) {
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
+		// systemctl is-enabled returns non-zero for "disabled", "not-found", etc.
+		// but still writes the state to stdout. Try to parse it.
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(output) > 0 {
+			state := strings.TrimSpace(string(output))
+			return isEnabledState(state), nil
+		}
 		return false, fmt.Errorf("failed to check enabled status for %s: %w", name, err)
 	}
 	return isEnabledState(strings.TrimSpace(string(output))), nil
