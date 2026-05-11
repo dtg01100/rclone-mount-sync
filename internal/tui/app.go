@@ -753,7 +753,9 @@ func (a *App) importSelectedOrphan() (tea.Model, tea.Cmd) {
 			return OrphanActionMsg{Err: fmt.Errorf("failed to write service file: %w", writeErr)}
 		}
 
-		_ = reconciler.RemoveOrphan(orphan)
+		if err := reconciler.RemoveOrphan(orphan); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove orphan unit file %s: %v\n", orphan.Name, err)
+		}
 
 		return OrphanActionMsg{
 			Action: "import",

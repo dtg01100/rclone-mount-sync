@@ -3,6 +3,7 @@ package components
 import (
 	"testing"
 
+	"github.com/dtg01100/rclone-mount-sync/internal/testutil"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -234,25 +235,25 @@ func TestConfirmDialog_View(t *testing.T) {
 	}
 
 	// Check that title is rendered
-	if !containsString(view, "Delete Item") {
+	if !testutil.ContainsString(view, "Delete Item") {
 		t.Error("Expected view to contain title 'Delete Item'")
 	}
 
 	// Check that message is rendered
-	if !containsString(view, "Are you sure?") {
+	if !testutil.ContainsString(view, "Are you sure?") {
 		t.Error("Expected view to contain message 'Are you sure?'")
 	}
 
 	// Check that options are rendered
-	if !containsString(view, "Cancel") {
+	if !testutil.ContainsString(view, "Cancel") {
 		t.Error("Expected view to contain 'Cancel' option")
 	}
-	if !containsString(view, "Delete") {
+	if !testutil.ContainsString(view, "Delete") {
 		t.Error("Expected view to contain 'Delete' option")
 	}
 
 	// Check that help is rendered
-	if !containsString(view, "Enter: confirm") {
+	if !testutil.ContainsString(view, "Enter: confirm") {
 		t.Error("Expected view to contain help text")
 	}
 }
@@ -345,21 +346,7 @@ func TestConfirmDialog_Description(t *testing.T) {
 
 	view := dialog.View()
 
-	if !containsString(view, "Additional information") {
+	if !testutil.ContainsString(view, "Additional information") {
 		t.Error("Expected view to contain description")
 	}
-}
-
-// Helper function to check if a string contains a substring
-func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > len(substr) && findSubstring(s, substr))
-}
-
-func findSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }

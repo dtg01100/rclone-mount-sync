@@ -454,6 +454,20 @@ func (c *Config) RemoveSyncJob(name string) error {
 	return fmt.Errorf("sync job %q not found", name)
 }
 
+// SetMounts replaces all mount configurations atomically.
+func (c *Config) SetMounts(mounts []models.MountConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.Mounts = mounts
+}
+
+// SetSyncJobs replaces all sync job configurations atomically.
+func (c *Config) SetSyncJobs(jobs []models.SyncJobConfig) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.SyncJobs = jobs
+}
+
 // GetSyncJob returns a sync job configuration by name.
 func (c *Config) GetSyncJob(name string) *models.SyncJobConfig {
 	c.mu.RLock()

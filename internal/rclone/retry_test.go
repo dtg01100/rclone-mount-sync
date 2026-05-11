@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"testing"
 	"time"
+
+	"github.com/dtg01100/rclone-mount-sync/internal/testutil"
 )
 
 func createMockRcloneForRetry(t *testing.T, script string) string {
@@ -925,23 +927,11 @@ func TestErrorMessageFormat(t *testing.T) {
 	}
 
 	expected := "operation failed after 3 attempts"
-	if !containsString(err.Error(), expected) {
+	if !testutil.ContainsString(err.Error(), expected) {
 		t.Errorf("error message should contain %q, got %q", expected, err.Error())
 	}
 }
 
-func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstring(s, substr))
-}
-
-func containsSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}
 
 func TestZeroRetries(t *testing.T) {
 	config := RetryConfig{

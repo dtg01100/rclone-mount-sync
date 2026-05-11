@@ -90,7 +90,7 @@ func (r *RollbackManager) RollbackMount(data MountRollbackData, systemdFailed bo
 
 	if err := config.RestoreFromBackup(); err != nil {
 		errs = append(errs, fmt.Errorf("backup restoration failed: %w", err))
-		r.config.Mounts = data.OriginalMounts
+		r.config.SetMounts(data.OriginalMounts)
 		if saveErr := r.config.Save(); saveErr != nil {
 			errs = append(errs, fmt.Errorf("failed to restore config: %w", saveErr))
 		}
@@ -100,7 +100,7 @@ func (r *RollbackManager) RollbackMount(data MountRollbackData, systemdFailed bo
 		return nil
 	}
 
-	r.config.Mounts = data.OriginalMounts
+	r.config.SetMounts(data.OriginalMounts)
 	return nil
 }
 
@@ -137,7 +137,7 @@ func (r *RollbackManager) RollbackSyncJob(data SyncJobRollbackData, systemdFaile
 
 	if err := config.RestoreFromBackup(); err != nil {
 		errs = append(errs, fmt.Errorf("backup restoration failed: %w", err))
-		r.config.SyncJobs = data.OriginalJobs
+		r.config.SetSyncJobs(data.OriginalJobs)
 		if saveErr := r.config.Save(); saveErr != nil {
 			errs = append(errs, fmt.Errorf("failed to restore config: %w", saveErr))
 		}
@@ -147,7 +147,7 @@ func (r *RollbackManager) RollbackSyncJob(data SyncJobRollbackData, systemdFaile
 		return nil
 	}
 
-	r.config.SyncJobs = data.OriginalJobs
+	r.config.SetSyncJobs(data.OriginalJobs)
 	return nil
 }
 

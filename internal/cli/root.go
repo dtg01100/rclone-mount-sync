@@ -2,6 +2,7 @@ package cli
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -140,6 +141,13 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 
 	cmd2 := exec.Command(systemctlPath, "--user", "list-units", "--state=failed", "--no-legend")
 	output, err := cmd2.Output()
+	var exitErr *exec.ExitError
+	if errors.As(err, &exitErr) && exitErr.ExitCode() == 3 {
+		if len(strings.TrimSpace(string(output))) == 0 {
+			fmt.Println("No failed units found.")
+			return nil
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("failed to list failed units: %w", err)
 	}

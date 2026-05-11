@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+
+	"github.com/dtg01100/rclone-mount-sync/internal/testutil"
 )
 
 func TestAppError_Error(t *testing.T) {
@@ -150,7 +152,7 @@ func TestAppError_FormatForTUI(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.err.FormatForTUI()
 			for _, s := range tt.contains {
-				if !containsString(got, s) {
+				if !testutil.ContainsString(got, s) {
 					t.Errorf("FormatForTUI() missing expected substring %q in:\n%s", s, got)
 				}
 			}
@@ -208,7 +210,7 @@ func TestNewRcloneVersionError(t *testing.T) {
 	if err.Code != ErrRcloneVersion.Code {
 		t.Errorf("expected code %s, got %s", ErrRcloneVersion.Code, err.Code)
 	}
-	if !containsString(err.Message, "1.50.0") || !containsString(err.Message, "1.60.0") {
+	if !testutil.ContainsString(err.Message, "1.50.0") || !testutil.ContainsString(err.Message, "1.60.0") {
 		t.Errorf("expected message to contain version info, got %s", err.Message)
 	}
 	if err.Cause != cause {
@@ -235,7 +237,7 @@ func TestNewMountPointExistsError(t *testing.T) {
 	if err.Code != ErrMountPointExists.Code {
 		t.Errorf("expected code %s, got %s", ErrMountPointExists.Code, err.Code)
 	}
-	if !containsString(err.Message, "/mnt/test") {
+	if !testutil.ContainsString(err.Message, "/mnt/test") {
 		t.Errorf("expected message to contain mount point, got %s", err.Message)
 	}
 	if err.Cause != cause {
@@ -250,7 +252,7 @@ func TestNewMountPointNotFoundError(t *testing.T) {
 	if err.Code != ErrMountPointNotFound.Code {
 		t.Errorf("expected code %s, got %s", ErrMountPointNotFound.Code, err.Code)
 	}
-	if !containsString(err.Message, "/mnt/missing") {
+	if !testutil.ContainsString(err.Message, "/mnt/missing") {
 		t.Errorf("expected message to contain mount point, got %s", err.Message)
 	}
 	if err.Cause != cause {
@@ -265,7 +267,7 @@ func TestNewServiceNotFoundError(t *testing.T) {
 	if err.Code != ErrServiceNotFound.Code {
 		t.Errorf("expected code %s, got %s", ErrServiceNotFound.Code, err.Code)
 	}
-	if !containsString(err.Message, "rclone-mount-test") {
+	if !testutil.ContainsString(err.Message, "rclone-mount-test") {
 		t.Errorf("expected message to contain service name, got %s", err.Message)
 	}
 	if err.Cause != cause {
@@ -280,7 +282,7 @@ func TestNewServiceFailedError(t *testing.T) {
 	if err.Code != ErrServiceFailed.Code {
 		t.Errorf("expected code %s, got %s", ErrServiceFailed.Code, err.Code)
 	}
-	if !containsString(err.Message, "start") || !containsString(err.Message, "rclone-mount-test") {
+	if !testutil.ContainsString(err.Message, "start") || !testutil.ContainsString(err.Message, "rclone-mount-test") {
 		t.Errorf("expected message to contain operation and service name, got %s", err.Message)
 	}
 	if err.Cause != cause {
@@ -295,7 +297,7 @@ func TestNewConfigInvalidError(t *testing.T) {
 	if err.Code != ErrConfigInvalid.Code {
 		t.Errorf("expected code %s, got %s", ErrConfigInvalid.Code, err.Code)
 	}
-	if !containsString(err.Message, "missing required field") {
+	if !testutil.ContainsString(err.Message, "missing required field") {
 		t.Errorf("expected message to contain details, got %s", err.Message)
 	}
 	if err.Cause != cause {
@@ -310,7 +312,7 @@ func TestNewPermissionDeniedError(t *testing.T) {
 	if err.Code != ErrPermissionDenied.Code {
 		t.Errorf("expected code %s, got %s", ErrPermissionDenied.Code, err.Code)
 	}
-	if !containsString(err.Message, "write") || !containsString(err.Message, "/etc/config") {
+	if !testutil.ContainsString(err.Message, "write") || !testutil.ContainsString(err.Message, "/etc/config") {
 		t.Errorf("expected message to contain operation and resource, got %s", err.Message)
 	}
 	if err.Cause != cause {
@@ -325,7 +327,7 @@ func TestNewRcloneError(t *testing.T) {
 	if err.Code != ErrRcloneError.Code {
 		t.Errorf("expected code %s, got %s", ErrRcloneError.Code, err.Code)
 	}
-	if !containsString(err.Message, "rclone mount") {
+	if !testutil.ContainsString(err.Message, "rclone mount") {
 		t.Errorf("expected message to contain command, got %s", err.Message)
 	}
 	if err.Cause != cause {
@@ -378,7 +380,7 @@ func TestWrap(t *testing.T) {
 		if wrapped.Code != "INNER_001" {
 			t.Errorf("expected code INNER_001, got %s", wrapped.Code)
 		}
-		if !containsString(wrapped.Message, "outer context") || !containsString(wrapped.Message, "inner message") {
+		if !testutil.ContainsString(wrapped.Message, "outer context") || !testutil.ContainsString(wrapped.Message, "inner message") {
 			t.Errorf("expected wrapped message, got %s", wrapped.Message)
 		}
 	if wrapped.Cause != inner {
@@ -393,7 +395,7 @@ func TestWrap(t *testing.T) {
 		if wrapped.Code != "GEN_001" {
 			t.Errorf("expected code GEN_001, got %s", wrapped.Code)
 		}
-		if !containsString(wrapped.Message, "context") {
+		if !testutil.ContainsString(wrapped.Message, "context") {
 			t.Errorf("expected message to contain context, got %s", wrapped.Message)
 		}
 		if wrapped.Cause != stdErr {
@@ -417,7 +419,7 @@ func TestFormatErrorForTUI(t *testing.T) {
 			Suggestion: "try this",
 		}
 		got := FormatErrorForTUI(appErr)
-		if !containsString(got, "⚠ test message") {
+		if !testutil.ContainsString(got, "⚠ test message") {
 			t.Errorf("expected formatted output, got %s", got)
 		}
 	})
@@ -425,10 +427,10 @@ func TestFormatErrorForTUI(t *testing.T) {
 	t.Run("standard error", func(t *testing.T) {
 		stdErr := fmt.Errorf("standard error")
 		got := FormatErrorForTUI(stdErr)
-		if !containsString(got, "⚠ standard error") {
+		if !testutil.ContainsString(got, "⚠ standard error") {
 			t.Errorf("expected formatted output, got %s", got)
 		}
-		if !containsString(got, "unexpected error") {
+		if !testutil.ContainsString(got, "unexpected error") {
 			t.Errorf("expected generic suggestion, got %s", got)
 		}
 	})
@@ -482,16 +484,4 @@ func TestErrorsUnwrap(t *testing.T) {
 	}
 }
 
-// Helper function
-func containsString(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsSubstring(s, substr))
-}
 
-func containsSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}

@@ -99,7 +99,22 @@ func (c *Client) runCommand(ctx context.Context, args ...string) ([]byte, error)
 	}
 
 	cmd := exec.CommandContext(ctx, c.binaryPath, args...)
-	return cmd.Output()
+	output, err := cmd.Output()
+	if err != nil {
+		// Include stderr in the error message for debugging
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr := strings.TrimSpace(string(exitErr.Stderr))
+			stdout := strings.TrimSpace(string(output))
+			if stderr != "" {
+				return output, fmt.Errorf("rclone command failed: %w (stderr: %s)", err, stderr)
+			}
+			if stdout != "" {
+				return output, fmt.Errorf("rclone command failed: %w (stdout: %s)", err, stdout)
+			}
+		}
+		return output, fmt.Errorf("rclone command failed: %w", err)
+	}
+	return output, nil
 }
 
 // runCommandWithRetry runs a command with retry logic for transient failures.
