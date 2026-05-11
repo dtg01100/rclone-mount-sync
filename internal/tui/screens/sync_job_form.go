@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -563,11 +564,15 @@ func (f *SyncJobForm) submitForm() tea.Msg {
 		Enabled: f.enabled,
 	}
 
+	now := time.Now()
 	if f.isEdit && f.job != nil {
 		job.ID = f.job.ID
+		job.CreatedAt = f.job.CreatedAt
 	} else {
 		job.ID = utils.GenerateID()
+		job.CreatedAt = now
 	}
+	job.ModifiedAt = now
 
 	op := OperationCreate
 	if f.isEdit {

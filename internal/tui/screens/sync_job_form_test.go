@@ -38,10 +38,6 @@ func createSyncTestGenerator(t *testing.T) *systemd.Generator {
 	return systemd.NewTestGenerator(tmpDir)
 }
 
-// createSyncTestManager creates a mock manager for sync job tests
-func createSyncTestManager() *systemd.MockManager {
-	return &systemd.MockManager{}
-}
 func TestNewSyncJobForm_Create(t *testing.T) {
 	cfg := createSyncTestConfig()
 	remotes := createTestRemotes()
@@ -229,7 +225,7 @@ func TestSyncJobForm_ValidateDestPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create a subdirectory that exists
 	existingDir := filepath.Join(tmpDir, "existing")
@@ -665,6 +661,11 @@ func TestSyncJobForm_SubmitFormEditMode(t *testing.T) {
 		ModifiedAt:  time.Now().Add(-24 * time.Hour),
 	}
 
+	// Add the existing sync job to config before editing
+	if err := cfg.AddSyncJob(*existingJob); err != nil {
+		t.Fatal(err)
+	}
+
 	gen := createSyncTestGenerator(t)
 	mgr := createTestManager()
 	form := NewSyncJobForm(existingJob, createTestRemotes(), cfg, gen, mgr, nil, true)
@@ -955,7 +956,7 @@ func TestSyncJobForm_ValidateDestPath_EdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	tests := []struct {
 		name          string

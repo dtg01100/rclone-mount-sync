@@ -79,7 +79,7 @@ func parseFlags(args []string) (*Config, error) {
 }
 
 func printVersion(w io.Writer, v string) {
-	fmt.Fprintln(w, v)
+	_, _ = fmt.Fprintln(w, v)
 }
 
 func handleConfigDir(configDir string) error {
@@ -91,45 +91,40 @@ func handleConfigDir(configDir string) error {
 	fi, err := os.Stat(configDir)
 	if err == nil && !fi.IsDir() {
 		resolvedDir = filepath.Dir(configDir)
-	} else if os.IsNotExist(err) {
-		// If it doesn't exist, try parent directory
-		parentDir := filepath.Dir(configDir)
-		if _, err := os.Stat(parentDir); os.IsNotExist(err) {
-			return fmt.Errorf("config directory %q does not exist", configDir)
-		}
-		resolvedDir = parentDir
+	} else if err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("cannot access config directory %q: %w", configDir, err)
 	}
 
 	return os.Setenv("XDG_CONFIG_HOME", resolvedDir)
 }
 
 func runPreflightChecksTo(w io.Writer, checker PreflightChecker) error {
-	fmt.Fprintln(w, "Running pre-flight checks...")
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Running pre-flight checks...")
+	_, _ = fmt.Fprintln(w)
 
 	results := checker.PreflightChecks()
 
-	fmt.Fprint(w, checker.FormatResults(results))
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprint(w, checker.FormatResults(results))
+	_, _ = fmt.Fprintln(w)
 
 	if checker.HasCriticalFailure(results) {
-		fmt.Fprintln(w, "╔══════════════════════════════════════════════════════════════════╗")
-		fmt.Fprintln(w, "║  Critical pre-flight check(s) failed. Cannot start application.  ║")
-		fmt.Fprintln(w, "╚══════════════════════════════════════════════════════════════════╝")
-		fmt.Fprintln(w)
-		fmt.Fprintln(w, "Please fix the issues above and try again.")
-		fmt.Fprintln(w, "You can skip these checks with --skip-checks (not recommended).")
+		_, _ = fmt.Fprintln(w, "╔══════════════════════════════════════════════════════════════════╗")
+		_, _ = fmt.Fprintln(w, "║  Critical pre-flight check(s) failed. Cannot start application.  ║")
+		_, _ = fmt.Fprintln(w, "╚══════════════════════════════════════════════════════════════════╝")
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "Please fix the issues above and try again.")
+		_, _ = fmt.Fprintln(w, "You can skip these checks with --skip-checks (not recommended).")
 		return fmt.Errorf("critical pre-flight checks failed")
 	}
 
 	if !checker.AllPassed(results) {
-		fmt.Fprintln(w, "⚠ Some optional checks failed. The application will start, but some")
-		fmt.Fprintln(w, "  features may not work correctly.")
-		fmt.Fprintln(w)
+		_, _ = fmt.Fprintln(w, "⚠ Some optional checks failed. The application will start, but some")
+		_, _ = fmt.Fprintln(w, "  features may not work correctly.")
+		_, _ = fmt.Fprintln(w)
 	}
 
-	fmt.Fprintln(w, "Pre-flight checks completed. Starting application...")
-	fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, "Pre-flight checks completed. Starting application...")
+	_, _ = fmt.Fprintln(w)
 
 	return nil
 }
@@ -163,7 +158,7 @@ func DefaultAppDeps(stdout, stderr io.Writer) *AppDeps {
 func runMainWithDeps(args []string, deps *AppDeps) int {
 	cfg, err := deps.ParseFlags(args)
 	if err != nil {
-		fmt.Fprintf(deps.Stderr, "Error parsing flags: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error parsing flags: %v\n", err)
 		return 2
 	}
 
@@ -173,7 +168,7 @@ func runMainWithDeps(args []string, deps *AppDeps) int {
 	}
 
 	if err := handleConfigDir(cfg.ConfigDir); err != nil {
-		fmt.Fprintf(deps.Stderr, "Error handling config directory: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error handling config directory: %v\n", err)
 		return 1
 	}
 
@@ -190,7 +185,7 @@ func runMainWithDeps(args []string, deps *AppDeps) int {
 
 	runner := deps.NewTUIRunner()
 	if err := runner.Run(); err != nil {
-		fmt.Fprintf(deps.Stderr, "Error: %v\n", err)
+		_, _ = fmt.Fprintf(deps.Stderr, "Error: %v\n", err)
 		return 1
 	}
 

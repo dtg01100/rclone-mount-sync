@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
@@ -461,11 +462,15 @@ func (f *MountForm) submitForm() tea.Msg {
 		Enabled:   f.enabled,
 	}
 
+	now := time.Now()
 	if f.isEdit && f.mount != nil {
 		mount.ID = f.mount.ID
+		mount.CreatedAt = f.mount.CreatedAt
 	} else {
 		mount.ID = utils.GenerateID()
+		mount.CreatedAt = now
 	}
+	mount.ModifiedAt = now
 
 	op := OperationCreate
 	if f.isEdit {

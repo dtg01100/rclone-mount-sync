@@ -242,7 +242,7 @@ func TestMountForm_ValidateMountPoint(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create a subdirectory that exists
 	existingDir := filepath.Join(tmpDir, "existing")
@@ -595,6 +595,11 @@ func TestMountForm_SubmitFormEditMode(t *testing.T) {
 		ModifiedAt: time.Now().Add(-24 * time.Hour),
 	}
 
+	// Add the existing mount to config before editing
+	if err := cfg.AddMount(*existingMount); err != nil {
+		t.Fatal(err)
+	}
+
 	gen := createTestGenerator(t)
 	mgr := createTestManager()
 	form := NewMountForm(existingMount, createTestRemotes(), cfg, gen, mgr, nil, true)
@@ -751,7 +756,7 @@ func TestMountForm_ValidateMountPoint_EdgeCases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	tests := []struct {
 		name          string
