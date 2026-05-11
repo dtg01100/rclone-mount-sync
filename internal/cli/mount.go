@@ -78,9 +78,9 @@ func init() {
 	mountCreateCmd.Flags().BoolVar(&mountCreateEnabled, "enabled", true, "enable the service")
 	mountCreateCmd.Flags().BoolVar(&mountCreateAutoStart, "auto-start", false, "start the service immediately")
 
-	mountCreateCmd.MarkFlagRequired("name")
-	mountCreateCmd.MarkFlagRequired("remote")
-	mountCreateCmd.MarkFlagRequired("mount-point")
+	_ = mountCreateCmd.MarkFlagRequired("name")
+	_ = mountCreateCmd.MarkFlagRequired("remote")
+	_ = mountCreateCmd.MarkFlagRequired("mount-point")
 }
 
 func runMountList(cmd *cobra.Command, args []string) error {
@@ -99,11 +99,11 @@ func runMountList(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tREMOTE\tMOUNT POINT\tENABLED\tAUTO-START")
+	_, _ = fmt.Fprintln(w, "ID\tNAME\tREMOTE\tMOUNT POINT\tENABLED\tAUTO-START")
 
 	for _, m := range cfg.Mounts {
 		remote := m.Remote + m.RemotePath
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\t%v\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%v\t%v\n",
 			m.ID, m.Name, remote, m.MountPoint, m.Enabled, m.AutoStart)
 	}
 

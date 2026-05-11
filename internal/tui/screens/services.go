@@ -71,10 +71,6 @@ type ServicesScreen struct {
 	showActions  bool
 	actionCursor int
 
-	// Bulk operations
-	showBulkMenu bool
-	bulkCursor   int
-
 	// Status messages
 	statusMessage     string
 	statusMessageType string // success, error, info

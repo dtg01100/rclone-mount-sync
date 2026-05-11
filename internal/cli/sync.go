@@ -71,9 +71,9 @@ func init() {
 	syncCreateCmd.Flags().StringVar(&syncCreateSchedule, "schedule", "daily", "schedule (e.g., daily, hourly, '*-*-* 02:00:00')")
 	syncCreateCmd.Flags().BoolVar(&syncCreateEnabled, "enabled", true, "enable the timer")
 
-	syncCreateCmd.MarkFlagRequired("name")
-	syncCreateCmd.MarkFlagRequired("source")
-	syncCreateCmd.MarkFlagRequired("destination")
+	_ = syncCreateCmd.MarkFlagRequired("name")
+	_ = syncCreateCmd.MarkFlagRequired("source")
+	_ = syncCreateCmd.MarkFlagRequired("destination")
 }
 
 func runSyncList(cmd *cobra.Command, args []string) error {
@@ -92,14 +92,14 @@ func runSyncList(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "ID\tNAME\tSOURCE\tDESTINATION\tSCHEDULE\tENABLED")
+	_, _ = fmt.Fprintln(w, "ID\tNAME\tSOURCE\tDESTINATION\tSCHEDULE\tENABLED")
 
 	for _, j := range cfg.SyncJobs {
 		schedule := j.Schedule.OnCalendar
 		if schedule == "" {
 			schedule = j.Schedule.Type
 		}
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%v\n",
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%v\n",
 			j.ID, j.Name, j.Source, j.Destination, schedule, j.Enabled)
 	}
 

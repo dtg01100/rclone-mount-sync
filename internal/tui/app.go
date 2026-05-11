@@ -743,9 +743,9 @@ func (a *App) importSelectedOrphan() (tea.Model, tea.Cmd) {
 
 		if writeErr != nil {
 			if imported.Mount != nil {
-				a.config.RemoveMount(imported.Mount.Name)
+				_ = a.config.RemoveMount(imported.Mount.Name)
 			} else if imported.SyncJob != nil {
-				a.config.RemoveSyncJob(imported.SyncJob.Name)
+				_ = a.config.RemoveSyncJob(imported.SyncJob.Name)
 			}
 			if saveErr := a.config.Save(); saveErr != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to rollback config: %v\n", saveErr)

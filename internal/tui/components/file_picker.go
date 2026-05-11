@@ -121,8 +121,6 @@ type EnhancedFilePicker struct {
 	validate    func(string) error
 
 	// Internal state
-	entries      []FileEntry
-	cursor       int
 	selectedPath *string
 	width        int
 	height       int

@@ -78,14 +78,14 @@ func runServicesList(cmd *cobra.Command, args []string) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "NAME\tSTATE\tENABLED")
+	_, _ = fmt.Fprintln(w, "NAME\tSTATE\tENABLED")
 
 	for _, s := range services {
 		state := s.State
 		if s.Active {
 			state = "running"
 		}
-		fmt.Fprintf(w, "%s\t%s\t%v\n", s.Name, state, s.Enabled)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%v\n", s.Name, state, s.Enabled)
 	}
 
 	return w.Flush()

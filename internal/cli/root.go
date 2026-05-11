@@ -11,7 +11,6 @@ import (
 
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
-	"github.com/dtg01100/rclone-mount-sync/internal/rclone"
 	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
 	"github.com/spf13/cobra"
 )
@@ -20,7 +19,6 @@ var (
 	cfgFile     string
 	outputJSON  bool
 	showVersion bool
-	cliVersion  = "dev"
 )
 
 var rootCmd = &cobra.Command{
@@ -43,7 +41,6 @@ func Execute() error {
 }
 
 func SetVersion(v string) {
-	cliVersion = v
 	rootCmd.Version = v
 	rootCmd.SetVersionTemplate("{{.Version}}\n")
 }
@@ -74,12 +71,6 @@ var loadGenerator = func() (*systemd.Generator, error) {
 // This function is injectable for testing purposes.
 var loadManager = func() systemd.ServiceManager {
 	return systemd.NewManager()
-}
-
-// loadRcloneClient returns a new rclone client instance.
-// This function is injectable for testing purposes.
-var loadRcloneClient = func() *rclone.Client {
-	return rclone.NewClient()
 }
 
 func printJSON(v interface{}) error {
