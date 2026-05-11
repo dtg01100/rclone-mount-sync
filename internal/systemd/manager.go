@@ -42,7 +42,7 @@ type UnitStatus struct {
 // It uses is-system-running which returns success if the manager is running,
 // regardless of individual service states.
 func (m *Manager) IsSystemdAvailable() bool {
-	cmd := exec.Command(m.systemctlPath, "--user", "is-system-running")
+	cmd := exec.Command(m.systemctlPath, "--user", "is-system-running") //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
@@ -54,7 +54,7 @@ func (m *Manager) IsSystemdAvailable() bool {
 
 // DaemonReload reloads the systemd daemon to pick up unit file changes.
 func (m *Manager) DaemonReload() error {
-	cmd := exec.Command(m.systemctlPath, "--user", "daemon-reload")
+	cmd := exec.Command(m.systemctlPath, "--user", "daemon-reload") //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -65,7 +65,7 @@ func (m *Manager) DaemonReload() error {
 
 // Enable enables a systemd user unit.
 func (m *Manager) Enable(name string) error {
-	cmd := exec.Command(m.systemctlPath, "--user", "enable", name)
+	cmd := exec.Command(m.systemctlPath, "--user", "enable", name) //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -76,7 +76,7 @@ func (m *Manager) Enable(name string) error {
 
 // Disable disables a systemd user unit.
 func (m *Manager) Disable(name string) error {
-	cmd := exec.Command(m.systemctlPath, "--user", "disable", name)
+	cmd := exec.Command(m.systemctlPath, "--user", "disable", name) //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -87,7 +87,7 @@ func (m *Manager) Disable(name string) error {
 
 // Start starts a systemd user unit.
 func (m *Manager) Start(name string) error {
-	cmd := exec.Command(m.systemctlPath, "--user", "start", name)
+	cmd := exec.Command(m.systemctlPath, "--user", "start", name) //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -98,7 +98,7 @@ func (m *Manager) Start(name string) error {
 
 // Stop stops a systemd user unit.
 func (m *Manager) Stop(name string) error {
-	cmd := exec.Command(m.systemctlPath, "--user", "stop", name)
+	cmd := exec.Command(m.systemctlPath, "--user", "stop", name) //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -109,7 +109,7 @@ func (m *Manager) Stop(name string) error {
 
 // ResetFailed resets the failed state of a unit.
 func (m *Manager) ResetFailed(name string) error {
-	cmd := exec.Command(m.systemctlPath, "--user", "reset-failed", name)
+	cmd := exec.Command(m.systemctlPath, "--user", "reset-failed", name) //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -120,7 +120,7 @@ func (m *Manager) ResetFailed(name string) error {
 
 // Restart restarts a systemd user unit.
 func (m *Manager) Restart(name string) error {
-	cmd := exec.Command(m.systemctlPath, "--user", "restart", name)
+	cmd := exec.Command(m.systemctlPath, "--user", "restart", name) //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -136,7 +136,7 @@ func (m *Manager) Status(name string) (*UnitStatus, error) {
 	}
 
 	// Get active state
-	cmd := exec.Command(m.systemctlPath, "--user", "show", name,
+	cmd := exec.Command(m.systemctlPath, "--user", "show", name, //nolint:gosec
 		"--property=ActiveState,SubState,LoadState")
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
@@ -172,7 +172,7 @@ func (m *Manager) Status(name string) (*UnitStatus, error) {
 
 // IsEnabled checks if a unit is enabled.
 func (m *Manager) IsEnabled(name string) (bool, error) {
-	cmd := exec.Command(m.systemctlPath, "--user", "is-enabled", name)
+	cmd := exec.Command(m.systemctlPath, "--user", "is-enabled", name) //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
@@ -192,7 +192,7 @@ func (m *Manager) IsEnabled(name string) (bool, error) {
 // Returns (false, err) if the check itself fails, allowing callers
 // to distinguish "inactive" from "check failed".
 func (m *Manager) IsActive(name string) (bool, error) {
-	cmd := exec.Command(m.systemctlPath, "--user", "is-active", name)
+	cmd := exec.Command(m.systemctlPath, "--user", "is-active", name) //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
@@ -243,7 +243,7 @@ func isEnabledState(state string) bool {
 // ListServices lists all rclone services (mounts and sync jobs).
 func (m *Manager) ListServices() ([]UnitStatus, error) {
 	// 1. Get all unit files (to find both enabled and disabled services)
-	cmd := exec.Command(m.systemctlPath, "--user", "list-unit-files",
+	cmd := exec.Command(m.systemctlPath, "--user", "list-unit-files", //nolint:gosec
 		"--type=service", "--no-legend", "rclone-*.service")
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
@@ -278,7 +278,7 @@ func (m *Manager) ListServices() ([]UnitStatus, error) {
 
 	// 2. Get active status for all rclone services in one go
 	// systemctl list-units only shows units that are currently loaded/active
-	cmd = exec.Command(m.systemctlPath, "--user", "list-units",
+	cmd = exec.Command(m.systemctlPath, "--user", "list-units", //nolint:gosec
 		"--type=service", "--no-legend", "--all", "rclone-*.service")
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err = cmd.Output()
@@ -325,7 +325,7 @@ func (m *Manager) GetLogs(name string, lines int) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("journalctl not found: %w", err)
 	}
-	cmd := exec.Command(journalctlPath, "--user", "-u", name, "-n", strconv.Itoa(lines), "--no-pager")
+	cmd := exec.Command(journalctlPath, "--user", "-u", name, "-n", strconv.Itoa(lines), "--no-pager") //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
 	if err != nil {
@@ -348,7 +348,7 @@ func (m *Manager) GetDetailedStatus(name string) (*models.ServiceStatus, error) 
 	}
 
 	// Get properties
-	cmd := exec.Command(m.systemctlPath, "--user", "show", name,
+	cmd := exec.Command(m.systemctlPath, "--user", "show", name, //nolint:gosec
 		"--property=LoadState,ActiveState,SubState,MainPID,ExecMainStatus,ActiveEnterTimestamp,InactiveEnterTimestamp")
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
@@ -403,7 +403,7 @@ func (m *Manager) GetDetailedStatus(name string) (*models.ServiceStatus, error) 
 		if strings.HasSuffix(timerName, ".service") {
 			timerName = strings.TrimSuffix(timerName, ".service") + ".timer"
 		} else if !strings.HasSuffix(timerName, ".timer") {
-			timerName = timerName + ".timer"
+			timerName += ".timer"
 		}
 		if isActive, _ := m.IsActive(timerName); isActive {
 			status.TimerActive = true
@@ -421,7 +421,7 @@ func (m *Manager) GetDetailedStatus(name string) (*models.ServiceStatus, error) 
 
 // GetTimerNextRun returns the next run time for a timer.
 func (m *Manager) GetTimerNextRun(timerName string) (time.Time, error) {
-	cmd := exec.Command(m.systemctlPath, "--user", "show", timerName,
+	cmd := exec.Command(m.systemctlPath, "--user", "show", timerName, //nolint:gosec
 		"--property=NextElapseUSec")
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.Output()
@@ -457,7 +457,7 @@ func (m *Manager) StartTimer(name string) error {
 	// Ensure we're using the timer unit
 	timerName := name
 	if !strings.HasSuffix(timerName, ".timer") {
-		timerName = timerName + ".timer"
+		timerName += ".timer"
 	}
 	return m.Start(timerName)
 }
@@ -467,7 +467,7 @@ func (m *Manager) StopTimer(name string) error {
 	// Ensure we're using the timer unit
 	timerName := name
 	if !strings.HasSuffix(timerName, ".timer") {
-		timerName = timerName + ".timer"
+		timerName += ".timer"
 	}
 	return m.Stop(timerName)
 }
@@ -477,7 +477,7 @@ func (m *Manager) EnableTimer(name string) error {
 	// Ensure we're using the timer unit
 	timerName := name
 	if !strings.HasSuffix(timerName, ".timer") {
-		timerName = timerName + ".timer"
+		timerName += ".timer"
 	}
 	return m.Enable(timerName)
 }
@@ -487,7 +487,7 @@ func (m *Manager) DisableTimer(name string) error {
 	// Ensure we're using the timer unit
 	timerName := name
 	if !strings.HasSuffix(timerName, ".timer") {
-		timerName = timerName + ".timer"
+		timerName += ".timer"
 	}
 	return m.Disable(timerName)
 }
@@ -497,14 +497,14 @@ func (m *Manager) RunSyncNow(name string) error {
 	// Ensure we're using the service unit
 	serviceName := name
 	if !strings.HasSuffix(serviceName, ".service") {
-		serviceName = serviceName + ".service"
+		serviceName += ".service"
 	}
 	return m.Start(serviceName)
 }
 
 // StartContext starts a systemd user unit with context for cancellation.
 func (m *Manager) StartContext(ctx context.Context, name string) error {
-	cmd := exec.CommandContext(ctx, m.systemctlPath, "--user", "start", name)
+	cmd := exec.CommandContext(ctx, m.systemctlPath, "--user", "start", name) //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -515,7 +515,7 @@ func (m *Manager) StartContext(ctx context.Context, name string) error {
 
 // StopContext stops a systemd user unit with context for cancellation.
 func (m *Manager) StopContext(ctx context.Context, name string) error {
-	cmd := exec.CommandContext(ctx, m.systemctlPath, "--user", "stop", name)
+	cmd := exec.CommandContext(ctx, m.systemctlPath, "--user", "stop", name) //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
 	output, err := cmd.CombinedOutput()
 	if err != nil {

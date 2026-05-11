@@ -125,7 +125,7 @@ func TestFileExists(t *testing.T) {
 		},
 	}
 
-	if err := os.WriteFile(tmpDir+"/testfile.txt", []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(tmpDir+"/testfile.txt", []byte("test"), 0600); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 
@@ -164,7 +164,7 @@ func TestDirExists(t *testing.T) {
 		},
 	}
 
-	if err := os.WriteFile(tmpDir+"/testfile.txt", []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(tmpDir+"/testfile.txt", []byte("test"), 0600); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 

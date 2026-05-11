@@ -249,12 +249,12 @@ func (g *Generator) WriteUnitFile(filename, content string) error {
 		return fmt.Errorf("invalid unit filename: %w", err)
 	}
 	// Ensure directory exists
-	if err := os.MkdirAll(g.systemdDir, 0755); err != nil {
+	if err := os.MkdirAll(g.systemdDir, 0750); err != nil {
 		return fmt.Errorf("failed to create systemd directory: %w", err)
 	}
 
 	path := filepath.Join(g.systemdDir, filename)
-	return os.WriteFile(path, []byte(content), 0644)
+	return os.WriteFile(path, []byte(content), 0644) //nolint:gosec
 }
 
 // validateUnitFilename ensures a unit filename doesn't contain path traversal.

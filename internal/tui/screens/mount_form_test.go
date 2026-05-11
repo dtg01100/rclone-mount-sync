@@ -246,7 +246,7 @@ func TestMountForm_ValidateMountPoint(t *testing.T) {
 
 	// Create a subdirectory that exists
 	existingDir := filepath.Join(tmpDir, "existing")
-	if err := os.Mkdir(existingDir, 0755); err != nil {
+	if err := os.Mkdir(existingDir, 0755); err != nil { //nolint:gosec
 		t.Fatalf("failed to create existing dir: %v", err)
 	}
 

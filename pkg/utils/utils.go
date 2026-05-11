@@ -92,7 +92,7 @@ func DirExists(path string) bool {
 // EnsureDir creates a directory if it doesn't exist.
 // It creates all necessary parent directories with mode 0755.
 func EnsureDir(path string) error {
-	if err := os.MkdirAll(path, 0755); err != nil && !os.IsExist(err) {
+	if err := os.MkdirAll(path, 0750); err != nil && !os.IsExist(err) {
 		return err
 	}
 	return nil

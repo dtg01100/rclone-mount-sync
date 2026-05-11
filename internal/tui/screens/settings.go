@@ -265,8 +265,7 @@ func (s *SettingsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return s.updateForm(msg)
 	}
 
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "up", "k":
 			if s.showingActions {
@@ -320,11 +319,8 @@ func (s *SettingsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // updateForm handles form updates when editing a setting.
 func (s *SettingsScreen) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc":
-			// Cancel editing
+	if msg, ok := msg.(tea.KeyMsg); ok {
+		if msg.String() == "esc" {
 			s.editing = false
 			s.form = nil
 			return s, nil
@@ -415,16 +411,13 @@ func (s *SettingsScreen) submitForm() (tea.Model, tea.Cmd) {
 	if err := s.setConfigValue(setting.ConfigKey, setting.Value); err != nil {
 		s.message = fmt.Sprintf("Error: %v", err)
 		s.messageType = "error"
-	} else {
-		// Save the config
-		if s.config != nil {
-			if err := s.config.Save(); err != nil {
-				s.message = fmt.Sprintf("Failed to save config: %v", err)
-				s.messageType = "error"
-			} else {
-				s.message = fmt.Sprintf("Setting '%s' updated to '%s'", setting.Name, setting.Value)
-				s.messageType = "success"
-			}
+	} else if s.config != nil {
+		if err := s.config.Save(); err != nil {
+			s.message = fmt.Sprintf("Failed to save config: %v", err)
+			s.messageType = "error"
+		} else {
+			s.message = fmt.Sprintf("Setting '%s' updated to '%s'", setting.Name, setting.Value)
+			s.messageType = "success"
 		}
 	}
 
@@ -473,15 +466,12 @@ func (s *SettingsScreen) startImport() (tea.Model, tea.Cmd) {
 
 // updateFilePicker handles file picker updates.
 func (s *SettingsScreen) updateFilePicker(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "esc" {
-			s.form = nil
-			s.showingFilePicker = false
-			s.exportPath = ""
-			s.pendingImportPath = ""
-			return s, nil
-		}
+	if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "esc" {
+		s.form = nil
+		s.showingFilePicker = false
+		s.exportPath = ""
+		s.pendingImportPath = ""
+		return s, nil
 	}
 
 	form, cmd := s.form.Update(msg)
@@ -558,14 +548,11 @@ func (s *SettingsScreen) showImportModeSelection() (tea.Model, tea.Cmd) {
 
 // updateImportModeForm handles the import mode selection form.
 func (s *SettingsScreen) updateImportModeForm(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "esc" {
-			s.showingImportMode = false
-			s.form = nil
-			s.pendingImportPath = ""
-			return s, nil
-		}
+	if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "esc" {
+		s.showingImportMode = false
+		s.form = nil
+		s.pendingImportPath = ""
+		return s, nil
 	}
 
 	form, cmd := s.form.Update(msg)
@@ -600,14 +587,11 @@ func (s *SettingsScreen) showReplaceConfirm() (tea.Model, tea.Cmd) {
 
 // updateConfirmDialog handles the confirmation dialog.
 func (s *SettingsScreen) updateConfirmDialog(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		if msg.String() == "esc" {
-			s.showingConfirm = false
-			s.confirmDialog = nil
-			s.pendingImportPath = ""
-			return s, nil
-		}
+	if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "esc" {
+		s.showingConfirm = false
+		s.confirmDialog = nil
+		s.pendingImportPath = ""
+		return s, nil
 	}
 
 	form, cmd := s.confirmDialog.Update(msg)

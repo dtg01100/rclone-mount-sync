@@ -106,13 +106,13 @@ func TestApp_InitError_ConfigEmpty(t *testing.T) {
 	// Use a temporary config directory
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "rclone-mount-sync")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0750); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
 
 	// Create minimal config file
 	configFile := filepath.Join(configDir, "config.yaml")
-	if err := os.WriteFile(configFile, []byte("version: \"1.0\"\n"), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte("version: \"1.0\"\n"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write config: %v", err)
 	}
 
@@ -139,7 +139,7 @@ func TestApp_InitError_ConfigWithMounts(t *testing.T) {
 	// Use a temporary config directory
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "rclone-mount-sync")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0750); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
 
@@ -154,7 +154,7 @@ mounts:
 sync_jobs: []
 `
 	configFile := filepath.Join(configDir, "config.yaml")
-	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte(configContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write config: %v", err)
 	}
 
@@ -393,12 +393,12 @@ func TestApp_Services_SetServices(t *testing.T) {
 	// Use a temporary config directory
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "rclone-mount-sync")
-	if err := os.MkdirAll(configDir, 0755); err != nil {
+	if err := os.MkdirAll(configDir, 0750); err != nil {
 		t.Fatalf("Failed to create config dir: %v", err)
 	}
 
 	configFile := filepath.Join(configDir, "config.yaml")
-	if err := os.WriteFile(configFile, []byte("version: \"1.0\"\nmounts: []\nsync_jobs: []\n"), 0644); err != nil {
+	if err := os.WriteFile(configFile, []byte("version: \"1.0\"\nmounts: []\nsync_jobs: []\n"), 0600); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write config: %v", err)
 	}
 

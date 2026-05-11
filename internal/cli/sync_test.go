@@ -73,10 +73,10 @@ func TestSyncCreateAndDeleteFlow(t *testing.T) {
 
 	serviceName := "rclone-sync-" + job.ID + ".service"
 	timerName := "rclone-sync-" + job.ID + ".timer"
-	if err := os.WriteFile(filepath.Join(tmp, serviceName), []byte("[Unit]\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, serviceName), []byte("[Unit]\n"), 0600); err != nil { //nolint:gosec
 		t.Fatalf("failed to write service file: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(tmp, timerName), []byte("[Unit]\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, timerName), []byte("[Unit]\n"), 0600); err != nil { //nolint:gosec
 		t.Fatalf("failed to write timer file: %v", err)
 	}
 

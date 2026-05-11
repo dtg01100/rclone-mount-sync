@@ -65,7 +65,7 @@ func TestMountCreateAndDeleteFlow(t *testing.T) {
 	cfg.Mounts = append(cfg.Mounts, m)
 
 	// Create a fake unit file matching generator.ServiceName
-	if err := os.WriteFile(filepath.Join(tmp, "rclone-mount-abc12345.service"), []byte("[Unit]\n"), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmp, "rclone-mount-abc12345.service"), []byte("[Unit]\n"), 0600); err != nil { //nolint:gosec
 		t.Fatalf("failed to write service file: %v", err)
 	}
 

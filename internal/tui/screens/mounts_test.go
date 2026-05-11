@@ -468,7 +468,7 @@ func TestMountsScreen_ErrorMsg(t *testing.T) {
 	screen.Update(msg)
 
 	// Verify error was set
-	if screen.err != errTestMountNotFound {
+	if !errors.Is(screen.err, errTestMountNotFound) {
 		t.Errorf("error = %v, want %v", screen.err, errTestMountNotFound)
 	}
 

@@ -522,12 +522,13 @@ func (s *MountsScreen) renderList() string {
 		s.success = ""
 	}
 
-	if s.loading {
+	switch {
+	case s.loading:
 		b.WriteString(lipgloss.NewStyle().
 			Width(s.width).
 			Align(lipgloss.Center).
 			Render("Loading mounts..."))
-	} else if len(s.mounts) == 0 {
+	case len(s.mounts) == 0:
 		// Empty state
 		emptyMsg := components.Styles.Subtitle.Render("No mounts configured.")
 		addHint := components.Styles.HelpText.Render("Press 'a' to add a new mount.")
@@ -541,8 +542,7 @@ func (s *MountsScreen) renderList() string {
 			Width(s.width).
 			Align(lipgloss.Center).
 			Render(addHint))
-	} else {
-		// Mount list
+	default:
 		b.WriteString(s.renderMountList())
 		b.WriteString("\n")
 
@@ -739,8 +739,7 @@ func (d *DeleteConfirm) Init() tea.Cmd {
 
 // Update handles updates.
 func (d *DeleteConfirm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "left", "h":
 			if d.cursor > 0 {
@@ -982,8 +981,7 @@ func (d *MountDetails) Init() tea.Cmd {
 
 // Update handles updates.
 func (d *MountDetails) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "esc", "q":
 			d.done = true

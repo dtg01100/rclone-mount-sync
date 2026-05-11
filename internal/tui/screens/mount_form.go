@@ -400,15 +400,10 @@ func (f *MountForm) Init() tea.Cmd {
 func (f *MountForm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc":
-			// Check if we're at the first field, if so cancel
-			f.cancelled = true
-			f.done = true
-			return f, func() tea.Msg { return MountFormCancelMsg{} }
-		}
+	if msg, ok := msg.(tea.KeyMsg); ok && msg.String() == "esc" {
+		f.cancelled = true
+		f.done = true
+		return f, func() tea.Msg { return MountFormCancelMsg{} }
 	}
 
 	// Update the form

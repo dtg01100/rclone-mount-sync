@@ -368,7 +368,7 @@ func TestSyncJobsScreen_ErrorMsg(t *testing.T) {
 	screen.Update(msg)
 
 	// Verify error was set
-	if screen.err != errTestSyncJobNotFound {
+	if !errors.Is(screen.err, errTestSyncJobNotFound) {
 		t.Errorf("error = %v, want %v", screen.err, errTestSyncJobNotFound)
 	}
 

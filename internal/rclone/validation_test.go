@@ -17,7 +17,7 @@ func createMockRcloneValidation(t *testing.T, script string) string {
 	if runtime.GOOS == "windows" {
 		mockPath += ".bat"
 	}
-	if err := os.WriteFile(mockPath, []byte(script), 0755); err != nil {
+	if err := os.WriteFile(mockPath, []byte(script), 0755); err != nil { //nolint:gosec
 		t.Fatalf("failed to create mock rclone: %v", err)
 	}
 	return mockPath
@@ -1889,7 +1889,7 @@ func TestCheckRcloneBinaryWithEnvVar(t *testing.T) {
 
 	// Create a minimal executable
 	script := "#!/bin/sh\necho 'fake rclone'"
-	if err := os.WriteFile(fakeRclone, []byte(script), 0755); err != nil {
+	if err := os.WriteFile(fakeRclone, []byte(script), 0755); err != nil { //nolint:gosec
 		t.Fatalf("failed to create fake rclone: %v", err)
 	}
 
@@ -1913,7 +1913,7 @@ func TestCheckRcloneBinaryCustomPath(t *testing.T) {
 	customPath := filepath.Join(tmpDir, "custom-rclone")
 
 	script := "#!/bin/sh\necho 'custom rclone'"
-	if err := os.WriteFile(customPath, []byte(script), 0755); err != nil {
+	if err := os.WriteFile(customPath, []byte(script), 0755); err != nil { //nolint:gosec
 		t.Fatalf("failed to create custom rclone: %v", err)
 	}
 

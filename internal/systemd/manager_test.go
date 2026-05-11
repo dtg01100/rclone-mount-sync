@@ -211,7 +211,7 @@ func TestManager_StartTimerNameHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			timerName := tt.input
 			if len(timerName) < 6 || timerName[len(timerName)-6:] != ".timer" {
-				timerName = timerName + ".timer"
+				timerName += ".timer"
 			}
 			if timerName != tt.expected {
 				t.Errorf("timer name handling: got %q, want %q", timerName, tt.expected)
@@ -243,7 +243,7 @@ func TestManager_StopTimerNameHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			timerName := tt.input
 			if len(timerName) < 6 || timerName[len(timerName)-6:] != ".timer" {
-				timerName = timerName + ".timer"
+				timerName += ".timer"
 			}
 			if timerName != tt.expected {
 				t.Errorf("timer name handling: got %q, want %q", timerName, tt.expected)
@@ -275,7 +275,7 @@ func TestManager_EnableTimerNameHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			timerName := tt.input
 			if len(timerName) < 6 || timerName[len(timerName)-6:] != ".timer" {
-				timerName = timerName + ".timer"
+				timerName += ".timer"
 			}
 			if timerName != tt.expected {
 				t.Errorf("timer name handling: got %q, want %q", timerName, tt.expected)
@@ -307,7 +307,7 @@ func TestManager_DisableTimerNameHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			timerName := tt.input
 			if len(timerName) < 6 || timerName[len(timerName)-6:] != ".timer" {
-				timerName = timerName + ".timer"
+				timerName += ".timer"
 			}
 			if timerName != tt.expected {
 				t.Errorf("timer name handling: got %q, want %q", timerName, tt.expected)
@@ -339,7 +339,7 @@ func TestManager_RunSyncNowNameHandling(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			serviceName := tt.input
 			if len(serviceName) < 8 || serviceName[len(serviceName)-8:] != ".service" {
-				serviceName = serviceName + ".service"
+				serviceName += ".service"
 			}
 			if serviceName != tt.expected {
 				t.Errorf("service name handling: got %q, want %q", serviceName, tt.expected)

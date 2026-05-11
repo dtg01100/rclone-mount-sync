@@ -29,7 +29,7 @@ if [[ "$*" == *"--user list-units"* ]]; then
 fi
 exit 1
 `
-	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create mock systemctl: %v", err)
 	}
 

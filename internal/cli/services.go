@@ -95,7 +95,7 @@ func runServicesStatus(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
 	if !strings.HasSuffix(name, ".service") {
-		name = name + ".service"
+		name += ".service"
 	}
 
 	manager := loadManager()
@@ -157,7 +157,7 @@ func runServicesLogs(cmd *cobra.Command, args []string) error {
 	name := args[0]
 
 	if !strings.HasSuffix(name, ".service") {
-		name = name + ".service"
+		name += ".service"
 	}
 
 	manager := loadManager()

@@ -222,7 +222,7 @@ func checkSystemdUserSession() CheckResult {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, systemctlPath, "--user", "is-active", "default.target")
+	cmd := exec.CommandContext(ctx, systemctlPath, "--user", "is-active", "default.target") //nolint:gosec
 	output, err := cmd.CombinedOutput()
 
 	// The user session might report "inactive" or "active" - both mean systemd is working

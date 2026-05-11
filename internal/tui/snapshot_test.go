@@ -20,10 +20,10 @@ func writeSnapshot(t *testing.T, name string, content string) {
 	}
 
 	path := filepath.Join(snapshotDir, name+".snap")
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0750); err != nil {
 		t.Fatalf("failed to create snapshot dir: %v", err)
 	}
-	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+	if err := os.WriteFile(path, []byte(content), 0600); err != nil { //nolint:gosec
 		t.Fatalf("failed to write snapshot: %v", err)
 	}
 }
@@ -32,7 +32,7 @@ func writeSnapshot(t *testing.T, name string, content string) {
 func readSnapshot(t *testing.T, name string) string {
 	t.Helper()
 	path := filepath.Join(snapshotDir, name+".snap")
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec
 	if err != nil {
 		return ""
 	}
@@ -57,7 +57,7 @@ func assertSnapshot(t *testing.T, name string, content string) {
 
 		// Write actual to .actual file for easy comparison
 		actualPath := filepath.Join(snapshotDir, name+".actual")
-		_ = os.WriteFile(actualPath, []byte(content), 0644)
+		_ = os.WriteFile(actualPath, []byte(content), 0644) //nolint:gosec
 		t.Logf("Actual output written to: %s", actualPath)
 		t.Logf("Run UPDATE_SNAPSHOTS=1 go test to update if change is intentional")
 	}

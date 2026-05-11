@@ -63,9 +63,7 @@ var loadConfig = func() (*config.Config, error) {
 
 // loadGenerator returns a new systemd generator instance.
 // This function is injectable for testing purposes.
-var loadGenerator = func() (*systemd.Generator, error) {
-	return systemd.NewGenerator()
-}
+var loadGenerator = systemd.NewGenerator
 
 // loadManager returns a new systemd manager instance.
 // This function is injectable for testing purposes.

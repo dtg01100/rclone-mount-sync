@@ -1670,7 +1670,7 @@ func TestServicesScreen_Messages(t *testing.T) {
 
 	// Test ServicesErrorMsg
 	errMsg := ServicesErrorMsg{Err: errTestServiceNotFound}
-	if errMsg.Err != errTestServiceNotFound {
+	if !errors.Is(errMsg.Err, errTestServiceNotFound) {
 		t.Error("ServicesErrorMsg Err should be set")
 	}
 

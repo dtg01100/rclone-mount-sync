@@ -129,7 +129,7 @@ func TestReconciler_ScanForOrphans(t *testing.T) {
 
 			for name, content := range tt.files {
 				path := filepath.Join(tmpDir, name)
-				if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+				if err := os.WriteFile(path, []byte(content), 0644); err != nil { //nolint:gosec
 					t.Fatalf("Failed to create test file: %v", err)
 				}
 			}
@@ -276,7 +276,7 @@ func TestIsValidID(t *testing.T) {
 func TestReconciler_RemoveOrphan(t *testing.T) {
 	tmpDir := t.TempDir()
 	serviceFile := filepath.Join(tmpDir, "rclone-mount-xyz12345.service")
-	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -309,10 +309,10 @@ func TestReconciler_RemoveOrphan_WithTimer(t *testing.T) {
 	tmpDir := t.TempDir()
 	serviceFile := filepath.Join(tmpDir, "rclone-sync-abc12345.service")
 	timerFile := filepath.Join(tmpDir, "rclone-sync-abc12345.timer")
-	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
-	if err := os.WriteFile(timerFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+	if err := os.WriteFile(timerFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -361,7 +361,7 @@ RestartSec=5
 WantedBy=default.target
 `
 	serviceFile := filepath.Join(tmpDir, "rclone-mount-legacy1.service")
-	if err := os.WriteFile(serviceFile, []byte(serviceContent), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte(serviceContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -418,7 +418,7 @@ ExecStart=/usr/bin/rclone sync gdrive:/ /home/user/backup --config=/home/user/.c
 WantedBy=default.target
 `
 	serviceFile := filepath.Join(tmpDir, "rclone-sync-legacy-svc.service")
-	if err := os.WriteFile(serviceFile, []byte(serviceContent), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte(serviceContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -475,7 +475,7 @@ ExecStart=/usr/bin/rclone sync gdrive:/Photos /home/user/Backup/Photos --config=
 WantedBy=default.target
 `
 	serviceFile := filepath.Join(tmpDir, "rclone-sync-legacy2.service")
-	if err := os.WriteFile(serviceFile, []byte(serviceContent), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte(serviceContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -490,7 +490,7 @@ Persistent=true
 WantedBy=timers.target
 `
 	timerFile := filepath.Join(tmpDir, "rclone-sync-legacy2.timer")
-	if err := os.WriteFile(timerFile, []byte(timerContent), 0644); err != nil {
+	if err := os.WriteFile(timerFile, []byte(timerContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -1031,12 +1031,12 @@ if [ "$1" = "--user" ]; then
 fi
 exit 0
 `
-	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create mock systemctl: %v", err)
 	}
 
 	serviceFile := filepath.Join(tmpDir, "rclone-mount-test1234.service")
-	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -1087,12 +1087,12 @@ if [ "$1" = "--user" ]; then
 fi
 exit 0
 `
-	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create mock systemctl: %v", err)
 	}
 
 	serviceFile := filepath.Join(tmpDir, "rclone-mount-test1234.service")
-	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -1130,25 +1130,25 @@ func TestReconciler_RemoveOrphan_RemoveUnitFileError(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	roDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(roDir, 0755); err != nil {
+	if err := os.MkdirAll(roDir, 0755); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create readonly dir: %v", err)
 	}
 
 	serviceFile := filepath.Join(roDir, "rclone-mount-test1234.service")
-	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
-	if err := os.Chmod(roDir, 0555); err != nil {
+	if err := os.Chmod(roDir, 0555); err != nil { //nolint:gosec
 		t.Fatalf("Failed to make directory read-only: %v", err)
 	}
-	defer func() { _ = os.Chmod(roDir, 0755) }()
+	defer func() { _ = os.Chmod(roDir, 0750) }() //nolint:gosec
 
 	mockSystemctl := filepath.Join(tmpDir, "mock-systemctl")
 	mockScript := `#!/bin/bash
 exit 0
 `
-	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create mock systemctl: %v", err)
 	}
 
@@ -1189,12 +1189,12 @@ if [ "$1" = "--user" ] && [ "$2" = "daemon-reload" ]; then
 fi
 exit 0
 `
-	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create mock systemctl: %v", err)
 	}
 
 	serviceFile := filepath.Join(tmpDir, "rclone-mount-test1234.service")
-	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -1231,16 +1231,16 @@ func TestReconciler_RemoveOrphan_SyncTypeWithTimer(t *testing.T) {
 	mockScript := `#!/bin/bash
 exit 0
 `
-	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create mock systemctl: %v", err)
 	}
 
 	serviceFile := filepath.Join(tmpDir, "rclone-sync-test1234.service")
 	timerFile := filepath.Join(tmpDir, "rclone-sync-test1234.timer")
-	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test service file: %v", err)
 	}
-	if err := os.WriteFile(timerFile, []byte("[Unit]\nDescription=Test Timer\n[Timer]\nOnCalendar=daily"), 0644); err != nil {
+	if err := os.WriteFile(timerFile, []byte("[Unit]\nDescription=Test Timer\n[Timer]\nOnCalendar=daily"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test timer file: %v", err)
 	}
 
@@ -1281,12 +1281,12 @@ func TestReconciler_RemoveOrphan_MountTypeNoTimer(t *testing.T) {
 	mockScript := `#!/bin/bash
 exit 0
 `
-	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create mock systemctl: %v", err)
 	}
 
 	serviceFile := filepath.Join(tmpDir, "rclone-mount-test1234.service")
-	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -1324,12 +1324,12 @@ func TestReconciler_RemoveOrphan_SyncTypeNoTimerFile(t *testing.T) {
 	mockScript := `#!/bin/bash
 exit 0
 `
-	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create mock systemctl: %v", err)
 	}
 
 	serviceFile := filepath.Join(tmpDir, "rclone-sync-test1234.service")
-	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test service file: %v", err)
 	}
 
@@ -1377,12 +1377,12 @@ if [ "$1" = "--user" ]; then
 fi
 exit 0
 `
-	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil {
+	if err := os.WriteFile(mockSystemctl, []byte(mockScript), 0755); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create mock systemctl: %v", err)
 	}
 
 	serviceFile := filepath.Join(tmpDir, "rclone-mount-test1234.service")
-	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil {
+	if err := os.WriteFile(serviceFile, []byte("[Unit]\nDescription=Test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 

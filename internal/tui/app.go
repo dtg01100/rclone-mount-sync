@@ -806,13 +806,14 @@ func (a *App) renderOrphanPrompt(baseView string) string {
 	b.WriteString(components.Styles.Warning.Render("Orphaned Units Detected"))
 	b.WriteString("\n\n")
 
-	if a.loading {
+	switch {
+	case a.loading:
 		b.WriteString(components.Styles.Info.Render("Processing..."))
-	} else if a.orphanError != nil {
+	case a.orphanError != nil:
 		b.WriteString(components.RenderError(a.orphanError.Error()))
 		b.WriteString("\n")
 		b.WriteString(components.Styles.HelpText.Render("Press Esc to go back"))
-	} else if a.orphanMode == 0 {
+	case a.orphanMode == 0:
 		b.WriteString("Select a unit to manage:\n\n")
 		for i, orphan := range a.orphans.OrphanedUnits {
 			legacyTag := ""
@@ -829,7 +830,7 @@ func (a *App) renderOrphanPrompt(baseView string) string {
 		}
 		b.WriteString("\n")
 		b.WriteString(components.Styles.HelpText.Render("[↑/k↓/j] Navigate  [Enter] Select  [d] Dismiss all  [q/Esc] Close"))
-	} else {
+	default:
 		orphan := a.orphans.OrphanedUnits[a.orphanSelected]
 		legacyTag := ""
 		if orphan.IsLegacy {

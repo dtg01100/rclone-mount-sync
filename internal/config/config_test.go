@@ -1217,7 +1217,7 @@ func TestSaveCreatesBackup(t *testing.T) {
 		t.Fatal("Backup file should exist after second save")
 	}
 
-	backupContent, err := os.ReadFile(backupPath)
+	backupContent, err := os.ReadFile(backupPath) //nolint:gosec
 	if err != nil {
 		t.Fatalf("Failed to read backup file: %v", err)
 	}
@@ -1226,7 +1226,7 @@ func TestSaveCreatesBackup(t *testing.T) {
 		t.Error("Backup should contain the first config")
 	}
 
-	configContent, err := os.ReadFile(filepath.Join(tmpDir, "config.yaml"))
+	configContent, err := os.ReadFile(filepath.Join(tmpDir, "config.yaml")) //nolint:gosec
 	if err != nil {
 		t.Fatalf("Failed to read config file: %v", err)
 	}
@@ -1278,7 +1278,7 @@ func TestAtomicWriteTempFileCleanup(t *testing.T) {
 		}
 	}
 
-	configContent, err := os.ReadFile(filepath.Join(tmpDir, "config.yaml"))
+	configContent, err := os.ReadFile(filepath.Join(tmpDir, "config.yaml")) //nolint:gosec
 	if err != nil {
 		t.Fatalf("Failed to read config file: %v", err)
 	}
@@ -1400,7 +1400,7 @@ func TestBackupOnlyKeepsMostRecent(t *testing.T) {
 	}
 
 	backupPath := filepath.Join(tmpDir, "config.yaml.bak")
-	backupContent, err := os.ReadFile(backupPath)
+	backupContent, err := os.ReadFile(backupPath) //nolint:gosec
 	if err != nil {
 		t.Fatalf("Failed to read backup: %v", err)
 	}
@@ -1562,7 +1562,7 @@ sync_jobs:
     enabled: true
 exported: "2024-01-01T00:00:00Z"
 `
-	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil {
+	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write export file: %v", err)
 	}
 
@@ -1607,7 +1607,7 @@ func TestImportConfigJSON(t *testing.T) {
   "sync_jobs": [],
   "exported": "2024-01-01T00:00:00Z"
 }`
-	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil {
+	if err := os.WriteFile(exportPath, []byte(exportContent), 0600); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write export file: %v", err)
 	}
 
@@ -1640,7 +1640,7 @@ func TestImportConfigInvalidFormat(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	exportPath := filepath.Join(tmpDir, "invalid.txt")
-	if err := os.WriteFile(exportPath, []byte("invalid content"), 0644); err != nil {
+	if err := os.WriteFile(exportPath, []byte("invalid content"), 0600); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write export file: %v", err)
 	}
 
@@ -1659,7 +1659,7 @@ func TestImportConfigInvalidContent(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	exportPath := filepath.Join(tmpDir, "empty.yaml")
-	if err := os.WriteFile(exportPath, []byte("{}"), 0644); err != nil {
+	if err := os.WriteFile(exportPath, []byte("{}"), 0600); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write export file: %v", err)
 	}
 
@@ -1694,7 +1694,7 @@ sync_jobs:
     enabled: true
 exported: "2024-01-01T00:00:00Z"
 `
-	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil {
+	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write export file: %v", err)
 	}
 
@@ -1750,7 +1750,7 @@ mounts:
 sync_jobs: []
 exported: "2024-01-01T00:00:00Z"
 `
-	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil {
+	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write export file: %v", err)
 	}
 
@@ -1798,7 +1798,7 @@ sync_jobs:
     enabled: true
 exported: "2024-01-01T00:00:00Z"
 `
-	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil {
+	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write export file: %v", err)
 	}
 
@@ -1907,7 +1907,7 @@ sync_jobs:
     destination: /backup/docs
 exported: "2024-01-01T00:00:00Z"
 `
-	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil {
+	if err := os.WriteFile(exportPath, []byte(exportContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write export file: %v", err)
 	}
 
@@ -1947,14 +1947,14 @@ func TestCreateBackupSourcePermissionDenied(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	srcPath := filepath.Join(tmpDir, "config.yaml")
-	if err := os.WriteFile(srcPath, []byte("test content"), 0644); err != nil {
+	if err := os.WriteFile(srcPath, []byte("test content"), 0600); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write source file: %v", err)
 	}
 
 	if err := os.Chmod(srcPath, 0000); err != nil {
 		t.Fatalf("Failed to chmod source file: %v", err)
 	}
-	defer func() { _ = os.Chmod(srcPath, 0644) }()
+	defer func() { _ = os.Chmod(srcPath, 0600) }()
 
 	backupPath := filepath.Join(tmpDir, "config.yaml.bak")
 	err = createBackup(srcPath, backupPath)
@@ -1978,15 +1978,15 @@ func TestCreateBackupDestPermissionDenied(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	srcPath := filepath.Join(tmpDir, "config.yaml")
-	if err := os.WriteFile(srcPath, []byte("test content"), 0644); err != nil {
+	if err := os.WriteFile(srcPath, []byte("test content"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write source file: %v", err)
 	}
 
 	destDir := filepath.Join(tmpDir, "readonly")
-	if err := os.Mkdir(destDir, 0555); err != nil {
+	if err := os.Mkdir(destDir, 0555); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create readonly dir: %v", err)
 	}
-	defer func() { _ = os.Chmod(destDir, 0755) }()
+	defer func() { _ = os.Chmod(destDir, 0750) }() //nolint:gosec
 
 	backupPath := filepath.Join(destDir, "config.yaml.bak")
 	err = createBackup(srcPath, backupPath)
@@ -2007,7 +2007,7 @@ func TestCreateBackupSuccess(t *testing.T) {
 
 	srcContent := "test config content\nwith multiple lines\n"
 	srcPath := filepath.Join(tmpDir, "config.yaml")
-	if err := os.WriteFile(srcPath, []byte(srcContent), 0644); err != nil {
+	if err := os.WriteFile(srcPath, []byte(srcContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to write source file: %v", err)
 	}
 
@@ -2016,7 +2016,7 @@ func TestCreateBackupSuccess(t *testing.T) {
 		t.Fatalf("createBackup() error = %v", err)
 	}
 
-	backupContent, err := os.ReadFile(backupPath)
+	backupContent, err := os.ReadFile(backupPath) //nolint:gosec
 	if err != nil {
 		t.Fatalf("Failed to read backup file: %v", err)
 	}
@@ -2136,7 +2136,7 @@ defaults:
 mounts: []
 sync_jobs: []
 `
-	if err := os.WriteFile(configPath, []byte(modifiedContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(modifiedContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to modify config file: %v", err)
 	}
 

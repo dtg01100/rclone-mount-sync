@@ -285,7 +285,7 @@ func TestHandleConfigDir(t *testing.T) {
 				defer func() { _ = os.RemoveAll(tempDir) }()
 
 				testFile := filepath.Join(tempDir, "config.yaml")
-				if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+				if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil { //nolint:gosec
 					t.Fatal(err)
 				}
 				inputPath = testFile
@@ -329,7 +329,7 @@ func TestHandleConfigDir_WithFile(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	testFile := filepath.Join(tempDir, "config.yaml")
-	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(testFile, []byte("test"), 0644); err != nil { //nolint:gosec
 		t.Fatal(err)
 	}
 
@@ -521,10 +521,8 @@ func TestIntegration_PreflightCheckFlow(t *testing.T) {
 		if !strings.Contains(output, "Critical pre-flight check(s) failed") {
 			t.Error("output should contain critical failure message")
 		}
-	} else {
-		if !strings.Contains(output, "Pre-flight checks completed") && err == nil {
-			t.Error("output should contain completion message for non-critical failures or success")
-		}
+	} else if !strings.Contains(output, "Pre-flight checks completed") && err == nil {
+		t.Error("output should contain completion message for non-critical failures or success")
 	}
 }
 

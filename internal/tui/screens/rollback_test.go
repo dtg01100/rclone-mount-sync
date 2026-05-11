@@ -203,10 +203,10 @@ mounts:
   - id: original123
     name: OriginalMount
 `
-	if err := os.WriteFile(configPath, []byte(originalContent), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(originalContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("failed to write config: %v", err)
 	}
-	if err := os.WriteFile(backupPath, []byte(originalContent), 0644); err != nil {
+	if err := os.WriteFile(backupPath, []byte(originalContent), 0644); err != nil { //nolint:gosec
 		t.Fatalf("failed to write backup: %v", err)
 	}
 

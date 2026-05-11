@@ -4,6 +4,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -98,10 +99,10 @@ func Load() (*Config, error) {
 
 	// Try to read config file
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+		var notFound viper.ConfigFileNotFoundError
+		if !errors.As(err, &notFound) {
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
-		// Config file not found, create a new one with defaults
 		return newConfigWithDefaults(), nil
 	}
 
@@ -133,8 +134,8 @@ func (c *Config) Reload() error {
 	setDefaults(v)
 
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			// Config file not found, clear the config
+		var notFound viper.ConfigFileNotFoundError
+		if errors.As(err, &notFound) {
 			c.Mounts = nil
 			c.SyncJobs = nil
 			return nil
@@ -205,14 +206,14 @@ func (c *Config) Save() error {
 
 	if err := v.WriteConfigAs(tempPath); err != nil {
 		if rmErr := os.Remove(tempPath); rmErr != nil && !os.IsNotExist(rmErr) {
-			return fmt.Errorf("failed to write config file: %w; cleanup failed: %v", err, rmErr)
+			return fmt.Errorf("failed to write config file: %w; cleanup failed: %w", err, rmErr)
 		}
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
 	if err := os.Rename(tempPath, configPath); err != nil {
 		if rmErr := os.Remove(tempPath); rmErr != nil && !os.IsNotExist(rmErr) {
-			return fmt.Errorf("failed to rename temp file: %w; cleanup failed: %v", err, rmErr)
+			return fmt.Errorf("failed to rename temp file: %w; cleanup failed: %w", err, rmErr)
 		}
 		return fmt.Errorf("failed to rename temp file: %w", err)
 	}
@@ -236,7 +237,7 @@ func RestoreFromBackup() error {
 		return fmt.Errorf("no backup file found")
 	}
 
-	src, err := os.Open(backupPath)
+	src, err := os.Open(backupPath) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("failed to open backup file: %w", err)
 	}
@@ -251,7 +252,7 @@ func RestoreFromBackup() error {
 		return fmt.Errorf("failed to stat backup file: %w", err)
 	}
 
-	dst, err := os.OpenFile(configPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
+	dst, err := os.OpenFile(configPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode()) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("failed to create config file: %w", err)
 	}
@@ -293,7 +294,7 @@ func HasBackup() (bool, error) {
 // createBackup creates a backup of the existing config file.
 // It overwrites any existing backup to keep only the most recent one.
 func createBackup(configPath, backupPath string) error {
-	srcFile, err := os.Open(configPath)
+	srcFile, err := os.Open(configPath) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("failed to open config file: %w", err)
 	}
@@ -308,7 +309,7 @@ func createBackup(configPath, backupPath string) error {
 		return fmt.Errorf("failed to stat config file: %w", err)
 	}
 
-	dstFile, err := os.OpenFile(backupPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode())
+	dstFile, err := os.OpenFile(backupPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode()) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("failed to create backup file: %w", err)
 	}
@@ -618,7 +619,7 @@ func (c *Config) ExportConfig(filePath string) error {
 		}
 	}
 
-	file, err := os.Create(filePath)
+	file, err := os.Create(filePath) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("failed to create export file: %w", err)
 	}
@@ -659,7 +660,7 @@ func (c *Config) ImportConfig(filePath string, mode ImportMode) error {
 		return fmt.Errorf("import file does not exist: %s", filePath)
 	}
 
-	file, err := os.Open(filePath)
+	file, err := os.Open(filePath) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("failed to open import file: %w", err)
 	}

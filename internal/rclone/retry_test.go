@@ -22,7 +22,7 @@ func createMockRcloneForRetry(t *testing.T, script string) string {
 	if runtime.GOOS == "windows" {
 		mockPath += ".bat"
 	}
-	if err := os.WriteFile(mockPath, []byte(script), 0755); err != nil {
+	if err := os.WriteFile(mockPath, []byte(script), 0755); err != nil { //nolint:gosec
 		t.Fatalf("failed to create mock rclone: %v", err)
 	}
 	return mockPath
@@ -431,7 +431,7 @@ func TestClassifyExitError(t *testing.T) {
 			result := classifyExitError(tt.err)
 
 			if tt.wantUnmodified {
-				if result != tt.err {
+				if !errors.Is(result, tt.err) {
 					t.Errorf("classifyExitError() should return unmodified error, got %v", result)
 				}
 				return
@@ -563,7 +563,7 @@ func TestDoRetryContextCancellation(t *testing.T) {
 		return NewRetryableError(errors.New("transient error"))
 	})
 
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("doRetry() should return context.Canceled, got %v", err)
 	}
 	if callCount != 0 {
@@ -832,7 +832,7 @@ func TestDoRetryAfterContextCancellationBetweenRetries(t *testing.T) {
 		return NewRetryableError(errors.New("transient error"))
 	})
 
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("doRetry() should return context.Canceled, got %v", err)
 	}
 }
@@ -862,7 +862,7 @@ func TestDoRetryBytesContextCancellationBetweenRetries(t *testing.T) {
 		return nil, NewRetryableError(errors.New("transient error"))
 	})
 
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("doRetryBytes() should return context.Canceled, got %v", err)
 	}
 }

@@ -75,7 +75,7 @@ func getLogDir() (string, error) {
 	stateDir := os.Getenv("XDG_STATE_HOME")
 	if stateDir != "" {
 		logDir := filepath.Join(stateDir, "rclone-mount-sync")
-		if err := os.MkdirAll(logDir, 0755); err != nil {
+		if err := os.MkdirAll(logDir, 0750); err != nil { //nolint:gosec
 			return "", err
 		}
 		return logDir, nil
@@ -86,7 +86,7 @@ func getLogDir() (string, error) {
 		return "", err
 	}
 	logDir := filepath.Join(home, ".local", "state", "rclone-mount-sync")
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0750); err != nil {
 		return "", err
 	}
 	return logDir, nil

@@ -504,26 +504,24 @@ func (s *SyncJobsScreen) renderList() string {
 		s.success = ""
 	}
 
-	if s.loading {
+	switch {
+	case s.loading:
 		b.WriteString(lipgloss.NewStyle().
 			Width(s.width).
 			Align(lipgloss.Center).
 			Render("Loading sync jobs..."))
-	} else if len(s.jobs) == 0 {
-		// Empty state
-		emptyMsg := components.Styles.Subtitle.Render("No sync jobs configured.")
-		addHint := components.Styles.HelpText.Render("Press 'a' or 'n' to add a new sync job.")
-
+	case len(s.jobs) == 0:
 		b.WriteString(lipgloss.NewStyle().
 			Width(s.width).
 			Align(lipgloss.Center).
-			Render(emptyMsg))
+			Render("No sync jobs configured."))
 		b.WriteString("\n")
+		addHint := components.Styles.HelpText.Render("Press 'a' or 'n' to add a new sync job.")
 		b.WriteString(lipgloss.NewStyle().
 			Width(s.width).
 			Align(lipgloss.Center).
 			Render(addHint))
-	} else {
+	default:
 		// Sync job list
 		b.WriteString(s.renderJobList())
 		b.WriteString("\n")
@@ -648,13 +646,14 @@ func (s *SyncJobsScreen) renderJobDetails() string {
 	// Get status info
 	statusStr := "unknown"
 	if status, ok := s.statuses[job.Name]; ok {
-		if status.TimerActive {
+		switch {
+		case status.TimerActive:
 			statusStr = "scheduled"
-		} else if status.ActiveState == "active" {
+		case status.ActiveState == "active":
 			statusStr = "running"
-		} else if status.ActiveState == "failed" {
+		case status.ActiveState == "failed":
 			statusStr = "failed"
-		} else {
+		default:
 			statusStr = "inactive"
 		}
 	}
@@ -810,8 +809,7 @@ func (d *SyncJobDetails) Init() tea.Cmd {
 
 // Update handles updates.
 func (d *SyncJobDetails) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "esc", "q":
 			d.done = true
@@ -1039,8 +1037,7 @@ func (d *SyncJobDeleteConfirm) Init() tea.Cmd {
 
 // Update handles updates.
 func (d *SyncJobDeleteConfirm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "left", "h":
 			if d.cursor > 0 {

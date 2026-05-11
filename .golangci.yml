@@ -11,8 +11,12 @@ linters:
     - intrange
     - misspell
     - nilnil
+    - errorlint
+    - gosec
+    - gocritic
 issues:
   exclude-rules:
-    - path: _test\.go
+    - path: .*_test\.go$
       linters:
         - errcheck
+        - gosec

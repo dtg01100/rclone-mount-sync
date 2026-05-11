@@ -270,7 +270,7 @@ func (r *Reconciler) parseSyncUnit(content string, orphan OrphanedUnit) (*models
 	}
 
 	timerPath := strings.Replace(orphan.Path, ".service", ".timer", 1)
-	if timerContent, err := os.ReadFile(timerPath); err == nil {
+	if timerContent, err := os.ReadFile(timerPath); err == nil { //nolint:gosec
 		job.Schedule = r.parseTimerSchedule(string(timerContent))
 	}
 
@@ -401,17 +401,18 @@ func (r *Reconciler) parseTimerSchedule(content string) models.ScheduleConfig {
 	scanner := bufio.NewScanner(strings.NewReader(content))
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if strings.HasPrefix(line, "OnCalendar=") {
+		switch {
+		case strings.HasPrefix(line, "OnCalendar="):
 			config.OnCalendar = strings.TrimPrefix(line, "OnCalendar=")
 			config.Type = "timer"
-		} else if strings.HasPrefix(line, "OnBootSec=") {
+		case strings.HasPrefix(line, "OnBootSec="):
 			config.OnBootSec = strings.TrimPrefix(line, "OnBootSec=")
 			config.Type = "onboot"
-		} else if strings.HasPrefix(line, "OnUnitActiveSec=") {
+		case strings.HasPrefix(line, "OnUnitActiveSec="):
 			config.OnActiveSec = strings.TrimPrefix(line, "OnUnitActiveSec=")
-		} else if strings.HasPrefix(line, "RandomizedDelaySec=") {
+		case strings.HasPrefix(line, "RandomizedDelaySec="):
 			config.RandomizedDelaySec = strings.TrimPrefix(line, "RandomizedDelaySec=")
-		} else if line == "Persistent=true" {
+		case line == "Persistent=true":
 			config.Persistent = true
 		}
 	}

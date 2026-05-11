@@ -3,6 +3,7 @@ package rclone
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -75,7 +76,7 @@ func (c *Client) GetVersion() (string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, c.binaryPath, "version")
+	cmd := exec.CommandContext(ctx, c.binaryPath, "version") //nolint:gosec
 	output, err := cmd.Output()
 	if err != nil {
 		return "", fmt.Errorf("failed to get rclone version: %w", err)
@@ -98,11 +99,12 @@ func (c *Client) runCommand(ctx context.Context, args ...string) ([]byte, error)
 		args = append([]string{"--config", c.configPath}, args...)
 	}
 
-	cmd := exec.CommandContext(ctx, c.binaryPath, args...)
+	cmd := exec.CommandContext(ctx, c.binaryPath, args...) //nolint:gosec
 	output, err := cmd.Output()
 	if err != nil {
 		// Include stderr in the error message for debugging
-		if exitErr, ok := err.(*exec.ExitError); ok {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) {
 			stderr := strings.TrimSpace(string(exitErr.Stderr))
 			stdout := strings.TrimSpace(string(output))
 			if stderr != "" {

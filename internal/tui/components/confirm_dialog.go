@@ -54,8 +54,7 @@ func (d *ConfirmDialog) Init() tea.Cmd {
 
 // Update handles updates.
 func (d *ConfirmDialog) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
+	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "left", "h":
 			if d.cursor > 0 {

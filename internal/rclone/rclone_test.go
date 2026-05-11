@@ -2,6 +2,7 @@ package rclone
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -88,7 +89,7 @@ func createMockRclone(t *testing.T, script string) string {
 	if runtime.GOOS == "windows" {
 		mockPath += ".bat"
 	}
-	if err := os.WriteFile(mockPath, []byte(script), 0755); err != nil {
+	if err := os.WriteFile(mockPath, []byte(script), 0755); err != nil { //nolint:gosec
 		t.Fatalf("failed to create mock rclone: %v", err)
 	}
 	return mockPath
@@ -842,7 +843,7 @@ echo "success: $*"
 		t.Errorf("runCommandWithRetry() output should contain 'success', got: %s", output)
 	}
 
-	attemptCount, _ := os.ReadFile(attemptFile)
+	attemptCount, _ := os.ReadFile(attemptFile) //nolint:gosec
 	if strings.TrimSpace(string(attemptCount)) != "2" {
 		t.Errorf("expected 2 attempts, got %s", string(attemptCount))
 	}
@@ -900,7 +901,7 @@ func TestRunCommandWithRetryContextCancellation(t *testing.T) {
 	<-started // Wait for goroutine to start
 
 	_, err := c.runCommandWithRetry(ctx, "listremotes")
-	if err != context.Canceled {
+	if !errors.Is(err, context.Canceled) {
 		t.Errorf("runCommandWithRetry() should return context.Canceled, got %v", err)
 	}
 }

@@ -791,7 +791,7 @@ func TestGenerator_WriteUnitFile(t *testing.T) {
 
 	// Verify file was created
 	path := filepath.Join(tmpDir, filename)
-	readContent, err := os.ReadFile(path)
+	readContent, err := os.ReadFile(path) //nolint:gosec
 	if err != nil {
 		t.Fatalf("Failed to read written file: %v", err)
 	}
@@ -841,7 +841,7 @@ func TestGenerator_RemoveUnit(t *testing.T) {
 	// Create a file to remove
 	filename := "to-remove.service"
 	path := filepath.Join(tmpDir, filename)
-	if err := os.WriteFile(path, []byte("content"), 0644); err != nil {
+	if err := os.WriteFile(path, []byte("content"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 
@@ -1158,7 +1158,7 @@ func TestGenerator_WriteMountService(t *testing.T) {
 		t.Errorf("WriteMountService() returned path without .service suffix: %q", path)
 	}
 
-	content, err := os.ReadFile(path)
+	content, err := os.ReadFile(path) //nolint:gosec
 	if err != nil {
 		t.Fatalf("Failed to read written file: %v", err)
 	}
@@ -1253,10 +1253,8 @@ func TestGenerator_WriteSyncUnits(t *testing.T) {
 				if _, err := os.Stat(timerPath); os.IsNotExist(err) {
 					t.Errorf("WriteSyncUnits() timer file not created at %q", timerPath)
 				}
-			} else {
-				if timerPath != "" {
-					t.Errorf("WriteSyncUnits() timerPath should be empty for manual schedule, got %q", timerPath)
-				}
+			} else if timerPath != "" {
+				t.Errorf("WriteSyncUnits() timerPath should be empty for manual schedule, got %q", timerPath)
 			}
 		})
 	}

@@ -116,7 +116,7 @@ func TestGetLogDir_MkdirAllPermissionDenied(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	readonlyDir := filepath.Join(tmpDir, "readonly")
-	if err := os.MkdirAll(readonlyDir, 0555); err != nil {
+	if err := os.MkdirAll(readonlyDir, 0555); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create readonly dir: %v", err)
 	}
 
@@ -138,7 +138,7 @@ func TestGetLogDir_XdgStateHomeMkdirError(t *testing.T) {
 
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "file")
-	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil {
+	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create file: %v", err)
 	}
 

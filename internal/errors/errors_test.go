@@ -70,7 +70,7 @@ func TestAppError_Unwrap(t *testing.T) {
 	}
 
 	unwrapped := err.Unwrap()
-	if unwrapped != cause {
+	if !errors.Is(unwrapped, cause) {
 		t.Errorf("Unwrap() = %v, want %v", unwrapped, cause)
 	}
 
@@ -195,7 +195,7 @@ func TestNewRcloneNotFoundError(t *testing.T) {
 	if err.Code != ErrRcloneNotFound.Code {
 		t.Errorf("expected code %s, got %s", ErrRcloneNotFound.Code, err.Code)
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Errorf("expected cause %v, got %v", cause, err.Cause)
 	}
 	if err.Message != ErrRcloneNotFound.Message {
@@ -213,7 +213,7 @@ func TestNewRcloneVersionError(t *testing.T) {
 	if !testutil.ContainsString(err.Message, "1.50.0") || !testutil.ContainsString(err.Message, "1.60.0") {
 		t.Errorf("expected message to contain version info, got %s", err.Message)
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Errorf("expected cause %v, got %v", cause, err.Cause)
 	}
 }
@@ -225,7 +225,7 @@ func TestNewNoRemotesConfiguredError(t *testing.T) {
 	if err.Code != ErrNoRemotesConfigured.Code {
 		t.Errorf("expected code %s, got %s", ErrNoRemotesConfigured.Code, err.Code)
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Errorf("expected cause %v, got %v", cause, err.Cause)
 	}
 }
@@ -240,7 +240,7 @@ func TestNewMountPointExistsError(t *testing.T) {
 	if !testutil.ContainsString(err.Message, "/mnt/test") {
 		t.Errorf("expected message to contain mount point, got %s", err.Message)
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Errorf("expected cause %v, got %v", cause, err.Cause)
 	}
 }
@@ -255,7 +255,7 @@ func TestNewMountPointNotFoundError(t *testing.T) {
 	if !testutil.ContainsString(err.Message, "/mnt/missing") {
 		t.Errorf("expected message to contain mount point, got %s", err.Message)
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Errorf("expected cause %v, got %v", cause, err.Cause)
 	}
 }
@@ -270,7 +270,7 @@ func TestNewServiceNotFoundError(t *testing.T) {
 	if !testutil.ContainsString(err.Message, "rclone-mount-test") {
 		t.Errorf("expected message to contain service name, got %s", err.Message)
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Errorf("expected cause %v, got %v", cause, err.Cause)
 	}
 }
@@ -285,7 +285,7 @@ func TestNewServiceFailedError(t *testing.T) {
 	if !testutil.ContainsString(err.Message, "start") || !testutil.ContainsString(err.Message, "rclone-mount-test") {
 		t.Errorf("expected message to contain operation and service name, got %s", err.Message)
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Errorf("expected cause %v, got %v", cause, err.Cause)
 	}
 }
@@ -300,7 +300,7 @@ func TestNewConfigInvalidError(t *testing.T) {
 	if !testutil.ContainsString(err.Message, "missing required field") {
 		t.Errorf("expected message to contain details, got %s", err.Message)
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Errorf("expected cause %v, got %v", cause, err.Cause)
 	}
 }
@@ -315,7 +315,7 @@ func TestNewPermissionDeniedError(t *testing.T) {
 	if !testutil.ContainsString(err.Message, "write") || !testutil.ContainsString(err.Message, "/etc/config") {
 		t.Errorf("expected message to contain operation and resource, got %s", err.Message)
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Errorf("expected cause %v, got %v", cause, err.Cause)
 	}
 }
@@ -330,7 +330,7 @@ func TestNewRcloneError(t *testing.T) {
 	if !testutil.ContainsString(err.Message, "rclone mount") {
 		t.Errorf("expected message to contain command, got %s", err.Message)
 	}
-	if err.Cause != cause {
+	if !errors.Is(err.Cause, cause) {
 		t.Errorf("expected cause %v, got %v", cause, err.Cause)
 	}
 }
@@ -383,7 +383,7 @@ func TestWrap(t *testing.T) {
 		if !testutil.ContainsString(wrapped.Message, "outer context") || !testutil.ContainsString(wrapped.Message, "inner message") {
 			t.Errorf("expected wrapped message, got %s", wrapped.Message)
 		}
-	if wrapped.Cause != inner {
+	if !errors.Is(wrapped.Cause, inner) {
 		t.Error("cause should be the inner AppError (preserving error chain)")
 	}
 	})
@@ -398,7 +398,7 @@ func TestWrap(t *testing.T) {
 		if !testutil.ContainsString(wrapped.Message, "context") {
 			t.Errorf("expected message to contain context, got %s", wrapped.Message)
 		}
-		if wrapped.Cause != stdErr {
+		if !errors.Is(wrapped.Cause, stdErr) {
 			t.Error("cause should be the original error")
 		}
 	})
@@ -479,7 +479,7 @@ func TestErrorsUnwrap(t *testing.T) {
 	err := NewRcloneNotFoundError(cause)
 
 	unwrapped := errors.Unwrap(err)
-	if unwrapped != cause {
+	if !errors.Is(unwrapped, cause) {
 		t.Error("errors.Unwrap should return the cause")
 	}
 }
