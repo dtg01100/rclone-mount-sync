@@ -88,8 +88,16 @@ func handleConfigDir(configDir string) error {
 	}
 
 	resolvedDir := configDir
-	if fi, err := os.Stat(configDir); err == nil && !fi.IsDir() {
+	fi, err := os.Stat(configDir)
+	if err == nil && !fi.IsDir() {
 		resolvedDir = filepath.Dir(configDir)
+	} else if os.IsNotExist(err) {
+		// If it doesn't exist, try parent directory
+		parentDir := filepath.Dir(configDir)
+		if _, err := os.Stat(parentDir); os.IsNotExist(err) {
+			return fmt.Errorf("config directory %q does not exist", configDir)
+		}
+		resolvedDir = parentDir
 	}
 
 	return os.Setenv("XDG_CONFIG_HOME", resolvedDir)
