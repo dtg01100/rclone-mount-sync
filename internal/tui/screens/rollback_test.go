@@ -75,7 +75,7 @@ func TestRollbackMount_RestoresConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	origMounts := []models.MountConfig{
 		{ID: "abc12345", Name: "Mount1"},
@@ -193,7 +193,7 @@ func TestRollbackMount_WithBackup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	configPath := filepath.Join(tmpDir, "config.yaml")
 	backupPath := configPath + ".bak"
