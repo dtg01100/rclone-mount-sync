@@ -466,12 +466,42 @@ func (g *Generator) buildTimerDirectives(schedule *models.ScheduleConfig) string
 }
 
 // sanitizeExtraArgs removes newlines and escapes percent signs to prevent
-// systemd unit file directive injection.
+// systemd unit file directive injection. It returns an empty string with
+// a logged warning if the args contain systemd directive patterns.
 func sanitizeExtraArgs(args string) string {
-	args = strings.ReplaceAll(args, "\r", " ")
-	args = strings.ReplaceAll(args, "\n", " ")
+	if err := models.ValidateExtraArgs(args); err != nil {
+		// Strip dangerous content rather than silently passing it through
+		cleaned := strings.ReplaceAll(args, "\r", " ")
+		cleaned = strings.ReplaceAll(cleaned, "\n", " ")
+		// Remove fields that look like systemd directives (Key=Value)
+		var safe []string
+		for _, field := range strings.Fields(cleaned) {
+			idx := strings.IndexByte(field, '=')
+			if idx > 0 && idx < len(field)-1 {
+				key := field[:idx]
+				if isAllAlpha(key) {
+					continue
+				}
+			}
+			safe = append(safe, field)
+		}
+		args = strings.Join(safe, " ")
+	}
 	args = strings.ReplaceAll(args, "%", "%%")
 	return strings.TrimSpace(args)
+}
+
+// isAllAlpha checks if a string contains only letters.
+func isAllAlpha(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
+			return false
+		}
+	}
+	return true
 }
 
 // NewTestGenerator creates a generator for use in tests.

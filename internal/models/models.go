@@ -8,12 +8,34 @@ import (
 )
 
 // ValidateExtraArgs checks that extra args don't contain newlines
-// which could inject arbitrary directives into systemd unit files.
+// or systemd directive patterns which could inject arbitrary directives
+// into systemd unit files.
 func ValidateExtraArgs(args string) error {
 	if strings.ContainsAny(args, "\r\n") {
 		return fmt.Errorf("extra args must not contain newlines")
 	}
+	for _, field := range strings.Fields(args) {
+		if idx := strings.IndexByte(field, '='); idx > 0 && idx < len(field)-1 {
+			key := field[:idx]
+			if isAlpha(key) {
+				return fmt.Errorf("extra arg %q looks like a systemd directive and is not allowed", field)
+			}
+		}
+	}
 	return nil
+}
+
+// isAlpha checks if a string contains only alphabetic characters.
+func isAlpha(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, r := range s {
+		if (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
+			return false
+		}
+	}
+	return true
 }
 
 // MountConfig represents the configuration for an rclone mount.
