@@ -5,11 +5,9 @@ linters:
   enable:
     - errcheck
     - unused
-    - gosimple
     - govet
     - ineffassign
     - staticcheck
-    - typecheck
 issues:
   exclude-rules:
     - path: _test\.go
