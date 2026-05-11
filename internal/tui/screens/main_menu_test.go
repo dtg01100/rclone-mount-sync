@@ -103,7 +103,7 @@ func TestMainMenuScreen_NavigationDown(t *testing.T) {
 	}
 
 	// Move down through all items
-	for i := 0; i < len(screen.menu.Items)-1; i++ {
+	for i := range len(screen.menu.Items) - 1 {
 		screen.Update(tea.KeyMsg{Type: tea.KeyDown})
 		expected := i + 1
 		if screen.menu.Cursor != expected {

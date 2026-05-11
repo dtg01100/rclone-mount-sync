@@ -870,14 +870,14 @@ func TestDefaultAppDeps_ParseFlags(t *testing.T) {
 
 func BenchmarkParseFlags(b *testing.B) {
 	args := []string{"--version", "--skip-checks", "--config", "/test/config"}
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_, _ = parseFlags(args)
 	}
 }
 
 func BenchmarkPrintVersion(b *testing.B) {
 	var buf bytes.Buffer
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		buf.Reset()
 		printVersion(&buf, "1.0.0")
 	}

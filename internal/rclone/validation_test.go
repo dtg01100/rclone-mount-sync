@@ -2250,7 +2250,7 @@ func TestCheckResultZeroValue(t *testing.T) {
 // Benchmark tests for performance-critical functions
 func BenchmarkParseVersion(b *testing.B) {
 	versionStr := "rclone v1.62.0"
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_, _ = parseVersion(versionStr)
 	}
 }
@@ -2258,7 +2258,7 @@ func BenchmarkParseVersion(b *testing.B) {
 func BenchmarkCompareVersions(b *testing.B) {
 	a := versionTuple{1, 62, 0}
 	bVersion := versionTuple{1, 60, 0}
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = compareVersions(a, bVersion)
 	}
 }
@@ -2269,14 +2269,14 @@ func BenchmarkFormatRemoteNames(b *testing.B) {
 		{Name: "onedrive"}, {Name: "box"}, {Name: "azure"},
 		{Name: "google_cloud"}, {Name: "aws"}, {Name: "backblaze"}, {Name: "meganz"},
 	}
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = formatRemoteNames(remotes)
 	}
 }
 
 func BenchmarkValidateOnCalendar(b *testing.B) {
 	calendar := "*-*-* 02:00:00"
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = ValidateOnCalendar(calendar)
 	}
 }
@@ -2289,7 +2289,7 @@ func BenchmarkFormatResults(b *testing.B) {
 		{Name: "Check4", Passed: false, Message: "Warning", Suggestion: "Consider fixing", IsCritical: false},
 		{Name: "Check5", Passed: true, Message: "OK", IsCritical: true},
 	}
-	for i := 0; i < b.N; i++ {
+	for range b.N {
 		_ = FormatResults(results)
 	}
 }

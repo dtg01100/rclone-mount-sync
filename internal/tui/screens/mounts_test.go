@@ -167,7 +167,7 @@ func TestMountsScreen_CursorNavigation(t *testing.T) {
 	}
 
 	// Move down through all items
-	for i := 0; i < len(screen.mounts)-1; i++ {
+	for i := range len(screen.mounts) - 1 {
 		screen.Update(tea.KeyMsg{Type: tea.KeyDown})
 		expected := i + 1
 		if screen.cursor != expected {
@@ -2334,7 +2334,7 @@ func TestMountDetails_RenderLogs_Truncation(t *testing.T) {
 
 	// Create logs with more than 15 lines
 	var logLines []string
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		logLines = append(logLines, fmt.Sprintf("Log line %d", i))
 	}
 	details.logs = strings.Join(logLines, "\n")

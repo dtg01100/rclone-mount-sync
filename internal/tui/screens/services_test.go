@@ -194,7 +194,7 @@ func TestServicesScreen_CursorNavigation(t *testing.T) {
 	}
 
 	// Move down through all items
-	for i := 0; i < len(screen.filteredServices)-1; i++ {
+	for i := range len(screen.filteredServices) - 1 {
 		screen.Update(tea.KeyMsg{Type: tea.KeyDown})
 		expected := i + 1
 		if screen.cursor != expected {

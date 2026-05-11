@@ -337,7 +337,7 @@ func TestEnhancedFilePicker_AddRecentPath(t *testing.T) {
 
 	// Test max paths limit (10)
 	ClearRecentPaths()
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		AddRecentPath(filepath.Join("/tmp", "path", string(rune('a'+i))))
 	}
 	paths = GetRecentPaths()
@@ -554,7 +554,7 @@ func TestEnhancedFilePicker_MaxRecentPaths(t *testing.T) {
 	ClearRecentPaths()
 
 	// Add more than maxRecentPaths paths
-	for i := 0; i < 15; i++ {
+	for i := range 15 {
 		AddRecentPath(filepath.Join("/tmp", "path", string(rune('a'+i))))
 	}
 

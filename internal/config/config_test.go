@@ -445,7 +445,7 @@ func TestAddRecentPathMostRecentFirst(t *testing.T) {
 		cfg.AddRecentPath(p)
 	}
 
-	for i := 0; i < len(paths); i++ {
+	for i := range paths {
 		expectedIdx := len(paths) - 1 - i
 		if cfg.Settings.RecentPaths[i] != paths[expectedIdx] {
 			t.Errorf("RecentPaths[%d] = %q, want %q", i, cfg.Settings.RecentPaths[i], paths[expectedIdx])
@@ -1376,7 +1376,7 @@ func TestBackupOnlyKeepsMostRecent(t *testing.T) {
 	defer func() { getConfigDir = origGetConfigDir }()
 
 	cfg := newConfigWithDefaults()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		cfg.Settings.DefaultMountDir = fmt.Sprintf("/mnt/%d", i)
 		if err := cfg.Save(); err != nil {
 			t.Fatalf("Save() iteration %d error = %v", i, err)
