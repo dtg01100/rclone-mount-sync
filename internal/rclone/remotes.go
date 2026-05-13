@@ -2,10 +2,8 @@ package rclone
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"log"
-	"os/exec"
+	"os"
 	"strings"
 	"time"
 )
@@ -34,10 +32,6 @@ func (c *Client) ListRemotes(ctx context.Context) ([]Remote, error) {
 
 	output, err := c.runCommandWithRetry(ctx, "listremotes")
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("failed to list remotes: %w", err)
-		}
 		return nil, fmt.Errorf("failed to list remotes: %w", err)
 	}
 
@@ -62,8 +56,8 @@ func (c *Client) ListRemotes(ctx context.Context) ([]Remote, error) {
 		// Get the remote type
 		remoteType, err := c.GetRemoteType(ctx, name)
 		if err != nil {
-			// Log warning but continue - remote might still be usable
-			log.Printf("Warning: failed to get remote type for %s: %v", name, err)
+		// Log warning but continue - remote might still be usable
+		fmt.Fprintf(os.Stderr, "Warning: failed to get remote type for %s: %v\n", name, err)
 			remoteType = "unknown"
 		}
 
@@ -88,10 +82,6 @@ func (c *Client) GetRemoteType(ctx context.Context, remote string) (string, erro
 
 	output, err := c.runCommandWithRetry(ctx, "config", "show", remote)
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return "", fmt.Errorf("failed to get remote type: %w", err)
-		}
 		return "", fmt.Errorf("failed to get remote type: %w", err)
 	}
 
@@ -127,10 +117,6 @@ func (c *Client) ListRemotePath(ctx context.Context, remote, path string) ([]str
 
 	output, err := c.runCommandWithRetry(ctx, "lsf", remotePath)
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("failed to list remote path: %w", err)
-		}
 		return nil, fmt.Errorf("failed to list remote path: %w", err)
 	}
 
@@ -162,10 +148,6 @@ func (c *Client) ListRemoteDirectories(ctx context.Context, remote, path string)
 
 	output, err := c.runCommandWithRetry(ctx, "lsf", remotePath, "--dirs-only")
 	if err != nil {
-		var exitErr *exec.ExitError
-		if errors.As(err, &exitErr) {
-			return nil, fmt.Errorf("failed to list remote directories: %w", err)
-		}
 		return nil, fmt.Errorf("failed to list remote directories: %w", err)
 	}
 

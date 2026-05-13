@@ -1835,6 +1835,174 @@ exported: "2024-01-01T00:00:00Z"
 	}
 }
 
+func TestUpdateMount(t *testing.T) {
+	cfg := newConfigWithDefaults()
+
+	_ = cfg.AddMount(models.MountConfig{
+		Name:       "original",
+		Remote:     "gdrive:",
+		MountPoint: "/mnt/original",
+	})
+
+	original := cfg.Mounts[0]
+	updated := original
+	updated.Remote = "dropbox:"
+	updated.MountPoint = "/mnt/updated"
+
+	if err := cfg.UpdateMount(updated); err != nil {
+		t.Fatalf("UpdateMount() error = %v", err)
+	}
+
+	if cfg.Mounts[0].Remote != "dropbox:" {
+		t.Errorf("Remote = %q, want %q", cfg.Mounts[0].Remote, "dropbox:")
+	}
+	if cfg.Mounts[0].MountPoint != "/mnt/updated" {
+		t.Errorf("MountPoint = %q, want %q", cfg.Mounts[0].MountPoint, "/mnt/updated")
+	}
+	if cfg.Mounts[0].CreatedAt.IsZero() {
+		t.Error("CreatedAt should not be zero")
+	}
+	if cfg.Mounts[0].ModifiedAt.Before(cfg.Mounts[0].CreatedAt) {
+		t.Error("ModifiedAt should be after or equal to CreatedAt")
+	}
+}
+
+func TestUpdateMountNotFound(t *testing.T) {
+	cfg := newConfigWithDefaults()
+
+	err := cfg.UpdateMount(models.MountConfig{
+		ID:   "nonexistent-id",
+		Name: "ghost",
+	})
+	if err == nil {
+		t.Error("UpdateMount() should return error for nonexistent ID")
+	}
+}
+
+func TestUpdateMountPreservesOriginalCreatedAt(t *testing.T) {
+	cfg := newConfigWithDefaults()
+
+	_ = cfg.AddMount(models.MountConfig{
+		Name:       "test",
+		Remote:     "gdrive:",
+		MountPoint: "/mnt/test",
+	})
+
+	original := cfg.Mounts[0]
+	updated := original
+	updated.CreatedAt = time.Time{} // zero it out
+	updated.Remote = "dropbox:"
+
+	if err := cfg.UpdateMount(updated); err != nil {
+		t.Fatalf("UpdateMount() error = %v", err)
+	}
+
+	if !cfg.Mounts[0].CreatedAt.Equal(original.CreatedAt) {
+		t.Error("UpdateMount should preserve original CreatedAt when zero")
+	}
+}
+
+func TestUpdateSyncJob(t *testing.T) {
+	cfg := newConfigWithDefaults()
+
+	_ = cfg.AddSyncJob(models.SyncJobConfig{
+		Name:        "original",
+		Source:      "gdrive:/a",
+		Destination: "/backup/a",
+	})
+
+	original := cfg.SyncJobs[0]
+	updated := original
+	updated.Source = "dropbox:/b"
+	updated.Destination = "/backup/b"
+
+	if err := cfg.UpdateSyncJob(updated); err != nil {
+		t.Fatalf("UpdateSyncJob() error = %v", err)
+	}
+
+	if cfg.SyncJobs[0].Source != "dropbox:/b" {
+		t.Errorf("Source = %q, want %q", cfg.SyncJobs[0].Source, "dropbox:/b")
+	}
+	if cfg.SyncJobs[0].Destination != "/backup/b" {
+		t.Errorf("Destination = %q, want %q", cfg.SyncJobs[0].Destination, "/backup/b")
+	}
+}
+
+func TestUpdateSyncJobNotFound(t *testing.T) {
+	cfg := newConfigWithDefaults()
+
+	err := cfg.UpdateSyncJob(models.SyncJobConfig{
+		ID:   "nonexistent-id",
+		Name: "ghost",
+	})
+	if err == nil {
+		t.Error("UpdateSyncJob() should return error for nonexistent ID")
+	}
+}
+
+func TestSetMounts(t *testing.T) {
+	cfg := newConfigWithDefaults()
+
+	_ = cfg.AddMount(models.MountConfig{Name: "old", Remote: "gdrive:", MountPoint: "/mnt/old"})
+
+	newMounts := []models.MountConfig{
+		{Name: "new1", Remote: "dropbox:", MountPoint: "/mnt/new1"},
+		{Name: "new2", Remote: "s3:", MountPoint: "/mnt/new2"},
+	}
+
+	cfg.SetMounts(newMounts)
+
+	if len(cfg.Mounts) != 2 {
+		t.Fatalf("Mounts count = %d, want 2", len(cfg.Mounts))
+	}
+	if cfg.Mounts[0].Name != "new1" {
+		t.Errorf("Mounts[0].Name = %q, want %q", cfg.Mounts[0].Name, "new1")
+	}
+}
+
+func TestSetMountsReplacesAll(t *testing.T) {
+	cfg := newConfigWithDefaults()
+
+	_ = cfg.AddMount(models.MountConfig{Name: "old", Remote: "gdrive:", MountPoint: "/mnt/old"})
+
+	cfg.SetMounts(nil)
+
+	if cfg.Mounts != nil {
+		t.Error("SetMounts(nil) should set Mounts to nil")
+	}
+}
+
+func TestSetSyncJobs(t *testing.T) {
+	cfg := newConfigWithDefaults()
+
+	_ = cfg.AddSyncJob(models.SyncJobConfig{Name: "old", Source: "gdrive:/a", Destination: "/backup/a"})
+
+	newJobs := []models.SyncJobConfig{
+		{Name: "new1", Source: "dropbox:/b", Destination: "/backup/b"},
+	}
+
+	cfg.SetSyncJobs(newJobs)
+
+	if len(cfg.SyncJobs) != 1 {
+		t.Fatalf("SyncJobs count = %d, want 1", len(cfg.SyncJobs))
+	}
+	if cfg.SyncJobs[0].Name != "new1" {
+		t.Errorf("SyncJobs[0].Name = %q, want %q", cfg.SyncJobs[0].Name, "new1")
+	}
+}
+
+func TestAddRecentPathEmpty(t *testing.T) {
+	cfg := newConfigWithDefaults()
+	cfg.Settings.RecentPaths = []string{"/existing"}
+
+	cfg.AddRecentPath("")
+	cfg.AddRecentPath("  ")
+
+	if len(cfg.Settings.RecentPaths) != 1 {
+		t.Errorf("RecentPaths count = %d, want 1 (empty strings should be ignored)", len(cfg.Settings.RecentPaths))
+	}
+}
+
 func TestExportImportRoundTrip(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "config-test-*")
 	if err != nil {

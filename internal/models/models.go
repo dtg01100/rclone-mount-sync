@@ -17,7 +17,7 @@ func ValidateExtraArgs(args string) error {
 	for _, field := range strings.Fields(args) {
 		if idx := strings.IndexByte(field, '='); idx > 0 && idx < len(field)-1 {
 			key := field[:idx]
-			if isAlpha(key) {
+			if IsAlpha(key) {
 				return fmt.Errorf("extra arg %q looks like a systemd directive and is not allowed", field)
 			}
 		}
@@ -25,8 +25,8 @@ func ValidateExtraArgs(args string) error {
 	return nil
 }
 
-// isAlpha checks if a string contains only alphabetic characters.
-func isAlpha(s string) bool {
+// IsAlpha checks if a string contains only alphabetic characters.
+func IsAlpha(s string) bool {
 	if s == "" {
 		return false
 	}

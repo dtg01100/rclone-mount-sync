@@ -74,12 +74,12 @@ func TestParseFlags(t *testing.T) {
 			wantConfigDir: "/path/to/config",
 			wantErr:       false,
 		},
-	{
-		name:         "short version flag",
-		args:         []string{"-v"},
-		wantErr:      false,
-		wantVersion:  true,
-	},
+		{
+			name:         "short version flag",
+			args:         []string{"-v"},
+			wantErr:      false,
+			wantVersion:  true,
+		},
 	}
 
 	for _, tt := range tests {

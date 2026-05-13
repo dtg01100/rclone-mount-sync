@@ -152,8 +152,8 @@ func (g *Generator) GenerateSyncService(job *models.SyncJobConfig) (string, erro
 		RequireACPower:   job.Schedule.RequireACPower,
 		RequireUnmetered: job.Schedule.RequireUnmetered,
 		ExecCondition:    execCondition,
-		MemoryMax:        "1G",
-		CPUQuota:         "50%",
+		MemoryMax:        DefaultMemoryMax,
+		CPUQuota:         DefaultCPUQuota,
 	}
 
 	tmpl, err := template.New("sync-service").Parse(SyncServiceTemplate)
@@ -479,7 +479,7 @@ func sanitizeExtraArgs(args string) string {
 			idx := strings.IndexByte(field, '=')
 			if idx > 0 && idx < len(field)-1 {
 				key := field[:idx]
-				if isAllAlpha(key) {
+				if models.IsAlpha(key) {
 					continue
 				}
 			}
@@ -491,26 +491,16 @@ func sanitizeExtraArgs(args string) string {
 	return strings.TrimSpace(args)
 }
 
-// isAllAlpha checks if a string contains only letters.
-func isAllAlpha(s string) bool {
-	if s == "" {
-		return false
-	}
-	for _, r := range s {
-		if (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
-			return false
-		}
-	}
-	return true
-}
+
 
 // NewTestGenerator creates a generator for use in tests.
 // It uses the provided temp directory for all output.
 func NewTestGenerator(tmpDir string) *Generator {
 	return &Generator{
-		systemdDir: tmpDir,
-		rclonePath: "/usr/bin/rclone",
-		configPath: "/tmp/rclone.conf",
-		logDir:     tmpDir,
+		systemdDir:     tmpDir,
+		rclonePath:     "/usr/bin/rclone",
+		configPath:     "/tmp/rclone.conf",
+		logDir:         tmpDir,
+		fusermountPath: "/bin/fusermount",
 	}
 }

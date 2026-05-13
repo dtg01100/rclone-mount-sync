@@ -388,14 +388,17 @@ func (c *Config) RemoveMount(name string) error {
 	return fmt.Errorf("mount %q not found", name)
 }
 
-// GetMount returns a mount configuration by name.
+// GetMount returns a copy of a mount configuration by name.
+// The returned pointer is to a copy, not the internal slice element,
+// making it safe for concurrent access.
 func (c *Config) GetMount(name string) *models.MountConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	for i := range c.Mounts {
 		if c.Mounts[i].Name == name {
-			return &c.Mounts[i]
+			result := c.Mounts[i] // copy
+			return &result
 		}
 	}
 	return nil
@@ -506,14 +509,17 @@ func (c *Config) UpdateSyncJob(updated models.SyncJobConfig) error {
 	return fmt.Errorf("sync job with ID %q not found", updated.ID)
 }
 
-// GetSyncJob returns a sync job configuration by name.
+// GetSyncJob returns a copy of a sync job configuration by name.
+// The returned pointer is to a copy, not the internal slice element,
+// making it safe for concurrent access.
 func (c *Config) GetSyncJob(name string) *models.SyncJobConfig {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	for i := range c.SyncJobs {
 		if c.SyncJobs[i].Name == name {
-			return &c.SyncJobs[i]
+			result := c.SyncJobs[i] // copy
+			return &result
 		}
 	}
 	return nil
