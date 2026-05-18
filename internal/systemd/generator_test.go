@@ -880,10 +880,7 @@ func TestMountUnitData(t *testing.T) {
 		Remote:       "gdrive:",
 		RemotePath:   "/Photos",
 		MountPoint:   "/mnt/gdrive",
-		ConfigPath:   "/home/user/.config/rclone/rclone.conf",
 		MountOptions: "--vfs-cache-mode=full",
-		LogLevel:     "INFO",
-		LogPath:      "/var/log/rclone.log",
 		RclonePath:   "/usr/bin/rclone",
 	}
 
@@ -902,10 +899,7 @@ func TestSyncUnitData(t *testing.T) {
 		Source:      "gdrive:/Photos",
 		Destination: "/home/user/Backup",
 		Direction:   "sync",
-		ConfigPath:  "/home/user/.config/rclone/rclone.conf",
 		SyncOptions: "--transfers=4",
-		LogLevel:    "DEBUG",
-		LogPath:     "/var/log/rclone-sync.log",
 		RclonePath:  "/usr/bin/rclone",
 	}
 
