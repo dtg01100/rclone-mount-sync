@@ -539,6 +539,20 @@ func TestGenerator_GenerateMountService(t *testing.T) {
 			t.Errorf("GenerateMountService() missing expected section %q", section)
 		}
 	}
+
+	// Verify resource limit fields are present (using defaults)
+	if !strings.Contains(content, "MemoryMax=") {
+		t.Error("GenerateMountService() missing MemoryMax= directive")
+	}
+	if !strings.Contains(content, "CPUQuota=") {
+		t.Error("GenerateMountService() missing CPUQuota= directive")
+	}
+	if !strings.Contains(content, "MemoryMax=1G") {
+		t.Error("GenerateMountService() expected MemoryMax=1G (default)")
+	}
+	if !strings.Contains(content, "CPUQuota=50%") {
+		t.Error("GenerateMountService() expected CPUQuota=50% (default)")
+	}
 }
 
 // TestGenerateSyncService tests the GenerateSyncService method.
@@ -582,6 +596,20 @@ func TestGenerator_GenerateSyncService(t *testing.T) {
 		if !strings.Contains(content, section) {
 			t.Errorf("GenerateSyncService() missing expected section %q", section)
 		}
+	}
+
+	// Verify resource limit fields are present (using defaults)
+	if !strings.Contains(content, "MemoryMax=") {
+		t.Error("GenerateSyncService() missing MemoryMax= directive")
+	}
+	if !strings.Contains(content, "CPUQuota=") {
+		t.Error("GenerateSyncService() missing CPUQuota= directive")
+	}
+	if !strings.Contains(content, "MemoryMax=1G") {
+		t.Error("GenerateSyncService() expected MemoryMax=1G (default)")
+	}
+	if !strings.Contains(content, "CPUQuota=50%") {
+		t.Error("GenerateSyncService() expected CPUQuota=50% (default)")
 	}
 }
 
@@ -825,6 +853,60 @@ func TestGenerator_WriteUnitFileCreatesDirectory(t *testing.T) {
 	// Verify directory was created
 	if _, err := os.Stat(systemdDir); os.IsNotExist(err) {
 		t.Error("WriteUnitFile() did not create systemd directory")
+	}
+}
+
+// TestValidateUnitFilename tests the validateUnitFilename function.
+func TestValidateUnitFilename(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name:    "valid simple name",
+			input:   "rclone-mount-gdrive.service",
+			wantErr: false,
+		},
+		{
+			name:    "valid with hyphens and underscores",
+			input:   "my-sync_job-123.service",
+			wantErr: false,
+		},
+		{
+			name:    "path traversal attempt",
+			input:   "../../../etc/passwd",
+			wantErr: true,
+		},
+		{
+			name:    "forward slash",
+			input:   "foo/bar.service",
+			wantErr: true,
+		},
+		{
+			name:    "backslash",
+			input:   "foo\\bar.service",
+			wantErr: true,
+		},
+		{
+			name:    "empty string",
+			input:   "",
+			wantErr: false,
+		},
+		{
+			name:    "double dot in middle",
+			input:   "foo..bar.service",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateUnitFilename(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("validateUnitFilename(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+		})
 	}
 }
 
@@ -1790,6 +1872,65 @@ func TestGenerator_BuildSyncOptions_CustomConfig(t *testing.T) {
 	result := g.buildSyncOptions(opts)
 	if !strings.Contains(result, "--config=/custom/rclone.conf") {
 		t.Errorf("buildSyncOptions() should use custom config, got: %s", result)
+	}
+}
+
+// TestSanitizeExtraArgs tests the sanitizeExtraArgs function.
+func TestSanitizeExtraArgs(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  string
+	}{
+		{
+			name:  "empty string",
+			input: "",
+			want:  "",
+		},
+		{
+			name:  "simple args preserved",
+			input: "--drive-shared-with-me --verbose",
+			want:  "--drive-shared-with-me --verbose",
+		},
+		{
+			name:  "newlines stripped",
+			input: "--foo\n--bar",
+			want:  "--foo --bar",
+		},
+		{
+			name:  "carriage returns stripped",
+			input: "--foo\r--bar",
+			want:  "--foo --bar",
+		},
+		{
+			name:  "systemd directive filtered",
+			input: "--foo CPUQuota=50% --bar",
+			want:  "--foo --bar",
+		},
+		{
+			name:  "systemd directive with equals filtered",
+			input: "--foo CPUQuota=50% --bar",
+			want:  "--foo --bar",
+		},
+		{
+			name:  "percent signs escaped",
+			input: "--foo %s %d",
+			want:  "--foo %%s %%d",
+		},
+		{
+			name:  "mixed newlines and systemd directives",
+			input: "--foo\nCPUQuota=200%\n--bar",
+			want:  "--foo --bar",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := sanitizeExtraArgs(tt.input)
+			if got != tt.want {
+				t.Errorf("sanitizeExtraArgs(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
 	}
 }
 
