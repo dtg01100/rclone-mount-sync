@@ -37,7 +37,6 @@ type MountsScreen struct {
 	width    int
 	height   int
 	mode     MountsScreenMode
-	goBack   bool
 
 	// Sub-screens
 	form    *MountForm
@@ -465,16 +464,6 @@ func (s *MountsScreen) stopMount() (tea.Model, tea.Cmd) {
 		}
 		return MountStatusMsg{Name: mount.Name, Status: &systemd.UnitStatus{Active: false}}
 	}
-}
-
-// ShouldGoBack returns true if the screen should go back to the main menu.
-func (s *MountsScreen) ShouldGoBack() bool {
-	return s.goBack
-}
-
-// ResetGoBack resets the go back state.
-func (s *MountsScreen) ResetGoBack() {
-	s.goBack = false
 }
 
 // View renders the screen.

@@ -53,8 +53,6 @@ type ServicesScreen struct {
 	cursor int
 	width  int
 	height int
-	goBack bool
-
 	// Filter
 	filter string
 
@@ -804,16 +802,6 @@ func (s *ServicesScreen) filterLogs() string {
 	}
 
 	return strings.Join(filtered, "\n")
-}
-
-// ShouldGoBack returns true if the screen should go back to the main menu.
-func (s *ServicesScreen) ShouldGoBack() bool {
-	return s.goBack
-}
-
-// ResetGoBack resets the go back state.
-func (s *ServicesScreen) ResetGoBack() {
-	s.goBack = false
 }
 
 // View renders the screen.

@@ -27,10 +27,6 @@ func TestNewSettingsScreen(t *testing.T) {
 		t.Errorf("cursor = %d, want 0", screen.cursor)
 	}
 
-	if screen.goBack {
-		t.Error("goBack should be false initially")
-	}
-
 	if screen.editing {
 		t.Error("editing should be false initially")
 	}
@@ -400,37 +396,6 @@ func TestSettingsScreen_VimNavigation(t *testing.T) {
 	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
 	if screen.cursor != 0 {
 		t.Errorf("cursor after 'k' = %d, want 0", screen.cursor)
-	}
-}
-
-func TestSettingsScreen_EscapeKey(t *testing.T) {
-	screen := NewSettingsScreen()
-	screen.SetSize(80, 24)
-
-	// Press escape
-	screen.Update(tea.KeyMsg{Type: tea.KeyEsc})
-
-	if !screen.ShouldGoBack() {
-		t.Error("ShouldGoBack() = false, want true")
-	}
-}
-
-func TestSettingsScreen_ResetGoBack(t *testing.T) {
-	screen := NewSettingsScreen()
-	screen.SetSize(80, 24)
-
-	// Trigger go back
-	screen.Update(tea.KeyMsg{Type: tea.KeyEsc})
-
-	if !screen.ShouldGoBack() {
-		t.Fatal("ShouldGoBack() = false before reset")
-	}
-
-	// Reset
-	screen.ResetGoBack()
-
-	if screen.ShouldGoBack() {
-		t.Error("ShouldGoBack() = true after reset, want false")
 	}
 }
 
@@ -1685,9 +1650,5 @@ func TestSettingsScreen_EscapeFromActions(t *testing.T) {
 	// Should go back from actions, not main menu
 	if screen.showingActions {
 		t.Error("showingActions should be false after escape")
-	}
-
-	if screen.ShouldGoBack() {
-		t.Error("ShouldGoBack should be false when escaping from actions")
 	}
 }

@@ -337,10 +337,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, cmd)
 
-		// Check if mounts screen wants to go back
-		if a.mounts.ShouldGoBack() {
-			a.mounts.ResetGoBack()
-			a.currentScreen = ScreenMain
+		// Execute navigation commands immediately for same-update navigation
+		if cmd != nil {
+			if navMsg := cmd(); navMsg != nil {
+				switch navMsg.(type) {
+				case screens.GoBackMsg:
+					a.currentScreen = ScreenMain
+				}
+			}
 		}
 
 	case ScreenSyncJobs:
@@ -350,10 +354,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, cmd)
 
-		// Check if sync jobs screen wants to go back
-		if a.syncJobs.ShouldGoBack() {
-			a.syncJobs.ResetGoBack()
-			a.currentScreen = ScreenMain
+		// Execute navigation commands immediately for same-update navigation
+		if cmd != nil {
+			if navMsg := cmd(); navMsg != nil {
+				switch navMsg.(type) {
+				case screens.GoBackMsg:
+					a.currentScreen = ScreenMain
+				}
+			}
 		}
 
 	case ScreenServices:
@@ -363,10 +371,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, cmd)
 
-		// Check if services screen wants to go back
-		if a.services.ShouldGoBack() {
-			a.services.ResetGoBack()
-			a.currentScreen = ScreenMain
+		// Execute navigation commands immediately for same-update navigation
+		if cmd != nil {
+			if navMsg := cmd(); navMsg != nil {
+				switch navMsg.(type) {
+				case screens.GoBackMsg:
+					a.currentScreen = ScreenMain
+				}
+			}
 		}
 
 	case ScreenSettings:
@@ -376,10 +388,14 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, cmd)
 
-		// Check if settings screen wants to go back
-		if a.settings.ShouldGoBack() {
-			a.settings.ResetGoBack()
-			a.currentScreen = ScreenMain
+		// Execute navigation commands immediately for same-update navigation
+		if cmd != nil {
+			if navMsg := cmd(); navMsg != nil {
+				switch navMsg.(type) {
+				case screens.GoBackMsg:
+					a.currentScreen = ScreenMain
+				}
+			}
 		}
 	}
 

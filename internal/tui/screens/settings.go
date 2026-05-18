@@ -20,7 +20,6 @@ type SettingsScreen struct {
 	cursor   int
 	width    int
 	height   int
-	goBack   bool
 	config   *config.Config
 
 	// Form state
@@ -308,8 +307,6 @@ func (s *SettingsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "esc":
 			if s.showingActions {
 				s.showingActions = false
-			} else {
-				s.goBack = true
 			}
 		}
 	}
@@ -664,16 +661,6 @@ func (s *SettingsScreen) executeAction() (tea.Model, tea.Cmd) {
 	}
 
 	return s, nil
-}
-
-// ShouldGoBack returns true if the screen should go back to the main menu.
-func (s *SettingsScreen) ShouldGoBack() bool {
-	return s.goBack
-}
-
-// ResetGoBack resets the go back state.
-func (s *SettingsScreen) ResetGoBack() {
-	s.goBack = false
 }
 
 // View renders the screen.

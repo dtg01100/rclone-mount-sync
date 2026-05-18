@@ -537,17 +537,6 @@ func TestMountsScreen_GoBackMsg(t *testing.T) {
 	}
 }
 
-func TestMountsScreen_ResetGoBack(t *testing.T) {
-	screen := NewMountsScreen()
-	screen.goBack = true
-
-	screen.ResetGoBack()
-
-	if screen.goBack {
-		t.Error("goBack should be false after ResetGoBack")
-	}
-}
-
 func TestMountsScreen_View(t *testing.T) {
 	screen := NewMountsScreen()
 	screen.SetSize(80, 24)

@@ -37,7 +37,6 @@ type SyncJobsScreen struct {
 	width    int
 	height   int
 	mode     SyncJobsScreenMode
-	goBack   bool
 
 	// Sub-screens
 	form    *SyncJobForm
@@ -447,16 +446,6 @@ func (s *SyncJobsScreen) toggleTimer() (tea.Model, tea.Cmd) {
 
 	// Refresh status
 	return s, s.loadSyncJobs
-}
-
-// ShouldGoBack returns true if the screen should go back to the main menu.
-func (s *SyncJobsScreen) ShouldGoBack() bool {
-	return s.goBack
-}
-
-// ResetGoBack resets the go back state.
-func (s *SyncJobsScreen) ResetGoBack() {
-	s.goBack = false
 }
 
 // View renders the screen.
