@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -264,5 +265,104 @@ func TestSyncCreateValidationMissingFields(t *testing.T) {
 
 	if err := runSyncCreate(nil, nil); err == nil {
 		t.Fatal("expected runSyncCreate to fail when destination is missing")
+	}
+}
+
+func TestSyncCreateSaveConfigError(t *testing.T) {
+	oldLoadConfig := loadConfig
+	oldSyncCreateName := syncCreateName
+	oldSyncCreateSource := syncCreateSource
+	oldSyncCreateDestination := syncCreateDestination
+	defer func() {
+		loadConfig = oldLoadConfig
+		syncCreateName = oldSyncCreateName
+		syncCreateSource = oldSyncCreateSource
+		syncCreateDestination = oldSyncCreateDestination
+	}()
+
+	loadConfig = func() (*config.Config, error) {
+		return &config.Config{}, fmt.Errorf("config save failed")
+	}
+	syncCreateName = "test-sync"
+	syncCreateSource = "gdrive:/Photos"
+	syncCreateDestination = "/home/user/Backup"
+
+	if err := runSyncCreate(nil, nil); err == nil {
+		t.Fatal("expected runSyncCreate to fail when config save fails")
+	}
+}
+
+func TestSyncCreateGeneratorError(t *testing.T) {
+	cfg := &config.Config{Defaults: config.DefaultConfig{Sync: config.SyncDefaults{LogLevel: "INFO", Transfers: 4, Checkers: 8}}}
+
+	oldLoadConfig := loadConfig
+	oldLoadGenerator := loadGenerator
+	oldSyncCreateName := syncCreateName
+	oldSyncCreateSource := syncCreateSource
+	oldSyncCreateDestination := syncCreateDestination
+	defer func() {
+		loadConfig = oldLoadConfig
+		loadGenerator = oldLoadGenerator
+		syncCreateName = oldSyncCreateName
+		syncCreateSource = oldSyncCreateSource
+		syncCreateDestination = oldSyncCreateDestination
+	}()
+
+	loadConfig = func() (*config.Config, error) { return cfg, nil }
+	loadGenerator = func() (*systemd.Generator, error) { return nil, fmt.Errorf("generator init failed") }
+	syncCreateName = "test-sync"
+	syncCreateSource = "gdrive:/Photos"
+	syncCreateDestination = "/home/user/Backup"
+
+	if err := runSyncCreate(nil, nil); err == nil {
+		t.Fatal("expected runSyncCreate to fail when generator init fails")
+	}
+}
+
+func TestSyncRunGeneratorError(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.DefaultConfig{Sync: config.SyncDefaults{LogLevel: "INFO", Transfers: 4, Checkers: 8}},
+		SyncJobs: []models.SyncJobConfig{
+			{ID: "abc123", Name: "test-sync-gen", Source: "gdrive:/Photos", Destination: "/home/user/Backup/Photos", Enabled: true, Schedule: models.ScheduleConfig{Type: "timer", OnCalendar: "daily"}},
+		},
+	}
+
+	oldLoadConfig := loadConfig
+	oldLoadGenerator := loadGenerator
+	defer func() {
+		loadConfig = oldLoadConfig
+		loadGenerator = oldLoadGenerator
+	}()
+
+	loadConfig = func() (*config.Config, error) { return cfg, nil }
+	loadGenerator = func() (*systemd.Generator, error) { return nil, fmt.Errorf("generator unavailable") }
+
+	err := runSyncRun(nil, []string{"test-sync-gen"})
+	if err == nil {
+		t.Fatal("expected error when generator load fails")
+	}
+}
+
+func TestSyncDeleteGeneratorError(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.DefaultConfig{Sync: config.SyncDefaults{LogLevel: "INFO", Transfers: 4, Checkers: 8}},
+		SyncJobs: []models.SyncJobConfig{
+			{ID: "abc123", Name: "test-sync-del", Source: "gdrive:/Photos", Destination: "/home/user/Backup/Photos", Enabled: true, Schedule: models.ScheduleConfig{Type: "timer", OnCalendar: "daily"}},
+		},
+	}
+
+	oldLoadConfig := loadConfig
+	oldLoadGenerator := loadGenerator
+	defer func() {
+		loadConfig = oldLoadConfig
+		loadGenerator = oldLoadGenerator
+	}()
+
+	loadConfig = func() (*config.Config, error) { return cfg, nil }
+	loadGenerator = func() (*systemd.Generator, error) { return nil, fmt.Errorf("generator unavailable") }
+
+	err := runSyncDelete(nil, []string{"test-sync-del"})
+	if err == nil {
+		t.Fatal("expected error when generator load fails")
 	}
 }

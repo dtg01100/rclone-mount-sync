@@ -486,3 +486,102 @@ func TestMountCreateValidationMissingFields(t *testing.T) {
 		t.Fatal("expected runMountCreate to fail when remote is missing")
 	}
 }
+
+func TestMountCreateSaveConfigError(t *testing.T) {
+	oldLoadConfig := loadConfig
+	oldMountCreateName := mountCreateName
+	oldMountCreateRemote := mountCreateRemote
+	oldMountCreateMountPoint := mountCreateMountPoint
+	defer func() {
+		loadConfig = oldLoadConfig
+		mountCreateName = oldMountCreateName
+		mountCreateRemote = oldMountCreateRemote
+		mountCreateMountPoint = oldMountCreateMountPoint
+	}()
+
+	loadConfig = func() (*config.Config, error) {
+		return &config.Config{}, fmt.Errorf("config save failed")
+	}
+	mountCreateName = "test-mount"
+	mountCreateRemote = "gdrive:"
+	mountCreateMountPoint = "/home/user/mnt"
+
+	if err := runMountCreate(nil, nil); err == nil {
+		t.Fatal("expected runMountCreate to fail when config save fails")
+	}
+}
+
+func TestMountCreateGeneratorError(t *testing.T) {
+	cfg := &config.Config{Defaults: config.DefaultConfig{Mount: config.MountDefaults{LogLevel: "INFO", VFSCacheMode: "full", BufferSize: "16M"}}}
+
+	oldLoadConfig := loadConfig
+	oldLoadGenerator := loadGenerator
+	oldMountCreateName := mountCreateName
+	oldMountCreateRemote := mountCreateRemote
+	oldMountCreateMountPoint := mountCreateMountPoint
+	defer func() {
+		loadConfig = oldLoadConfig
+		loadGenerator = oldLoadGenerator
+		mountCreateName = oldMountCreateName
+		mountCreateRemote = oldMountCreateRemote
+		mountCreateMountPoint = oldMountCreateMountPoint
+	}()
+
+	loadConfig = func() (*config.Config, error) { return cfg, nil }
+	loadGenerator = func() (*systemd.Generator, error) { return nil, fmt.Errorf("generator init failed") }
+	mountCreateName = "test-mount"
+	mountCreateRemote = "gdrive:"
+	mountCreateMountPoint = "/home/user/mnt"
+
+	if err := runMountCreate(nil, nil); err == nil {
+		t.Fatal("expected runMountCreate to fail when generator init fails")
+	}
+}
+
+func TestMountStartGeneratorError(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.DefaultConfig{Mount: config.MountDefaults{LogLevel: "INFO", VFSCacheMode: "full", BufferSize: "16M"}},
+		Mounts: []models.MountConfig{
+			{ID: "abc12345", Name: "test-mount-gen", Remote: "gdrive:", RemotePath: "/", MountPoint: "/home/user/mnt", Enabled: true},
+		},
+	}
+
+	oldLoadConfig := loadConfig
+	oldLoadGenerator := loadGenerator
+	defer func() {
+		loadConfig = oldLoadConfig
+		loadGenerator = oldLoadGenerator
+	}()
+
+	loadConfig = func() (*config.Config, error) { return cfg, nil }
+	loadGenerator = func() (*systemd.Generator, error) { return nil, fmt.Errorf("generator unavailable") }
+
+	err := runMountStart(nil, []string{"test-mount-gen"})
+	if err == nil {
+		t.Fatal("expected error when generator load fails")
+	}
+}
+
+func TestMountStopGeneratorError(t *testing.T) {
+	cfg := &config.Config{
+		Defaults: config.DefaultConfig{Mount: config.MountDefaults{LogLevel: "INFO", VFSCacheMode: "full", BufferSize: "16M"}},
+		Mounts: []models.MountConfig{
+			{ID: "abc12345", Name: "test-mount-stop-gen", Remote: "gdrive:", RemotePath: "/", MountPoint: "/home/user/mnt", Enabled: true},
+		},
+	}
+
+	oldLoadConfig := loadConfig
+	oldLoadGenerator := loadGenerator
+	defer func() {
+		loadConfig = oldLoadConfig
+		loadGenerator = oldLoadGenerator
+	}()
+
+	loadConfig = func() (*config.Config, error) { return cfg, nil }
+	loadGenerator = func() (*systemd.Generator, error) { return nil, fmt.Errorf("generator unavailable") }
+
+	err := runMountStop(nil, []string{"test-mount-stop-gen"})
+	if err == nil {
+		t.Fatal("expected error when generator load fails")
+	}
+}
