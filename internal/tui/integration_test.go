@@ -490,6 +490,165 @@ func TestIntegration_AppInitErrorMsg(t *testing.T) {
 	}
 }
 
+// TestIntegration_OrphanPromptDismissWithD tests that 'd' dismisses the orphan prompt.
+func TestIntegration_OrphanPromptDismissWithD(t *testing.T) {
+	app := minimalApp(t)
+
+	// Show orphan prompt
+	app.showOrphanPrompt = true
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "rclone-mount-orphan.service", Type: "mount", Path: "/home/user/.config/systemd/user/rclone-mount-orphan.service", ID: "orphan1", IsLegacy: false},
+		},
+	}
+	app.currentScreen = ScreenMain
+	app.width = 80
+	app.height = 24
+
+	m := sendKey(t, app, keyRune("d"))
+	if m.showOrphanPrompt {
+		t.Error("showOrphanPrompt = true after 'd', want false")
+	}
+}
+
+// TestIntegration_OrphanPromptDismissWithEscape tests that 'esc' dismisses the orphan prompt.
+func TestIntegration_OrphanPromptDismissWithEscape(t *testing.T) {
+	app := minimalApp(t)
+
+	app.showOrphanPrompt = true
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "rclone-mount-orphan.service", Type: "mount", Path: "/home/user/.config/systemd/user/rclone-mount-orphan.service", ID: "orphan1", IsLegacy: false},
+		},
+	}
+	app.currentScreen = ScreenMain
+	app.width = 80
+	app.height = 24
+
+	m := sendKey(t, app, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.showOrphanPrompt {
+		t.Error("showOrphanPrompt = true after Escape, want false")
+	}
+}
+
+// TestIntegration_OrphanPromptNavigation tests up/down navigation between orphans.
+func TestIntegration_OrphanPromptNavigation(t *testing.T) {
+	app := minimalApp(t)
+
+	app.showOrphanPrompt = true
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "rclone-mount-orphan.service", Type: "mount", Path: "/home/user/.config/systemd/user/rclone-mount-orphan.service", ID: "orphan1", IsLegacy: false},
+			{Name: "rclone-sync-orphan.service", Type: "sync", Path: "/home/user/.config/systemd/user/rclone-sync-orphan.service", ID: "orphan2", IsLegacy: false},
+		},
+	}
+	app.currentScreen = ScreenMain
+	app.orphanSelected = 0
+	app.width = 80
+	app.height = 24
+
+	// Navigate down
+	m := sendKey(t, app, tea.KeyMsg{Type: tea.KeyDown})
+	if m.orphanSelected != 1 {
+		t.Errorf("orphanSelected = %d after KeyDown, want 1", m.orphanSelected)
+	}
+
+	// Navigate up
+	m = sendKey(t, m, tea.KeyMsg{Type: tea.KeyUp})
+	if m.orphanSelected != 0 {
+		t.Errorf("orphanSelected = %d after KeyUp, want 0", m.orphanSelected)
+	}
+}
+
+// TestIntegration_OrphanActionMsgError sets orphanError when OrphanActionMsg has an error.
+func TestIntegration_OrphanActionMsgError(t *testing.T) {
+	app := minimalApp(t)
+	app.loading = true
+	app.showOrphanPrompt = true
+	app.currentScreen = ScreenMain
+	app.width = 80
+	app.height = 24
+
+	m := sendMsg(t, app, OrphanActionMsg{Err: &testConfigError{msg: "import failed"}})
+
+	if m.orphanError == nil {
+		t.Error("orphanError should be set")
+	}
+	if m.loading {
+		t.Error("loading should be false after OrphanActionMsg")
+	}
+}
+
+// TestIntegration_OrphanActionMsgSuccess dismisses prompt on successful orphan action.
+func TestIntegration_OrphanActionMsgSuccess(t *testing.T) {
+	app := minimalApp(t)
+	app.loading = true
+	app.showOrphanPrompt = true
+	app.currentScreen = ScreenMain
+	app.width = 80
+	app.height = 24
+	// Set up orphans so that len(a.orphans.OrphanedUnits) == 0 triggers dismissal
+	app.orphans = &systemd.ReconciliationResult{OrphanedUnits: []systemd.OrphanedUnit{}}
+	// Index 0 with 0 orphans means list is now empty after removal
+	m := sendMsg(t, app, OrphanActionMsg{Action: "import", Index: 0})
+
+	if m.showOrphanPrompt {
+		t.Error("showOrphanPrompt = true after successful import with no remaining orphans, want false")
+	}
+	if m.loading {
+		t.Error("loading should be false after OrphanActionMsg")
+	}
+}
+
+// TestIntegration_OrphanModeEnterSelectAction tests that Enter on orphanMode=0 transitions to orphanMode=1.
+func TestIntegration_OrphanModeEnterSelectAction(t *testing.T) {
+	app := minimalApp(t)
+
+	app.showOrphanPrompt = true
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "rclone-mount-orphan.service", Type: "mount", Path: "/home/user/.config/systemd/user/rclone-mount-orphan.service", ID: "orphan1", IsLegacy: false},
+		},
+	}
+	app.orphanMode = 0
+	app.orphanSelected = 0
+	app.currentScreen = ScreenMain
+	app.width = 80
+	app.height = 24
+
+	m := sendKey(t, app, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.orphanMode != 1 {
+		t.Errorf("orphanMode = %d after Enter, want 1 (action selection)", m.orphanMode)
+	}
+}
+
+// TestIntegration_OrphanModeEscapeReturnsToList tests that Escape in action menu (orphanMode=1) goes back to list (orphanMode=0) and keeps prompt open.
+func TestIntegration_OrphanModeEscapeReturnsToList(t *testing.T) {
+	app := minimalApp(t)
+
+	app.showOrphanPrompt = true
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "rclone-mount-orphan.service", Type: "mount", Path: "/home/user/.config/systemd/user/rclone-mount-orphan.service", ID: "orphan1", IsLegacy: false},
+		},
+	}
+	app.orphanMode = 1
+	app.orphanSelected = 0
+	app.currentScreen = ScreenMain
+	app.width = 80
+	app.height = 24
+
+	m := sendKey(t, app, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.orphanMode != 0 {
+		t.Errorf("orphanMode = %d after Escape from action menu, want 0", m.orphanMode)
+	}
+	// Note: showOrphanPrompt stays true when escaping from action menu - only dismisses from list view
+	if !m.showOrphanPrompt {
+		t.Error("showOrphanPrompt = false after Escape from action menu, want true (stays in prompt)")
+	}
+}
+
+
 // --- test helpers ---
 
 type testConfigError struct {
