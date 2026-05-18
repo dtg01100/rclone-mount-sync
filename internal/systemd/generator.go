@@ -83,7 +83,6 @@ func findFusermount() string {
 func (g *Generator) GenerateMountService(mount *models.MountConfig) (string, error) {
 	mountPoint := expandPath(mount.MountPoint)
 	mountOptions := g.buildMountOptions(&mount.MountOptions)
-	logPath := filepath.Join(g.logDir, fmt.Sprintf("rclone-mount-%s.log", mount.ID))
 
 	data := MountUnitData{
 		Name:           mount.Name,
@@ -91,7 +90,6 @@ func (g *Generator) GenerateMountService(mount *models.MountConfig) (string, err
 		RemotePath:     mount.RemotePath,
 		MountPoint:     mountPoint,
 		MountOptions:   mountOptions,
-		LogPath:        logPath,
 		RclonePath:     g.rclonePath,
 		FusermountPath: g.fusermountPath,
 		MemoryMax:      DefaultMemoryMax,
@@ -129,7 +127,6 @@ func (g *Generator) WriteMountService(mount *models.MountConfig) (string, error)
 // GenerateSyncService generates a systemd service unit for an rclone sync job.
 func (g *Generator) GenerateSyncService(job *models.SyncJobConfig) (string, error) {
 	syncOptions := g.buildSyncOptions(&job.SyncOptions)
-	logPath := filepath.Join(g.logDir, fmt.Sprintf("rclone-sync-%s.log", job.ID))
 
 	direction := job.SyncOptions.Direction
 	if direction == "" {
@@ -147,7 +144,6 @@ func (g *Generator) GenerateSyncService(job *models.SyncJobConfig) (string, erro
 		Destination:      expandPath(job.Destination),
 		Direction:        direction,
 		SyncOptions:      syncOptions,
-		LogPath:          logPath,
 		RclonePath:       g.rclonePath,
 		RequireACPower:   job.Schedule.RequireACPower,
 		RequireUnmetered: job.Schedule.RequireUnmetered,

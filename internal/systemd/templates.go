@@ -71,10 +71,7 @@ type MountUnitData struct {
 	Remote         string
 	RemotePath     string
 	MountPoint     string
-	ConfigPath     string
 	MountOptions   string
-	LogLevel       string
-	LogPath        string
 	RclonePath     string
 	FusermountPath string // Path to fusermount binary (prefers fusermount3)
 	MemoryMax      string // Memory limit (e.g., "1G", "512M")
@@ -87,10 +84,7 @@ type SyncUnitData struct {
 	Source           string
 	Destination      string
 	Direction        string
-	ConfigPath       string
 	SyncOptions      string
-	LogLevel         string
-	LogPath          string
 	RclonePath       string
 	RequireACPower   bool
 	RequireUnmetered bool

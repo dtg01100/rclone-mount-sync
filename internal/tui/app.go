@@ -165,7 +165,7 @@ func (a *App) initializeServices() tea.Msg {
 
 	result, err := reconciler.ScanForOrphans(mountIDs, syncIDs)
 	if err != nil {
-		return AppInitDone{}
+		return AppInitError{Err: fmt.Errorf("failed to scan for orphaned units: %w", err)}
 	}
 
 	if len(result.OrphanedUnits) > 0 {

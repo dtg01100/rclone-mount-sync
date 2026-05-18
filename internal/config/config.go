@@ -656,6 +656,34 @@ func (c *Config) ExportConfig(filePath string) error {
 	return nil
 }
 
+// validateMountForImport checks that a mount has all required fields.
+func validateMountForImport(m models.MountConfig) error {
+	if strings.TrimSpace(m.Name) == "" {
+		return fmt.Errorf("imported mount has empty name")
+	}
+	if strings.TrimSpace(m.Remote) == "" {
+		return fmt.Errorf("imported mount %q has empty remote", m.Name)
+	}
+	if strings.TrimSpace(m.MountPoint) == "" {
+		return fmt.Errorf("imported mount %q has empty mount point", m.Name)
+	}
+	return nil
+}
+
+// validateSyncJobForImport checks that a sync job has all required fields.
+func validateSyncJobForImport(j models.SyncJobConfig) error {
+	if strings.TrimSpace(j.Name) == "" {
+		return fmt.Errorf("imported sync job has empty name")
+	}
+	if strings.TrimSpace(j.Source) == "" {
+		return fmt.Errorf("imported sync job %q has empty source", j.Name)
+	}
+	if strings.TrimSpace(j.Destination) == "" {
+		return fmt.Errorf("imported sync job %q has empty destination", j.Name)
+	}
+	return nil
+}
+
 // ImportConfig imports mounts and sync jobs from a file.
 // The import mode determines how conflicts are handled.
 func (c *Config) ImportConfig(filePath string, mode ImportMode) error {
@@ -700,18 +728,30 @@ func (c *Config) ImportConfig(filePath string, mode ImportMode) error {
 
 	switch mode {
 	case ImportModeReplace:
+		for _, m := range data.Mounts {
+			if err := validateMountForImport(m); err != nil {
+				return err
+			}
+		}
+		for _, j := range data.SyncJobs {
+			if err := validateSyncJobForImport(j); err != nil {
+				return err
+			}
+		}
 		c.Mounts = data.Mounts
 		c.SyncJobs = data.SyncJobs
 	case ImportModeMerge:
-		c.mergeImport(data)
+		if err := c.mergeImport(data); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
 // mergeImport merges the imported data with the existing configuration.
-// Items with duplicate names are skipped with an error recorded.
-func (c *Config) mergeImport(data ExportData) {
+// Items with duplicate names are skipped. Returns an error if any item fails validation.
+func (c *Config) mergeImport(data ExportData) error {
 	// Note: mergeImport is called from ImportConfig, which already holds the lock.
 	existingMountNames := make(map[string]bool)
 	for _, m := range c.Mounts {
@@ -721,6 +761,9 @@ func (c *Config) mergeImport(data ExportData) {
 	for _, mount := range data.Mounts {
 		if existingMountNames[mount.Name] {
 			continue
+		}
+		if err := validateMountForImport(mount); err != nil {
+			return err
 		}
 		if mount.ID == "" {
 			mount.ID = generateID()
@@ -743,6 +786,9 @@ func (c *Config) mergeImport(data ExportData) {
 		if existingSyncJobNames[job.Name] {
 			continue
 		}
+		if err := validateSyncJobForImport(job); err != nil {
+			return err
+		}
 		if job.ID == "" {
 			job.ID = generateID()
 		}
@@ -754,4 +800,6 @@ func (c *Config) mergeImport(data ExportData) {
 		}
 		c.SyncJobs = append(c.SyncJobs, job)
 	}
+
+	return nil
 }

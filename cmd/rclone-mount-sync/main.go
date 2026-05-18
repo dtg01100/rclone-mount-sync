@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/cli"
 	"github.com/dtg01100/rclone-mount-sync/internal/rclone"
@@ -233,7 +234,18 @@ func main() {
 		"--version":     true,
 		"-v":            true,
 	}
-	if tuiFlags[firstArg] {
+	isTUIArg := tuiFlags[firstArg] || strings.HasPrefix(firstArg, "--config=")
+	if isTUIArg {
+		// Check if any arg is a CLI subcommand (e.g., --config /path mount list)
+		for _, arg := range args {
+			if cliCommands[arg] {
+				cli.SetVersion(version)
+				if err := cli.Execute(); err != nil {
+					os.Exit(1)
+				}
+				os.Exit(0)
+			}
+		}
 		os.Exit(runMain(args, os.Stdout, os.Stderr))
 	}
 
