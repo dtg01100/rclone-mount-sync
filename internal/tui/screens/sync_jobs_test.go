@@ -111,11 +111,6 @@ func TestNewSyncJobsScreen(t *testing.T) {
 		t.Errorf("cursor = %d, want 0", screen.cursor)
 	}
 
-	// Verify goBack is false
-	if screen.goBack {
-		t.Error("goBack should be false initially")
-	}
-
 	// Verify jobs is nil/empty
 	if len(screen.jobs) != 0 {
 		t.Errorf("jobs should be empty initially, got %d items", len(screen.jobs))
@@ -407,45 +402,38 @@ func TestSyncJobsScreen_EscapeKey(t *testing.T) {
 	screen.SetSize(80, 24)
 
 	// Press escape
-	screen.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyEsc})
 
-	if !screen.ShouldGoBack() {
-		t.Error("ShouldGoBack() = false, want true")
+	if cmd == nil {
+		t.Fatal("Update() returned nil command, want GoBackMsg command")
+	}
+
+	msg := cmd()
+	if _, ok := msg.(GoBackMsg); !ok {
+		t.Errorf("message type = %T, want GoBackMsg", msg)
 	}
 }
 
-func TestSyncJobsScreen_GoBack(t *testing.T) {
+func TestSyncJobsScreen_GoBackMsg(t *testing.T) {
 	screen := NewSyncJobsScreen()
 	screen.SetSize(80, 24)
 
-	// Initially should not go back
-	if screen.ShouldGoBack() {
-		t.Error("ShouldGoBack() = true initially, want false")
+	// Initially no command returned for non-escape keys
+	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if cmd != nil {
+		t.Error("Update() should return nil command for non-escape keys")
 	}
 
-	// Trigger go back
-	screen.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	// Trigger go back with escape
+	_, cmd = screen.Update(tea.KeyMsg{Type: tea.KeyEsc})
 
-	if !screen.ShouldGoBack() {
-		t.Error("ShouldGoBack() = false after escape, want true")
+	if cmd == nil {
+		t.Fatal("Update() returned nil command, want GoBackMsg command")
 	}
 
-	// Reset go back
-	screen.ResetGoBack()
-
-	if screen.ShouldGoBack() {
-		t.Error("ShouldGoBack() = true after reset, want false")
-	}
-}
-
-func TestSyncJobsScreen_ResetGoBack(t *testing.T) {
-	screen := NewSyncJobsScreen()
-	screen.goBack = true
-
-	screen.ResetGoBack()
-
-	if screen.goBack {
-		t.Error("goBack should be false after ResetGoBack")
+	msg := cmd()
+	if _, ok := msg.(GoBackMsg); !ok {
+		t.Errorf("message type = %T, want GoBackMsg", msg)
 	}
 }
 

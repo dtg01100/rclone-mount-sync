@@ -23,15 +23,6 @@ func TestNewMainMenuScreen(t *testing.T) {
 	if len(screen.menu.Items) != 5 {
 		t.Errorf("menu items count = %d, want 5", len(screen.menu.Items))
 	}
-
-	// Verify initial state
-	if screen.navigate {
-		t.Error("navigate should be false initially")
-	}
-
-	if screen.navigationTarget != "" {
-		t.Errorf("navigationTarget = %q, want empty string", screen.navigationTarget)
-	}
 }
 
 func TestMainMenuScreen_MenuItems(t *testing.T) {
@@ -152,12 +143,13 @@ func TestMainMenuScreen_EnterKeyNavigation(t *testing.T) {
 		name           string
 		startIndex     int
 		expectedTarget string
+		isQuit         bool
 	}{
-		{"Mount Management", 0, "mounts"},
-		{"Sync Job Management", 1, "sync_jobs"},
-		{"Service Status", 2, "services"},
-		{"Settings", 3, "settings"},
-		{"Quit", 4, "quit"},
+		{"Mount Management", 0, "mounts", false},
+		{"Sync Job Management", 1, "sync_jobs", false},
+		{"Service Status", 2, "services", false},
+		{"Settings", 3, "settings", false},
+		{"Quit", 4, "", true},
 	}
 
 	for _, tt := range tests {
@@ -166,15 +158,35 @@ func TestMainMenuScreen_EnterKeyNavigation(t *testing.T) {
 			screen.SetSize(80, 24)
 			screen.menu.Cursor = tt.startIndex
 
-			// Press enter
-			screen.Update(tea.KeyMsg{Type: tea.KeyEnter})
+			// Press enter and capture the command
+			_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyEnter})
 
-			if !screen.ShouldNavigate() {
-				t.Error("ShouldNavigate() = false, want true")
+			if cmd == nil {
+				t.Fatal("Update() returned nil command, want navigation command")
 			}
 
-			if screen.GetNavigationTarget() != tt.expectedTarget {
-				t.Errorf("GetNavigationTarget() = %q, want %q", screen.GetNavigationTarget(), tt.expectedTarget)
+			// Execute the command to get the message
+			msg := cmd()
+			if msg == nil {
+				t.Fatal("command returned nil message")
+			}
+
+			// Quit uses tea.Quit which returns QuitMsg
+			if tt.isQuit {
+				if _, ok := msg.(tea.QuitMsg); !ok {
+					t.Fatalf("message type = %T, want tea.QuitMsg", msg)
+				}
+				return
+			}
+
+			// Check the message type and target
+			navigateMsg, ok := msg.(NavigateToMsg)
+			if !ok {
+				t.Fatalf("message type = %T, want NavigateToMsg", msg)
+			}
+
+			if navigateMsg.Target != tt.expectedTarget {
+				t.Errorf("NavigateToMsg.Target = %q, want %q", navigateMsg.Target, tt.expectedTarget)
 			}
 		})
 	}
@@ -190,7 +202,7 @@ func TestMainMenuScreen_QuickJumpKeys(t *testing.T) {
 		{"s key -> sync_jobs", "s", "sync_jobs"},
 		{"v key -> services", "v", "services"},
 		{"t key -> settings", "t", "settings"},
-		{"q key -> quit", "q", "quit"},
+		{"q key -> quit", "q", ""}, // Quit returns tea.Quit, not NavigateToMsg
 	}
 
 	for _, tt := range tests {
@@ -199,39 +211,34 @@ func TestMainMenuScreen_QuickJumpKeys(t *testing.T) {
 			screen.SetSize(80, 24)
 
 			// Send quick-jump key
-			screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)})
+			_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tt.key)})
 
-			if !screen.ShouldNavigate() {
-				t.Error("ShouldNavigate() = false, want true")
+			if cmd == nil {
+				t.Fatal("Update() returned nil command, want navigation command")
 			}
 
-			if screen.GetNavigationTarget() != tt.expectedTarget {
-				t.Errorf("GetNavigationTarget() = %q, want %q", screen.GetNavigationTarget(), tt.expectedTarget)
+			msg := cmd()
+			if msg == nil {
+				t.Fatal("command returned nil message")
+			}
+
+			if tt.key == "q" {
+				// Quit should return tea.Quit which produces QuitMsg
+				if _, ok := msg.(tea.QuitMsg); !ok {
+					t.Errorf("message type = %T, want tea.QuitMsg", msg)
+				}
+				return
+			}
+
+			navigateMsg, ok := msg.(NavigateToMsg)
+			if !ok {
+				t.Fatalf("message type = %T, want NavigateToMsg", msg)
+			}
+
+			if navigateMsg.Target != tt.expectedTarget {
+				t.Errorf("NavigateToMsg.Target = %q, want %q", navigateMsg.Target, tt.expectedTarget)
 			}
 		})
-	}
-}
-
-func TestMainMenuScreen_ResetNavigation(t *testing.T) {
-	screen := NewMainMenuScreen()
-	screen.SetSize(80, 24)
-
-	// Trigger navigation
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
-
-	if !screen.ShouldNavigate() {
-		t.Fatal("ShouldNavigate() = false before reset")
-	}
-
-	// Reset navigation
-	screen.ResetNavigation()
-
-	if screen.ShouldNavigate() {
-		t.Error("ShouldNavigate() = true after reset, want false")
-	}
-
-	if screen.GetNavigationTarget() != "" {
-		t.Errorf("GetNavigationTarget() = %q after reset, want empty string", screen.GetNavigationTarget())
 	}
 }
 
@@ -334,120 +341,20 @@ func TestMainMenuScreen_SpaceKeySelects(t *testing.T) {
 	screen.menu.Cursor = 0
 
 	// Press space to select
-	screen.Update(tea.KeyMsg{Type: tea.KeySpace})
+	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeySpace})
 
-	if !screen.ShouldNavigate() {
-		t.Error("ShouldNavigate() = false after space, want true")
+	if cmd == nil {
+		t.Fatal("Update() returned nil command")
 	}
 
-	if screen.GetNavigationTarget() != "mounts" {
-		t.Errorf("GetNavigationTarget() = %q, want 'mounts'", screen.GetNavigationTarget())
-	}
-}
-
-func TestMainMenuScreen_NavigationStateIsolation(t *testing.T) {
-	screen := NewMainMenuScreen()
-	screen.SetSize(80, 24)
-
-	// First navigation
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
-	firstTarget := screen.GetNavigationTarget()
-
-	// Reset and navigate again
-	screen.ResetNavigation()
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	secondTarget := screen.GetNavigationTarget()
-
-	if firstTarget == secondTarget {
-		t.Errorf("navigation targets should be different: first=%q, second=%q", firstTarget, secondTarget)
+	msg := cmd()
+	navigateMsg, ok := msg.(NavigateToMsg)
+	if !ok {
+		t.Fatalf("message type = %T, want NavigateToMsg", msg)
 	}
 
-	if secondTarget != "quit" {
-		t.Errorf("second target = %q, want 'quit'", secondTarget)
-	}
-}
-
-func TestMainMenuScreen_MultipleNavigations(t *testing.T) {
-	screen := NewMainMenuScreen()
-	screen.SetSize(80, 24)
-
-	// Navigate to mounts
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
-	if screen.GetNavigationTarget() != "mounts" {
-		t.Errorf("target = %q, want 'mounts'", screen.GetNavigationTarget())
-	}
-
-	// Reset and navigate to sync_jobs
-	screen.ResetNavigation()
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	if screen.GetNavigationTarget() != "sync_jobs" {
-		t.Errorf("target = %q, want 'sync_jobs'", screen.GetNavigationTarget())
-	}
-
-	// Reset and navigate to services
-	screen.ResetNavigation()
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
-	if screen.GetNavigationTarget() != "services" {
-		t.Errorf("target = %q, want 'services'", screen.GetNavigationTarget())
-	}
-
-	// Reset and navigate to settings
-	screen.ResetNavigation()
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
-	if screen.GetNavigationTarget() != "settings" {
-		t.Errorf("target = %q, want 'settings'", screen.GetNavigationTarget())
-	}
-}
-
-func TestMainMenuScreen_EnterKeyOnEachItem(t *testing.T) {
-	screen := NewMainMenuScreen()
-	screen.SetSize(80, 24)
-
-	// Test Enter on each menu item
-	items := []struct {
-		cursor   int
-		expected string
-	}{
-		{0, "mounts"},
-		{1, "sync_jobs"},
-		{2, "services"},
-		{3, "settings"},
-		{4, "quit"},
-	}
-
-	for _, item := range items {
-		screen.menu.Cursor = item.cursor
-		screen.ResetNavigation()
-		screen.Update(tea.KeyMsg{Type: tea.KeyEnter})
-		if screen.GetNavigationTarget() != item.expected {
-			t.Errorf("cursor %d: target = %q, want %q", item.cursor, screen.GetNavigationTarget(), item.expected)
-		}
-	}
-}
-
-func TestMainMenuScreen_SpaceKeyOnEachItem(t *testing.T) {
-	screen := NewMainMenuScreen()
-	screen.SetSize(80, 24)
-
-	// Test Space on each menu item
-	items := []struct {
-		cursor   int
-		expected string
-	}{
-		{0, "mounts"},
-		{1, "sync_jobs"},
-		{2, "services"},
-		{3, "settings"},
-		{4, "quit"},
-	}
-
-	for _, item := range items {
-		screen.menu.Cursor = item.cursor
-		screen.ResetNavigation()
-		screen.Update(tea.KeyMsg{Type: tea.KeySpace})
-		if screen.GetNavigationTarget() != item.expected {
-			t.Errorf("cursor %d: target = %q, want %q", item.cursor, screen.GetNavigationTarget(), item.expected)
-		}
+	if navigateMsg.Target != "mounts" {
+		t.Errorf("NavigateToMsg.Target = %q, want 'mounts'", navigateMsg.Target)
 	}
 }
 
@@ -480,32 +387,47 @@ func TestMainMenuScreen_UnknownKey(t *testing.T) {
 	screen.SetSize(80, 24)
 
 	// Press an unknown key - should not navigate
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
 
-	if screen.ShouldNavigate() {
-		t.Error("ShouldNavigate() = true after unknown key, want false")
+	// No command should be returned for unknown keys
+	if cmd != nil {
+		t.Error("Update() should return nil command for unknown keys")
 	}
 }
 
-func TestMainMenuScreen_NavigationAfterReset(t *testing.T) {
+func TestMainMenuScreen_MultipleNavigations(t *testing.T) {
 	screen := NewMainMenuScreen()
 	screen.SetSize(80, 24)
 
-	// Navigate
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
-	if !screen.ShouldNavigate() {
-		t.Error("ShouldNavigate() = false after navigation, want true")
+	// Navigate to mounts
+	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	msg := cmd()
+	navigateMsg := msg.(NavigateToMsg)
+	if navigateMsg.Target != "mounts" {
+		t.Errorf("target = %q, want 'mounts'", navigateMsg.Target)
 	}
 
-	// Reset should clear navigation
-	screen.ResetNavigation()
-	if screen.ShouldNavigate() {
-		t.Error("ShouldNavigate() = true after reset, want false")
+	// Navigate to sync_jobs
+	_, cmd = screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+	msg = cmd()
+	navigateMsg = msg.(NavigateToMsg)
+	if navigateMsg.Target != "sync_jobs" {
+		t.Errorf("target = %q, want 'sync_jobs'", navigateMsg.Target)
 	}
 
-	// Should be able to navigate again
-	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	if !screen.ShouldNavigate() {
-		t.Error("ShouldNavigate() = false after new navigation, want true")
+	// Navigate to services
+	_, cmd = screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
+	msg = cmd()
+	navigateMsg = msg.(NavigateToMsg)
+	if navigateMsg.Target != "services" {
+		t.Errorf("target = %q, want 'services'", navigateMsg.Target)
+	}
+
+	// Navigate to settings
+	_, cmd = screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
+	msg = cmd()
+	navigateMsg = msg.(NavigateToMsg)
+	if navigateMsg.Target != "settings" {
+		t.Errorf("target = %q, want 'settings'", navigateMsg.Target)
 	}
 }

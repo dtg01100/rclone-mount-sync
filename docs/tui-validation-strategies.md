@@ -112,7 +112,7 @@ func TestApp_InitError_ConfigLoadFailure(t *testing.T) {
     // Point XDG_CONFIG_HOME to restricted dir
     os.Setenv("XDG_CONFIG_HOME", restrictedDir)
     
-    app := NewApp()
+    app := NewApp("dev")
     msg := app.initializeServices()
     
     // Should handle gracefully

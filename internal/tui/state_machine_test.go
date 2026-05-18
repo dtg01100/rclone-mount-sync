@@ -45,7 +45,7 @@ func TestApp_StateMachine_Navigation(t *testing.T) {
 
 	for _, tt := range transitions {
 		t.Run(tt.name, func(t *testing.T) {
-			app := NewApp()
+			app := NewApp("dev")
 			app.width = 80
 			app.height = 24
 			app.currentScreen = tt.startScreen
@@ -128,7 +128,7 @@ func TestApp_StateMachine_HelpScreen(t *testing.T) {
 
 	for _, tt := range transitions {
 		t.Run(tt.name, func(t *testing.T) {
-			app := NewApp()
+			app := NewApp("dev")
 			app.width = 80
 			app.height = 24
 			tt.setup(app)
@@ -161,7 +161,7 @@ func TestApp_StateMachine_ScreenChangeMsg(t *testing.T) {
 
 	for _, target := range screens {
 		t.Run("change to "+target.String(), func(t *testing.T) {
-			app := NewApp()
+			app := NewApp("dev")
 			app.width = 80
 			app.height = 24
 			app.currentScreen = ScreenMain
@@ -183,7 +183,7 @@ func TestApp_StateMachine_ScreenChangeMsg(t *testing.T) {
 // are handled without panicking and produce expected state changes.
 func TestApp_MessageHandling_AllMessageTypes(t *testing.T) {
 	t.Run("LoadingMsg", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 		app.width = 80
 		app.height = 24
 		app.loading = false
@@ -197,7 +197,7 @@ func TestApp_MessageHandling_AllMessageTypes(t *testing.T) {
 	})
 
 	t.Run("LoadingDoneMsg", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 		app.width = 80
 		app.height = 24
 		app.loading = true
@@ -210,7 +210,7 @@ func TestApp_MessageHandling_AllMessageTypes(t *testing.T) {
 	})
 
 	t.Run("AppInitError", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 		app.width = 80
 		app.height = 24
 		app.loading = true
@@ -227,7 +227,7 @@ func TestApp_MessageHandling_AllMessageTypes(t *testing.T) {
 	})
 
 	t.Run("AppInitDone", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 		app.width = 80
 		app.height = 24
 		app.loading = true
@@ -240,7 +240,7 @@ func TestApp_MessageHandling_AllMessageTypes(t *testing.T) {
 	})
 
 	t.Run("ReconciliationMsg", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 		app.width = 80
 		app.height = 24
 
@@ -264,7 +264,7 @@ func TestApp_MessageHandling_AllMessageTypes(t *testing.T) {
 	})
 
 	t.Run("ReconciliationMsg_NoOrphans", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 		app.width = 80
 		app.height = 24
 
@@ -280,7 +280,7 @@ func TestApp_MessageHandling_AllMessageTypes(t *testing.T) {
 	})
 
 	t.Run("WindowSizeMsg propagates to screens", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 
 		_, _ = app.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 
@@ -300,7 +300,7 @@ func TestApp_MessageHandling_AllMessageTypes(t *testing.T) {
 // TestApp_Invariants validates that certain invariants hold after any update.
 func TestApp_Invariants(t *testing.T) {
 	t.Run("width and height are never negative", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 
 		// Try various window sizes
 		sizes := []struct{ w, h int }{
@@ -322,7 +322,7 @@ func TestApp_Invariants(t *testing.T) {
 	})
 
 	t.Run("screen enum is always valid", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 		app.width = 80
 		app.height = 24
 
@@ -337,7 +337,7 @@ func TestApp_Invariants(t *testing.T) {
 	})
 
 	t.Run("help state is consistent with help screen", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 		app.width = 80
 		app.height = 24
 
@@ -371,7 +371,7 @@ func TestApp_Invariants(t *testing.T) {
 		}
 
 		for i, setup := range states {
-			app := NewApp()
+			app := NewApp("dev")
 			setup(app)
 
 			// Should not panic
@@ -391,7 +391,7 @@ func TestApp_Invariants(t *testing.T) {
 
 // TestApp_RapidKeyPresses tests that rapid key presses don't cause issues.
 func TestApp_RapidKeyPresses(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
@@ -420,7 +420,7 @@ func TestApp_RapidKeyPresses(t *testing.T) {
 // TestApp_ScrollBoundaries tests help scroll boundary conditions.
 func TestApp_ScrollBoundaries(t *testing.T) {
 	t.Run("scroll up at boundary", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 		app.width = 80
 		app.height = 24
 		app.currentScreen = ScreenHelp
@@ -436,7 +436,7 @@ func TestApp_ScrollBoundaries(t *testing.T) {
 	})
 
 	t.Run("scroll down at boundary", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 		app.width = 80
 		app.height = 24
 		app.currentScreen = ScreenHelp
@@ -453,7 +453,7 @@ func TestApp_ScrollBoundaries(t *testing.T) {
 	})
 
 	t.Run("scroll with zero content length", func(t *testing.T) {
-		app := NewApp()
+		app := NewApp("dev")
 		app.width = 80
 		app.height = 24
 		app.currentScreen = ScreenHelp

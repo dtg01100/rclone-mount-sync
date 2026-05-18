@@ -65,7 +65,7 @@ func assertSnapshot(t *testing.T, name string, content string) {
 
 // TestApp_Snapshot_MainMenu renders the main menu and compares against snapshot.
 func TestApp_Snapshot_MainMenu(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -90,7 +90,7 @@ func TestApp_Snapshot_MainMenu(t *testing.T) {
 
 // TestApp_Snapshot_HelpScreen renders the help screen and compares against snapshot.
 func TestApp_Snapshot_HelpScreen(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -111,7 +111,7 @@ func TestApp_Snapshot_HelpScreen(t *testing.T) {
 
 // TestApp_Snapshot_InitError renders the init error screen and compares against snapshot.
 func TestApp_Snapshot_InitError(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.initError = &testError{msg: "failed to initialize rclone"}
@@ -133,7 +133,7 @@ func TestApp_Snapshot_InitError(t *testing.T) {
 
 // TestApp_Snapshot_Loading renders the loading state and compares against snapshot.
 func TestApp_Snapshot_Loading(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.loading = true
@@ -166,7 +166,7 @@ func TestApp_Snapshot_DifferentSizes(t *testing.T) {
 
 	for _, sz := range sizes {
 		t.Run(sz.name, func(t *testing.T) {
-			app := NewApp()
+			app := NewApp("dev")
 			app.width = sz.width
 			app.height = sz.height
 			app.currentScreen = ScreenMain
@@ -193,7 +193,7 @@ func TestApp_Snapshot_DifferentSizes(t *testing.T) {
 
 // TestApp_Snapshot_OrphanPrompt renders the orphan detection prompt.
 func TestApp_Snapshot_OrphanPrompt(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -222,7 +222,7 @@ func TestApp_Snapshot_OrphanPrompt(t *testing.T) {
 
 // TestApp_View_LineCount tests that views have reasonable line counts.
 func TestApp_View_LineCount(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
@@ -241,7 +241,7 @@ func TestApp_View_LineCount(t *testing.T) {
 // Note: The TUI uses trailing whitespace for layout purposes, so this
 // test documents the current behavior rather than enforcing strict rules.
 func TestApp_View_NoTrailingWhitespace(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -264,7 +264,7 @@ func TestApp_View_NoTrailingWhitespace(t *testing.T) {
 // TestApp_View_EmptyLines tests that there aren't excessive empty lines.
 // Note: Some empty lines are expected for visual spacing in the TUI.
 func TestApp_View_EmptyLines(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -296,7 +296,7 @@ func TestApp_View_EmptyLines(t *testing.T) {
 
 // TestApp_Snapshot_WideTerminal tests rendering on very wide terminals.
 func TestApp_Snapshot_WideTerminal(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 200
 	app.height = 30
 	app.currentScreen = ScreenMain
@@ -312,7 +312,7 @@ func TestApp_Snapshot_WideTerminal(t *testing.T) {
 
 // TestApp_Snapshot_TallTerminal tests rendering on tall terminals.
 func TestApp_Snapshot_TallTerminal(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 60
 	app.currentScreen = ScreenMain

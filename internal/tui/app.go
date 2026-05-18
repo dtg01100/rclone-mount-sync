@@ -68,6 +68,7 @@ type ReconciliationMsg struct {
 
 // App is the main TUI application model.
 type App struct {
+	version    string // Build version, set via NewApp/Run
 	currentScreen  Screen
 	previousScreen Screen
 	width          int
@@ -101,9 +102,10 @@ type App struct {
 	orphanError      error
 }
 
-// NewApp creates a new TUI application.
-func NewApp() *App {
+// NewApp creates a new TUI application with the given version.
+func NewApp(version string) *App {
 	return &App{
+		version:       version,
 		currentScreen:  ScreenMain,
 		previousScreen: ScreenMain,
 		mainMenu:       screens.NewMainMenuScreen(),
@@ -307,21 +309,24 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, cmd)
 
-		// Check if main menu wants to navigate
-		if a.mainMenu.ShouldNavigate() {
-			target := a.mainMenu.GetNavigationTarget()
-			a.mainMenu.ResetNavigation()
-			switch target {
-			case "mounts":
-				a.currentScreen = ScreenMounts
-			case "sync_jobs":
-				a.currentScreen = ScreenSyncJobs
-			case "services":
-				a.currentScreen = ScreenServices
-			case "settings":
-				a.currentScreen = ScreenSettings
-			case "quit":
-				return a, tea.Quit
+		// Execute navigation commands immediately for same-update navigation
+		if cmd != nil {
+			if navMsg := cmd(); navMsg != nil {
+				switch m := navMsg.(type) {
+				case screens.NavigateToMsg:
+					switch m.Target {
+					case "mounts":
+						a.currentScreen = ScreenMounts
+					case "sync_jobs":
+						a.currentScreen = ScreenSyncJobs
+					case "services":
+						a.currentScreen = ScreenServices
+					case "settings":
+						a.currentScreen = ScreenSettings
+					}
+				case screens.GoBackMsg:
+					a.currentScreen = ScreenMain
+				}
 			}
 		}
 
@@ -376,6 +381,23 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.settings.ResetGoBack()
 			a.currentScreen = ScreenMain
 		}
+	}
+
+	// Handle navigation messages from screens (must be processed in same Update)
+	switch msg := msg.(type) {
+	case screens.NavigateToMsg:
+		switch msg.Target {
+		case "mounts":
+			a.currentScreen = ScreenMounts
+		case "sync_jobs":
+			a.currentScreen = ScreenSyncJobs
+		case "services":
+			a.currentScreen = ScreenServices
+		case "settings":
+			a.currentScreen = ScreenSettings
+		}
+	case screens.GoBackMsg:
+		a.currentScreen = ScreenMain
 	}
 
 	return a, tea.Batch(cmds...)
@@ -443,7 +465,7 @@ func (a *App) View() string {
 
 // renderHeader renders the top header bar.
 func (a *App) renderHeader() string {
-	return components.TitleBar(a.width, "Rclone Mount Sync", Version)
+	return components.TitleBar(a.width, "Rclone Mount Sync", a.version)
 }
 
 // renderStatusBar renders the bottom status bar.
@@ -870,7 +892,7 @@ func (a *App) renderOrphanPrompt(baseView string) string {
 
 // Run starts the TUI application.
 func Run() error {
-	app := NewApp()
+	app := NewApp(Version)
 	p := tea.NewProgram(
 		app,
 		tea.WithAltScreen(),

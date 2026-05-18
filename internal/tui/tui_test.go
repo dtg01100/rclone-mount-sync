@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
+	"github.com/dtg01100/rclone-mount-sync/internal/tui/screens"
 )
 
 func TestScreen_String(t *testing.T) {
@@ -56,7 +57,7 @@ func TestScreen_Constants(t *testing.T) {
 }
 
 func TestNewApp(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 
 	if app == nil {
 		t.Fatal("NewApp() returned nil")
@@ -100,7 +101,7 @@ func TestNewApp(t *testing.T) {
 }
 
 func TestApp_Init(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	cmd := app.Init()
 
 	if cmd == nil {
@@ -109,7 +110,7 @@ func TestApp_Init(t *testing.T) {
 }
 
 func TestApp_initializeServices(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	msg := app.initializeServices()
 
 	// initializeServices should return a message (AppInitDone or AppInitError or ReconciliationMsg)
@@ -119,7 +120,7 @@ func TestApp_initializeServices(t *testing.T) {
 }
 
 func TestApp_Update_QuitKey(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
@@ -131,7 +132,7 @@ func TestApp_Update_QuitKey(t *testing.T) {
 }
 
 func TestApp_Update_QKeyFromMainScreen(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -144,7 +145,7 @@ func TestApp_Update_QKeyFromMainScreen(t *testing.T) {
 }
 
 func TestApp_Update_QKeyFromOtherScreen(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMounts
@@ -157,7 +158,7 @@ func TestApp_Update_QKeyFromOtherScreen(t *testing.T) {
 }
 
 func TestApp_Update_EscapeKey(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMounts
@@ -171,7 +172,7 @@ func TestApp_Update_EscapeKey(t *testing.T) {
 }
 
 func TestApp_Update_HelpToggle(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -188,7 +189,7 @@ func TestApp_Update_HelpToggle(t *testing.T) {
 }
 
 func TestApp_Update_HelpClose(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -206,7 +207,7 @@ func TestApp_Update_HelpClose(t *testing.T) {
 }
 
 func TestApp_Update_WindowSize(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 
 	_, _ = app.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
@@ -219,7 +220,7 @@ func TestApp_Update_WindowSize(t *testing.T) {
 }
 
 func TestApp_View_ZeroSize(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 0
 	app.height = 0
 
@@ -231,7 +232,7 @@ func TestApp_View_ZeroSize(t *testing.T) {
 }
 
 func TestApp_View_Normal(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
@@ -246,7 +247,7 @@ func TestApp_View_Normal(t *testing.T) {
 }
 
 func TestApp_View_WithInitError(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.initError = &testError{msg: "test error"}
@@ -262,7 +263,7 @@ func TestApp_View_WithInitError(t *testing.T) {
 }
 
 func TestApp_View_HelpScreen(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -276,7 +277,7 @@ func TestApp_View_HelpScreen(t *testing.T) {
 }
 
 func TestApp_ScreenChangeMsg(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
@@ -288,7 +289,7 @@ func TestApp_ScreenChangeMsg(t *testing.T) {
 }
 
 func TestApp_AppInitError(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
@@ -304,7 +305,7 @@ func TestApp_AppInitError(t *testing.T) {
 }
 
 func TestApp_RenderHeader(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 
 	header := app.renderHeader()
@@ -318,7 +319,7 @@ func TestApp_RenderHeader(t *testing.T) {
 }
 
 func TestApp_RenderStatusBar(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.currentScreen = ScreenMain
 
@@ -333,7 +334,7 @@ func TestApp_RenderStatusBar(t *testing.T) {
 }
 
 func TestApp_RenderStatusBar_HelpMode(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.showHelp = true
 
@@ -365,7 +366,7 @@ func TestApp_Update_ScreenNavigation(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			app := NewApp()
+			app := NewApp("dev")
 			app.width = 80
 			app.height = 24
 			app.currentScreen = tt.startScreen
@@ -380,7 +381,7 @@ func TestApp_Update_ScreenNavigation(t *testing.T) {
 }
 
 func TestApp_Update_ScrollInHelp(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -396,7 +397,7 @@ func TestApp_Update_ScrollInHelp(t *testing.T) {
 }
 
 func TestApp_Update_ScrollDownInHelp(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -412,7 +413,7 @@ func TestApp_Update_ScrollDownInHelp(t *testing.T) {
 }
 
 func TestApp_Update_ScrollBounds(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -436,7 +437,7 @@ func (e *testError) Error() string {
 }
 
 func TestApp_Update_HelpCloseWithQ(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -454,7 +455,7 @@ func TestApp_Update_HelpCloseWithQ(t *testing.T) {
 }
 
 func TestApp_Update_EscapeFromMainScreen(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -468,7 +469,7 @@ func TestApp_Update_EscapeFromMainScreen(t *testing.T) {
 }
 
 func TestApp_Update_HelpToggleWhenAlreadyOpen(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -483,7 +484,7 @@ func TestApp_Update_HelpToggleWhenAlreadyOpen(t *testing.T) {
 }
 
 func TestApp_Update_ReconciliationMsg(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
@@ -503,7 +504,7 @@ func TestApp_Update_ReconciliationMsg(t *testing.T) {
 }
 
 func TestApp_Update_ReconciliationMsgEmpty(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
@@ -518,7 +519,7 @@ func TestApp_Update_ReconciliationMsgEmpty(t *testing.T) {
 }
 
 func TestApp_Update_AppInitDone(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
@@ -544,7 +545,7 @@ func TestApp_View_AllScreens(t *testing.T) {
 
 	for _, tt := range screens {
 		t.Run(tt.name, func(t *testing.T) {
-			app := NewApp()
+			app := NewApp("dev")
 			app.width = 80
 			app.height = 24
 			app.mainMenu.SetSize(80, 24)
@@ -567,7 +568,7 @@ func TestApp_View_AllScreens(t *testing.T) {
 }
 
 func TestApp_Update_ScrollDownMaxBounds(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -583,7 +584,7 @@ func TestApp_Update_ScrollDownMaxBounds(t *testing.T) {
 }
 
 func TestApp_Update_KKeyScrollUp(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -599,7 +600,7 @@ func TestApp_Update_KKeyScrollUp(t *testing.T) {
 }
 
 func TestApp_Update_JKeyScrollDown(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -615,7 +616,7 @@ func TestApp_Update_JKeyScrollDown(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_NavigateUp(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 1
@@ -636,7 +637,7 @@ func TestApp_updateOrphanPrompt_NavigateUp(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_NavigateDown(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -657,7 +658,7 @@ func TestApp_updateOrphanPrompt_NavigateDown(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_EnterSelect(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -677,7 +678,7 @@ func TestApp_updateOrphanPrompt_EnterSelect(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_EscapeFromActionMenu(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -697,7 +698,7 @@ func TestApp_updateOrphanPrompt_EscapeFromActionMenu(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_EscapeFromList(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -717,7 +718,7 @@ func TestApp_updateOrphanPrompt_EscapeFromList(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_QKeyFromActionMenu(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -737,7 +738,7 @@ func TestApp_updateOrphanPrompt_QKeyFromActionMenu(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_QKeyFromList(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -757,7 +758,7 @@ func TestApp_updateOrphanPrompt_QKeyFromList(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_DismissAll(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -777,7 +778,7 @@ func TestApp_updateOrphanPrompt_DismissAll(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_NavigateUpAtTop(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -798,7 +799,7 @@ func TestApp_updateOrphanPrompt_NavigateUpAtTop(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_NavigateDownAtBottom(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 1
@@ -819,7 +820,7 @@ func TestApp_updateOrphanPrompt_NavigateDownAtBottom(t *testing.T) {
 }
 
 func TestApp_renderOrphanPrompt_SelectMode(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -841,7 +842,7 @@ func TestApp_renderOrphanPrompt_SelectMode(t *testing.T) {
 }
 
 func TestApp_renderOrphanPrompt_ActionMode(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -863,7 +864,7 @@ func TestApp_renderOrphanPrompt_ActionMode(t *testing.T) {
 }
 
 func TestApp_renderOrphanPrompt_LegacyTag(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -882,7 +883,7 @@ func TestApp_renderOrphanPrompt_LegacyTag(t *testing.T) {
 }
 
 func TestApp_renderOrphanPrompt_SmallWidth(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 30
 	app.height = 24
 	app.orphanSelected = 0
@@ -901,7 +902,7 @@ func TestApp_renderOrphanPrompt_SmallWidth(t *testing.T) {
 }
 
 func TestApp_View_WithOrphanPrompt(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.showOrphanPrompt = true
@@ -919,7 +920,7 @@ func TestApp_View_WithOrphanPrompt(t *testing.T) {
 }
 
 func TestApp_Update_OrphanPromptIntercept(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.showOrphanPrompt = true
@@ -939,97 +940,107 @@ func TestApp_Update_OrphanPromptIntercept(t *testing.T) {
 }
 
 func TestApp_Update_MainMenuNavigation(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
 	app.mainMenu.SetSize(80, 24)
 
-	app.mainMenu.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
-	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	// First Update triggers mainMenu to process 'm' key and returns a command
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+	if cmd == nil {
+		t.Fatal("Update() returned nil command, want NavigateToMsg command")
+	}
 
-	if updatedApp.(*App).currentScreen != ScreenMounts {
-		t.Errorf("main menu navigation should change screen to Mounts, got %d", updatedApp.(*App).currentScreen)
+	// Execute the command to get the navigation message
+	msg := cmd()
+	if msg == nil {
+		t.Fatal("command returned nil message")
+	}
+
+	navigateMsg, ok := msg.(screens.NavigateToMsg)
+	if !ok {
+		t.Fatalf("message type = %T, want NavigateToMsg", msg)
+	}
+	if navigateMsg.Target != "mounts" {
+		t.Errorf("NavigateToMsg.Target = %q, want %q", navigateMsg.Target, "mounts")
 	}
 }
 
 func TestApp_Update_MainMenuNavigationQuit(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
 	app.mainMenu.SetSize(80, 24)
 
-	app.mainMenu.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	// Press 'q' on main menu - returns tea.Quit
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
 
 	if cmd == nil {
-		t.Error("main menu quit navigation should return quit command")
+		t.Fatal("Update() returned nil command, want tea.Quit")
+	}
+
+	// tea.Quit is itself a command that returns QuitMsg
+	if msg := cmd(); msg == nil {
+		t.Error("tea.Quit should produce a message")
 	}
 }
 
 func TestApp_Update_MountsScreenGoBack(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMounts
 
-	app.mounts.ResetGoBack()
-	app.mounts.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
 
 	if updatedApp.(*App).currentScreen != ScreenMain {
-		t.Errorf("mounts screen go back should return to main, got %d", updatedApp.(*App).currentScreen)
+		t.Errorf("currentScreen = %d, want %d (ScreenMain)", updatedApp.(*App).currentScreen, ScreenMain)
 	}
 }
 
 func TestApp_Update_SyncJobsScreenGoBack(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenSyncJobs
 
-	app.syncJobs.ResetGoBack()
-	app.syncJobs.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
-
+	// Press Escape to trigger go back - app handles Escape directly
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if updatedApp.(*App).currentScreen != ScreenMain {
-		t.Errorf("sync jobs screen go back should return to main, got %d", updatedApp.(*App).currentScreen)
+		t.Errorf("currentScreen = %d, want ScreenMain", updatedApp.(*App).currentScreen)
 	}
 }
 
 func TestApp_Update_ServicesScreenGoBack(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenServices
 
-	app.services.ResetGoBack()
-	app.services.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
-
+	// Press Escape to trigger go back - app handles Escape directly
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if updatedApp.(*App).currentScreen != ScreenMain {
-		t.Errorf("services screen go back should return to main, got %d", updatedApp.(*App).currentScreen)
+		t.Errorf("currentScreen = %d, want ScreenMain", updatedApp.(*App).currentScreen)
 	}
 }
 
 func TestApp_Update_SettingsScreenGoBack(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenSettings
 
-	app.settings.ResetGoBack()
-	app.settings.Update(tea.KeyMsg{Type: tea.KeyEsc})
-	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
-
+	// Press Escape to trigger go back - app handles Escape directly
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	if updatedApp.(*App).currentScreen != ScreenMain {
-		t.Errorf("settings screen go back should return to main, got %d", updatedApp.(*App).currentScreen)
+		t.Errorf("currentScreen = %d, want ScreenMain", updatedApp.(*App).currentScreen)
 	}
 }
 
 func TestApp_RenderHelp_ScrollIndicator(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 10
 	app.currentScreen = ScreenHelp
@@ -1044,7 +1055,7 @@ func TestApp_RenderHelp_ScrollIndicator(t *testing.T) {
 }
 
 func TestApp_RenderHelp_NegativeScroll(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -1059,7 +1070,7 @@ func TestApp_RenderHelp_NegativeScroll(t *testing.T) {
 }
 
 func TestApp_RenderHelp_ScrollToEnd(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -1075,7 +1086,7 @@ func TestApp_RenderHelp_ScrollToEnd(t *testing.T) {
 }
 
 func TestApp_ScreenChangeMsg_HidesHelp(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -1167,7 +1178,7 @@ func TestApp_Messages(t *testing.T) {
 }
 
 func TestApp_RenderInitError_Layout(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.initError = &testError{msg: "detailed error message"}
@@ -1190,7 +1201,7 @@ func TestApp_RenderInitError_Layout(t *testing.T) {
 }
 
 func TestApp_RenderStatusBar_ShowHelp(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.currentScreen = ScreenMain
 	app.showHelp = true
@@ -1203,7 +1214,7 @@ func TestApp_RenderStatusBar_ShowHelp(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_JKeyInActionMode(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1224,7 +1235,7 @@ func TestApp_updateOrphanPrompt_JKeyInActionMode(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_KKeyInActionMode(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1244,7 +1255,7 @@ func TestApp_updateOrphanPrompt_KKeyInActionMode(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_CKeyInSelectMode(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1264,7 +1275,7 @@ func TestApp_updateOrphanPrompt_CKeyInSelectMode(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_UpKeyInActionMode(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1284,7 +1295,7 @@ func TestApp_updateOrphanPrompt_UpKeyInActionMode(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_DownKeyInActionMode(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1305,7 +1316,7 @@ func TestApp_updateOrphanPrompt_DownKeyInActionMode(t *testing.T) {
 }
 
 func TestApp_Update_UnknownKeyWithOrphanPrompt(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.showOrphanPrompt = true
@@ -1325,7 +1336,7 @@ func TestApp_Update_UnknownKeyWithOrphanPrompt(t *testing.T) {
 }
 
 func TestApp_renderOrphanPrompt_SelectedItem(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 1
@@ -1345,7 +1356,7 @@ func TestApp_renderOrphanPrompt_SelectedItem(t *testing.T) {
 }
 
 func TestApp_renderOrphanPrompt_LargeWidth(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 200
 	app.height = 24
 	app.orphanSelected = 0
@@ -1364,14 +1375,14 @@ func TestApp_renderOrphanPrompt_LargeWidth(t *testing.T) {
 }
 
 func TestApp_Update_MainMenuNavigationToSyncJobs(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
 	app.mainMenu.SetSize(80, 24)
 
-	app.mainMenu.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
-	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	// Press 's' key - app.Update handles the screen Update and processes navigation
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
 
 	if updatedApp.(*App).currentScreen != ScreenSyncJobs {
 		t.Errorf("main menu navigation should change screen to SyncJobs, got %d", updatedApp.(*App).currentScreen)
@@ -1379,14 +1390,14 @@ func TestApp_Update_MainMenuNavigationToSyncJobs(t *testing.T) {
 }
 
 func TestApp_Update_MainMenuNavigationToServices(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
 	app.mainMenu.SetSize(80, 24)
 
-	app.mainMenu.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
-	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	// Press 'v' key - app.Update handles the screen Update and processes navigation
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("v")})
 
 	if updatedApp.(*App).currentScreen != ScreenServices {
 		t.Errorf("main menu navigation should change screen to Services, got %d", updatedApp.(*App).currentScreen)
@@ -1394,14 +1405,14 @@ func TestApp_Update_MainMenuNavigationToServices(t *testing.T) {
 }
 
 func TestApp_Update_MainMenuNavigationToSettings(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
 	app.mainMenu.SetSize(80, 24)
 
-	app.mainMenu.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
-	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
+	// Press 't' key - app.Update handles the screen Update and processes navigation
+	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
 
 	if updatedApp.(*App).currentScreen != ScreenSettings {
 		t.Errorf("main menu navigation should change screen to Settings, got %d", updatedApp.(*App).currentScreen)
@@ -1409,7 +1420,7 @@ func TestApp_Update_MainMenuNavigationToSettings(t *testing.T) {
 }
 
 func TestApp_Update_ReconciliationMsgTriggersMountsInit(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
@@ -1440,7 +1451,7 @@ func TestApp_View_DifferentScreensContent(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			app := NewApp()
+			app := NewApp("dev")
 			app.width = 80
 			app.height = 24
 			app.mainMenu.SetSize(80, 24)
@@ -1460,7 +1471,7 @@ func TestApp_View_DifferentScreensContent(t *testing.T) {
 }
 
 func TestApp_RenderHelp_WithScrolling(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 15
 	app.currentScreen = ScreenHelp
@@ -1475,7 +1486,7 @@ func TestApp_RenderHelp_WithScrolling(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_EnterInActionModeWithNilOrphans(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1491,7 +1502,7 @@ func TestApp_updateOrphanPrompt_EnterInActionModeWithNilOrphans(t *testing.T) {
 }
 
 func TestApp_updateOrphanPrompt_CleanupKeyInActionMode(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1511,7 +1522,7 @@ func TestApp_updateOrphanPrompt_CleanupKeyInActionMode(t *testing.T) {
 }
 
 func TestApp_Update_HelpNotShown_KeysDontAffectScroll(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -1526,7 +1537,7 @@ func TestApp_Update_HelpNotShown_KeysDontAffectScroll(t *testing.T) {
 }
 
 func TestApp_Update_HelpNotShown_DownDoesNotScroll(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -1541,7 +1552,7 @@ func TestApp_Update_HelpNotShown_DownDoesNotScroll(t *testing.T) {
 }
 
 func TestApp_Update_SpaceKey(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -1554,7 +1565,7 @@ func TestApp_Update_SpaceKey(t *testing.T) {
 }
 
 func TestApp_View_HelpScreenWithShowHelp(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenHelp
@@ -1569,7 +1580,7 @@ func TestApp_View_HelpScreenWithShowHelp(t *testing.T) {
 }
 
 func TestApp_RenderHelp_AvailableHeightOne(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 6
 	app.currentScreen = ScreenHelp
@@ -1584,7 +1595,7 @@ func TestApp_RenderHelp_AvailableHeightOne(t *testing.T) {
 }
 
 func TestApp_Update_JKeyNotInHelp(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -1599,7 +1610,7 @@ func TestApp_Update_JKeyNotInHelp(t *testing.T) {
 }
 
 func TestApp_Update_KKeyNotInHelp(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -1614,7 +1625,7 @@ func TestApp_Update_KKeyNotInHelp(t *testing.T) {
 }
 
 func TestApp_Update_EnterInActionModeWithOrphans(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1631,7 +1642,7 @@ func TestApp_Update_EnterInActionModeWithOrphans(t *testing.T) {
 }
 
 func TestApp_importSelectedOrphan_NilGenerator(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1648,7 +1659,7 @@ func TestApp_importSelectedOrphan_NilGenerator(t *testing.T) {
 }
 
 func TestApp_importSelectedOrphan_NilConfig(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1667,7 +1678,7 @@ func TestApp_importSelectedOrphan_NilConfig(t *testing.T) {
 }
 
 func TestApp_importSelectedOrphan_MountType(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1686,7 +1697,7 @@ func TestApp_importSelectedOrphan_MountType(t *testing.T) {
 }
 
 func TestApp_importSelectedOrphan_SyncType(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1705,7 +1716,7 @@ func TestApp_importSelectedOrphan_SyncType(t *testing.T) {
 }
 
 func TestApp_importSelectedOrphan_EmptyOrphanList(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1725,7 +1736,7 @@ func TestApp_importSelectedOrphan_EmptyOrphanList(t *testing.T) {
 }
 
 func TestApp_importSelectedOrphan_IndexOutOfBounds(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 5
@@ -1747,7 +1758,7 @@ func TestApp_importSelectedOrphan_IndexOutOfBounds(t *testing.T) {
 }
 
 func TestApp_importSelectedOrphan_UpdatesOrphanList(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1767,7 +1778,7 @@ func TestApp_importSelectedOrphan_UpdatesOrphanList(t *testing.T) {
 }
 
 func TestApp_importSelectedOrphan_LastOrphan(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1786,7 +1797,7 @@ func TestApp_importSelectedOrphan_LastOrphan(t *testing.T) {
 }
 
 func TestApp_cleanupSelectedOrphan_NilGenerator(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1806,7 +1817,7 @@ func TestApp_cleanupSelectedOrphan_NilGenerator(t *testing.T) {
 }
 
 func TestApp_cleanupSelectedOrphan_NilManager(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1827,7 +1838,7 @@ func TestApp_cleanupSelectedOrphan_NilManager(t *testing.T) {
 }
 
 func TestApp_cleanupSelectedOrphan_MountType(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1845,7 +1856,7 @@ func TestApp_cleanupSelectedOrphan_MountType(t *testing.T) {
 }
 
 func TestApp_cleanupSelectedOrphan_SyncType(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1863,7 +1874,7 @@ func TestApp_cleanupSelectedOrphan_SyncType(t *testing.T) {
 }
 
 func TestApp_cleanupSelectedOrphan_UpdatesList(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1882,7 +1893,7 @@ func TestApp_cleanupSelectedOrphan_UpdatesList(t *testing.T) {
 }
 
 func TestApp_cleanupSelectedOrphan_LastOrphanClosesPrompt(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1900,7 +1911,7 @@ func TestApp_cleanupSelectedOrphan_LastOrphanClosesPrompt(t *testing.T) {
 }
 
 func TestApp_cleanupSelectedOrphan_EmptyOrphanList(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1919,7 +1930,7 @@ func TestApp_cleanupSelectedOrphan_EmptyOrphanList(t *testing.T) {
 }
 
 func TestApp_cleanupSelectedOrphan_IndexOutOfBounds(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 10
@@ -1940,7 +1951,7 @@ func TestApp_cleanupSelectedOrphan_IndexOutOfBounds(t *testing.T) {
 }
 
 func TestApp_cleanupSelectedOrphan_ResetsOrphanMode(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 0
@@ -1959,7 +1970,7 @@ func TestApp_cleanupSelectedOrphan_ResetsOrphanMode(t *testing.T) {
 }
 
 func TestApp_cleanupSelectedOrphan_AdjustsSelectedIndex(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.orphanSelected = 1

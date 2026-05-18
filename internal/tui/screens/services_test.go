@@ -142,11 +142,6 @@ func TestNewServicesScreen(t *testing.T) {
 		t.Errorf("cursor = %d, want 0", screen.cursor)
 	}
 
-	// Verify goBack is false
-	if screen.goBack {
-		t.Error("goBack should be false initially")
-	}
-
 	// Verify services slices are initialized
 	if screen.services == nil {
 		t.Error("services should be initialized")
@@ -662,34 +657,34 @@ func TestServicesScreen_CycleLogFilter(t *testing.T) {
 
 func TestServicesScreen_EscapeKey(t *testing.T) {
 	tests := []struct {
-		name         string
-		initialMode  string
-		expectedMode string
-		shouldGoBack bool
+		name          string
+		initialMode   string
+		expectedMode  string
+		expectGoBack  bool
 	}{
 		{
 			name:         "Escape from list mode",
 			initialMode:  ServicesModeList,
 			expectedMode: ServicesModeList,
-			shouldGoBack: true,
+			expectGoBack: true,
 		},
 		{
 			name:         "Escape from details mode",
 			initialMode:  ServicesModeDetails,
 			expectedMode: ServicesModeList,
-			shouldGoBack: false,
+			expectGoBack: false,
 		},
 		{
 			name:         "Escape from logs mode",
 			initialMode:  ServicesModeLogs,
 			expectedMode: ServicesModeDetails,
-			shouldGoBack: false,
+			expectGoBack: false,
 		},
 		{
 			name:         "Escape from actions mode",
 			initialMode:  ServicesModeActions,
 			expectedMode: ServicesModeList,
-			shouldGoBack: false,
+			expectGoBack: false,
 		},
 	}
 
@@ -701,54 +696,48 @@ func TestServicesScreen_EscapeKey(t *testing.T) {
 			screen.filteredServices = createTestServices()
 			screen.selectedService = &screen.filteredServices[0]
 
-			// Reset goBack
-			screen.goBack = false
-
-			screen.Update(tea.KeyMsg{Type: tea.KeyEsc})
+			_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyEsc})
 
 			if screen.mode != tt.expectedMode {
 				t.Errorf("mode = %q, want %q", screen.mode, tt.expectedMode)
 			}
 
-			if screen.ShouldGoBack() != tt.shouldGoBack {
-				t.Errorf("ShouldGoBack() = %v, want %v", screen.ShouldGoBack(), tt.shouldGoBack)
+			if tt.expectGoBack {
+				if cmd == nil {
+					t.Fatal("expected GoBackMsg command, got nil")
+				}
+				msg := cmd()
+				if _, ok := msg.(GoBackMsg); !ok {
+					t.Errorf("message type = %T, want GoBackMsg", msg)
+				}
 			}
 		})
 	}
 }
 
-func TestServicesScreen_GoBack(t *testing.T) {
+func TestServicesScreen_GoBackMsg(t *testing.T) {
 	screen := NewServicesScreen()
 	screen.SetSize(80, 24)
 
-	// Initially should not go back
-	if screen.ShouldGoBack() {
-		t.Error("ShouldGoBack() = true initially, want false")
+	// Initially no GoBackMsg for non-escape keys
+	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyUp})
+	if cmd != nil {
+		msg := cmd()
+		if _, ok := msg.(GoBackMsg); ok {
+			t.Error("did not expect GoBackMsg for non-escape keys")
+		}
 	}
 
-	// Trigger go back
-	screen.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	// Escape in list mode returns GoBackMsg
+	screen.mode = ServicesModeList
+	_, cmd = screen.Update(tea.KeyMsg{Type: tea.KeyEsc})
 
-	if !screen.ShouldGoBack() {
-		t.Error("ShouldGoBack() = false after escape, want true")
+	if cmd == nil {
+		t.Fatal("expected GoBackMsg command, got nil")
 	}
-
-	// Reset go back
-	screen.ResetGoBack()
-
-	if screen.ShouldGoBack() {
-		t.Error("ShouldGoBack() = true after reset, want false")
-	}
-}
-
-func TestServicesScreen_ResetGoBack(t *testing.T) {
-	screen := NewServicesScreen()
-	screen.goBack = true
-
-	screen.ResetGoBack()
-
-	if screen.goBack {
-		t.Error("goBack should be false after ResetGoBack")
+	msg := cmd()
+	if _, ok := msg.(GoBackMsg); !ok {
+		t.Errorf("message type = %T, want GoBackMsg", msg)
 	}
 }
 

@@ -246,7 +246,7 @@ func (s *SyncJobsScreen) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		s.loading = true
 		return s, s.loadSyncJobs
 	case "esc":
-		s.goBack = true
+		return s, func() tea.Msg { return GoBackMsg{} }
 	}
 
 	return s, nil

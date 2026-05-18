@@ -9,13 +9,20 @@ import (
 	"github.com/dtg01100/rclone-mount-sync/internal/tui/components"
 )
 
+// NavigateToMsg is sent when the screen wants to navigate to a specific screen.
+// The string value should be one of: "mounts", "sync_jobs", "services", "settings".
+type NavigateToMsg struct {
+	Target string
+}
+
+// GoBackMsg is sent when the screen wants to go back to the main menu.
+type GoBackMsg struct{}
+
 // MainMenuScreen is the main navigation screen.
 type MainMenuScreen struct {
-	menu             *components.Menu
-	width            int
-	height           int
-	navigate         bool
-	navigationTarget string
+	menu   *components.Menu
+	width  int
+	height int
 }
 
 // NewMainMenuScreen creates a new main menu screen.
@@ -75,64 +82,40 @@ func (s *MainMenuScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			s.menu.Down()
 		case "enter", " ":
-			s.selectCurrent()
+			return s, s.navigateFromCursor()
 		case "m":
-			s.navigationTarget = "mounts"
-			s.navigate = true
+			return s, func() tea.Msg { return NavigateToMsg{Target: "mounts"} }
 		case "s":
-			s.navigationTarget = "sync_jobs"
-			s.navigate = true
+			return s, func() tea.Msg { return NavigateToMsg{Target: "sync_jobs"} }
 		case "v":
-			s.navigationTarget = "services"
-			s.navigate = true
+			return s, func() tea.Msg { return NavigateToMsg{Target: "services"} }
 		case "t":
-			s.navigationTarget = "settings"
-			s.navigate = true
+			return s, func() tea.Msg { return NavigateToMsg{Target: "settings"} }
 		case "q":
-			s.navigationTarget = "quit"
-			s.navigate = true
+			return s, tea.Quit
 		}
 	}
 
 	return s, nil
 }
 
-// selectCurrent selects the current menu item.
-func (s *MainMenuScreen) selectCurrent() {
+// navigateFromCursor returns a command to navigate based on the current cursor position.
+func (s *MainMenuScreen) navigateFromCursor() tea.Cmd {
 	selected := s.menu.Selected()
 	switch selected.Key {
 	case "M":
-		s.navigationTarget = "mounts"
-		s.navigate = true
+		return func() tea.Msg { return NavigateToMsg{Target: "mounts"} }
 	case "S":
-		s.navigationTarget = "sync_jobs"
-		s.navigate = true
+		return func() tea.Msg { return NavigateToMsg{Target: "sync_jobs"} }
 	case "V":
-		s.navigationTarget = "services"
-		s.navigate = true
+		return func() tea.Msg { return NavigateToMsg{Target: "services"} }
 	case "T":
-		s.navigationTarget = "settings"
-		s.navigate = true
+		return func() tea.Msg { return NavigateToMsg{Target: "settings"} }
 	case "Q":
-		s.navigationTarget = "quit"
-		s.navigate = true
+		return tea.Quit
+	default:
+		return nil
 	}
-}
-
-// ShouldNavigate returns true if the screen should navigate to another screen.
-func (s *MainMenuScreen) ShouldNavigate() bool {
-	return s.navigate
-}
-
-// GetNavigationTarget returns the target screen to navigate to.
-func (s *MainMenuScreen) GetNavigationTarget() string {
-	return s.navigationTarget
-}
-
-// ResetNavigation resets the navigation state.
-func (s *MainMenuScreen) ResetNavigation() {
-	s.navigate = false
-	s.navigationTarget = ""
 }
 
 // View renders the screen.

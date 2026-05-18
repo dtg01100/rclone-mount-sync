@@ -471,7 +471,8 @@ func (s *ServicesScreen) handleListKeyPress(msg tea.KeyMsg) []tea.Cmd {
 		s.loading = true
 		cmds = append(cmds, s.loadServices)
 	case "esc":
-		s.goBack = true
+		// Go back to main menu
+		return []tea.Cmd{func() tea.Msg { return GoBackMsg{} }}
 	}
 
 	return cmds

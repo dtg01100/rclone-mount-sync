@@ -29,7 +29,7 @@ func TestApp_InitError_ConfigLoadFailure(t *testing.T) {
 	// Point to restricted directory
 	_ = os.Setenv("XDG_CONFIG_HOME", restrictedDir)
 
-	app := NewApp()
+	app := NewApp("dev")
 	msg := app.initializeServices()
 
 	// Should return AppInitError due to permission issues
@@ -55,7 +55,7 @@ func TestApp_InitError_SystemdGeneratorFailure(t *testing.T) {
 	// Use a path that will fail to create
 	_ = os.Setenv("XDG_CONFIG_HOME", "/proc/nonexistent")
 
-	app := NewApp()
+	app := NewApp("dev")
 	msg := app.initializeServices()
 
 	// Should return AppInitError due to generator failure
@@ -81,7 +81,7 @@ func TestApp_InitError_RcloneNotAvailable(t *testing.T) {
 	tmpDir := t.TempDir()
 	_ = os.Setenv("PATH", tmpDir)
 
-	app := NewApp()
+	app := NewApp("dev")
 	msg := app.initializeServices()
 
 	// Should NOT fail - rclone unavailability should be handled gracefully
@@ -120,7 +120,7 @@ func TestApp_InitError_ConfigEmpty(t *testing.T) {
 	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
 	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	app := NewApp()
+	app := NewApp("dev")
 	msg := app.initializeServices()
 
 	// Should succeed with empty config
@@ -162,7 +162,7 @@ sync_jobs: []
 	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
 	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	app := NewApp()
+	app := NewApp("dev")
 	msg := app.initializeServices()
 
 	// Should handle mounts in config gracefully
@@ -179,7 +179,7 @@ sync_jobs: []
 
 // TestApp_Reconciliation_WithOrphans tests the reconciliation flow with orphaned units.
 func TestApp_Reconciliation_WithOrphans(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
@@ -210,7 +210,7 @@ func TestApp_Reconciliation_WithOrphans(t *testing.T) {
 
 // TestApp_Reconciliation_NoOrphans tests reconciliation when no orphans exist.
 func TestReconciliation_NoOrphans(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
@@ -230,7 +230,7 @@ func TestReconciliation_NoOrphans(t *testing.T) {
 
 // TestApp_OrphanAction_Remove tests removing an orphaned unit.
 func TestApp_OrphanAction_Remove(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.showOrphanPrompt = true
@@ -259,7 +259,7 @@ func TestApp_OrphanAction_Remove(t *testing.T) {
 
 // TestApp_OrphanAction_RemoveLast tests removing the last orphaned unit.
 func TestApp_OrphanAction_RemoveLast(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.showOrphanPrompt = true
@@ -282,7 +282,7 @@ func TestApp_OrphanAction_RemoveLast(t *testing.T) {
 
 // TestApp_OrphanAction_Ignore tests ignoring an orphaned unit.
 func TestApp_OrphanAction_Ignore(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.showOrphanPrompt = true
@@ -310,7 +310,7 @@ func TestApp_OrphanAction_Ignore(t *testing.T) {
 
 // TestApp_OrphanAction_Error tests handling of orphan action errors.
 func TestApp_OrphanAction_Error(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.showOrphanPrompt = true
@@ -341,7 +341,7 @@ func TestApp_OrphanAction_Error(t *testing.T) {
 
 // TestApp_OrphanAction_InvalidIndex tests handling of invalid orphan index.
 func TestApp_OrphanAction_InvalidIndex(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.showOrphanPrompt = true
@@ -361,7 +361,7 @@ func TestApp_OrphanAction_InvalidIndex(t *testing.T) {
 
 // TestApp_OrphanPrompt_Display tests that orphan prompt appears in View.
 func TestApp_OrphanPrompt_Display(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 	app.currentScreen = ScreenMain
@@ -406,7 +406,7 @@ func TestApp_Services_SetServices(t *testing.T) {
 	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
 	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
 
-	app := NewApp()
+	app := NewApp("dev")
 	msg := app.initializeServices()
 
 	// Check that services were set
@@ -445,7 +445,7 @@ func TestRclone_Remotes(t *testing.T) {
 
 // TestApp_ConcurrentMessages tests handling concurrent messages safely.
 func TestApp_ConcurrentMessages(t *testing.T) {
-	app := NewApp()
+	app := NewApp("dev")
 	app.width = 80
 	app.height = 24
 
