@@ -1329,6 +1329,18 @@ func TestGenerator_WriteSyncUnits(t *testing.T) {
 				if _, err := os.Stat(timerPath); os.IsNotExist(err) {
 					t.Errorf("WriteSyncUnits() timer file not created at %q", timerPath)
 				}
+				// Verify timer file content
+				content, err := os.ReadFile(timerPath) //nolint:gosec
+				if err != nil {
+					t.Fatalf("Failed to read timer file: %v", err)
+				}
+				timerContent := string(content)
+				if !strings.Contains(timerContent, "[Timer]") {
+					t.Error("Timer file missing [Timer] section")
+				}
+				if tt.job.Schedule.OnCalendar != "" && !strings.Contains(timerContent, "OnCalendar="+tt.job.Schedule.OnCalendar) {
+					t.Errorf("Timer file missing OnCalendar=%s", tt.job.Schedule.OnCalendar)
+				}
 			} else if timerPath != "" {
 				t.Errorf("WriteSyncUnits() timerPath should be empty for manual schedule, got %q", timerPath)
 			}
