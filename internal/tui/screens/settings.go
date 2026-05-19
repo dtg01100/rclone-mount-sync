@@ -326,7 +326,11 @@ func (s *SettingsScreen) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update the form
 	form, cmd := s.form.Update(msg)
-	s.form = form.(*huh.Form)
+	if f, ok := form.(*huh.Form); ok {
+		s.form = f
+	} else {
+		return s, nil
+	}
 
 	// Check if form is complete
 	if s.form.State == huh.StateCompleted {
@@ -472,7 +476,11 @@ func (s *SettingsScreen) updateFilePicker(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	form, cmd := s.form.Update(msg)
-	s.form = form.(*huh.Form)
+	if f, ok := form.(*huh.Form); ok {
+		s.form = f
+	} else {
+		return s, nil
+	}
 
 	if s.form.State == huh.StateCompleted {
 		s.showingFilePicker = false
@@ -553,7 +561,11 @@ func (s *SettingsScreen) updateImportModeForm(msg tea.Msg) (tea.Model, tea.Cmd) 
 	}
 
 	form, cmd := s.form.Update(msg)
-	s.form = form.(*huh.Form)
+	if f, ok := form.(*huh.Form); ok {
+		s.form = f
+	} else {
+		return s, nil
+	}
 
 	if s.form.State == huh.StateCompleted {
 		s.showingImportMode = false
@@ -592,7 +604,11 @@ func (s *SettingsScreen) updateConfirmDialog(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	form, cmd := s.confirmDialog.Update(msg)
-	s.confirmDialog = form.(*huh.Form)
+	if f, ok := form.(*huh.Form); ok {
+		s.confirmDialog = f
+	} else {
+		return s, nil
+	}
 
 	if s.confirmDialog.State == huh.StateCompleted {
 		s.showingConfirm = false

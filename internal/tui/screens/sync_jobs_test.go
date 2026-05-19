@@ -1708,7 +1708,9 @@ func TestSyncJobsScreen_ToggleTimer_WithServices(t *testing.T) {
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
 	screen.generator = &systemd.Generator{}
-	screen.manager = &systemd.Manager{}
+	screen.manager = &systemd.MockManager{
+		IsActiveResult: false,
+	}
 
 	model, cmd := screen.toggleTimer()
 
@@ -2189,7 +2191,9 @@ func TestSyncJobsScreen_ToggleTimer_ActiveTimer(t *testing.T) {
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
 	screen.generator = &systemd.Generator{}
-	screen.manager = &systemd.Manager{}
+	screen.manager = &systemd.MockManager{
+		IsActiveResult: true,
+	}
 
 	// Set up status to indicate timer is active
 	screen.statuses = make(map[string]*models.ServiceStatus)
@@ -2216,7 +2220,9 @@ func TestSyncJobsScreen_ToggleTimer_InactiveTimer(t *testing.T) {
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
 	screen.generator = &systemd.Generator{}
-	screen.manager = &systemd.Manager{}
+	screen.manager = &systemd.MockManager{
+		IsActiveResult: false,
+	}
 
 	// Set up status to indicate timer is inactive
 	screen.statuses = make(map[string]*models.ServiceStatus)

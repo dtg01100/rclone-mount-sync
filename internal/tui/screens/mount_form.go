@@ -408,7 +408,11 @@ func (f *MountForm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Update the form
 	form, cmd := f.form.Update(msg)
-	f.form = form.(*huh.Form)
+	if form, ok := form.(*huh.Form); ok {
+		f.form = form
+	} else {
+		return f, nil
+	}
 	cmds = append(cmds, cmd)
 
 	// Check if form is complete

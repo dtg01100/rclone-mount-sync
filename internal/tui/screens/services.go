@@ -173,7 +173,7 @@ func (s *ServicesScreen) Init() tea.Cmd {
 
 // loadServices loads all services from systemd.
 func (s *ServicesScreen) loadServices() tea.Msg {
-	if s.manager == nil {
+	if s.manager == nil || s.generator == nil {
 		return ServicesLoadedMsg{Services: []ServiceInfo{}}
 	}
 
@@ -236,6 +236,11 @@ func (s *ServicesScreen) loadServices() tea.Msg {
 
 			// Get next run time
 			nextRun, _ := s.manager.GetTimerNextRun(timerName)
+			// Note: Errors from Status and GetTimerNextRun are intentionally ignored.
+			// The service info will show "inactive" state when timer status is unavailable,
+			// and nextRun will be zero time (displayed as "unknown"). This is the desired
+			// fallback behavior - we don't want to fail the entire load if one timer
+			// query fails.
 
 			services = append(services, ServiceInfo{
 				Name:        serviceName,
@@ -272,7 +277,7 @@ func (s *ServicesScreen) loadSystemdStatus() SystemdStatus {
 		SessionType: "user@.service",
 	}
 
-	if !status.Available {
+	if s.manager == nil || !status.Available {
 		return status
 	}
 
@@ -389,11 +394,11 @@ func (s *ServicesScreen) handleListKeyPress(msg tea.KeyMsg) []tea.Cmd {
 
 	switch msg.String() {
 	case "up", "k":
-		if s.cursor > 0 {
+		if len(s.filteredServices) > 0 && s.cursor > 0 {
 			s.cursor--
 		}
 	case "down", "j":
-		if s.cursor < len(s.filteredServices)-1 {
+		if len(s.filteredServices) > 0 && s.cursor < len(s.filteredServices)-1 {
 			s.cursor++
 		}
 	case "enter":

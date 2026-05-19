@@ -200,11 +200,11 @@ func (s *SyncJobsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (s *SyncJobsScreen) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
-		if s.cursor > 0 {
+		if len(s.jobs) > 0 && s.cursor > 0 {
 			s.cursor--
 		}
 	case "down", "j":
-		if s.cursor < len(s.jobs)-1 {
+		if len(s.jobs) > 0 && s.cursor < len(s.jobs)-1 {
 			s.cursor++
 		}
 	case "a", "n":
@@ -349,6 +349,10 @@ func (s *SyncJobsScreen) startCreateForm() (tea.Model, tea.Cmd) {
 
 // startEditForm starts the edit sync job form.
 func (s *SyncJobsScreen) startEditForm() (tea.Model, tea.Cmd) {
+	if len(s.jobs) == 0 || s.cursor < 0 || s.cursor >= len(s.jobs) {
+		s.err = fmt.Errorf("no sync job selected")
+		return s, nil
+	}
 	job := s.jobs[s.cursor]
 
 	// Stop timer if running before editing (only if services are available)
@@ -400,6 +404,10 @@ func (s *SyncJobsScreen) runSyncJobNow() (tea.Model, tea.Cmd) {
 		s.err = fmt.Errorf("systemd services not initialized")
 		return s, nil
 	}
+	if len(s.jobs) == 0 || s.cursor < 0 || s.cursor >= len(s.jobs) {
+		s.err = fmt.Errorf("no sync job selected")
+		return s, nil
+	}
 
 	job := s.jobs[s.cursor]
 	serviceName := s.generator.ServiceName(job.ID, "sync") + ".service"
@@ -419,12 +427,20 @@ func (s *SyncJobsScreen) toggleTimer() (tea.Model, tea.Cmd) {
 		s.err = fmt.Errorf("systemd services not initialized")
 		return s, nil
 	}
+	if len(s.jobs) == 0 || s.cursor < 0 || s.cursor >= len(s.jobs) {
+		s.err = fmt.Errorf("no sync job selected")
+		return s, nil
+	}
 
 	job := s.jobs[s.cursor]
 	timerName := s.generator.ServiceName(job.ID, "sync") + ".timer"
 
 	// Check if timer is currently active
-	isActive, _ := s.manager.IsActive(timerName)
+	isActive, err := s.manager.IsActive(timerName)
+	if err != nil {
+		s.err = fmt.Errorf("failed to check timer status: %w", err)
+		return s, s.loadSyncJobs
+	}
 
 	if isActive {
 		// Stop and disable timer
@@ -554,15 +570,9 @@ func (s *SyncJobsScreen) renderJobList() string {
 		var line string
 		status := s.getJobStatus(&job)
 
-		source := job.Source
-		if len(source) > 25 {
-			source = source[:22] + "..."
-		}
-
-		dest := job.Destination
-		if len(dest) > 25 {
-			dest = dest[:22] + "..."
-		}
+		// Use rune-aware truncation for UTF-8 paths
+		source := components.Truncate(job.Source, 22)
+		dest := components.Truncate(job.Destination, 22)
 
 		sourceDest := source + " → " + dest
 		schedule := getScheduleDisplay(&job)
@@ -627,6 +637,9 @@ func getScheduleDisplay(job *models.SyncJobConfig) string {
 
 // renderJobDetails renders the details of the selected sync job.
 func (s *SyncJobsScreen) renderJobDetails() string {
+	if len(s.jobs) == 0 || s.cursor < 0 || s.cursor >= len(s.jobs) {
+		return ""
+	}
 	job := s.jobs[s.cursor]
 
 	var b strings.Builder

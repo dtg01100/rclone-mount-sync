@@ -200,11 +200,11 @@ func (s *MountsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (s *MountsScreen) updateList(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
 	case "up", "k":
-		if s.cursor > 0 {
+		if len(s.mounts) > 0 && s.cursor > 0 {
 			s.cursor--
 		}
 	case "down", "j":
-		if s.cursor < len(s.mounts)-1 {
+		if len(s.mounts) > 0 && s.cursor < len(s.mounts)-1 {
 			s.cursor++
 		}
 	case "a":
@@ -354,6 +354,10 @@ func (s *MountsScreen) startCreateForm() (tea.Model, tea.Cmd) {
 
 // startEditForm starts the edit mount form.
 func (s *MountsScreen) startEditForm() (tea.Model, tea.Cmd) {
+	if len(s.mounts) == 0 || s.cursor < 0 || s.cursor >= len(s.mounts) {
+		s.err = fmt.Errorf("no mount selected")
+		return s, nil
+	}
 	mount := s.mounts[s.cursor]
 
 	// Check if rclone client is available
@@ -392,6 +396,10 @@ func (s *MountsScreen) toggleMount() (tea.Model, tea.Cmd) {
 	// Check if generator and manager are available
 	if s.generator == nil || s.manager == nil {
 		s.err = fmt.Errorf("systemd services not initialized")
+		return s, nil
+	}
+	if len(s.mounts) == 0 || s.cursor < 0 || s.cursor >= len(s.mounts) {
+		s.err = fmt.Errorf("no mount selected")
 		return s, nil
 	}
 
@@ -435,6 +443,10 @@ func (s *MountsScreen) startMount() (tea.Model, tea.Cmd) {
 		s.err = fmt.Errorf("systemd services not initialized")
 		return s, nil
 	}
+	if len(s.mounts) == 0 || s.cursor < 0 || s.cursor >= len(s.mounts) {
+		s.err = fmt.Errorf("no mount selected")
+		return s, nil
+	}
 
 	mount := s.mounts[s.cursor]
 	serviceName := s.generator.ServiceName(mount.ID, "mount") + ".service"
@@ -452,6 +464,10 @@ func (s *MountsScreen) stopMount() (tea.Model, tea.Cmd) {
 	// Check if generator and manager are available
 	if s.generator == nil || s.manager == nil {
 		s.err = fmt.Errorf("systemd services not initialized")
+		return s, nil
+	}
+	if len(s.mounts) == 0 || s.cursor < 0 || s.cursor >= len(s.mounts) {
+		s.err = fmt.Errorf("no mount selected")
 		return s, nil
 	}
 
@@ -608,6 +624,9 @@ func (s *MountsScreen) getMountStatus(mount *models.MountConfig) string {
 
 // renderMountDetails renders the details of the selected mount.
 func (s *MountsScreen) renderMountDetails() string {
+	if len(s.mounts) == 0 || s.cursor < 0 || s.cursor >= len(s.mounts) {
+		return ""
+	}
 	mount := s.mounts[s.cursor]
 
 	var b strings.Builder

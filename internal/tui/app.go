@@ -340,8 +340,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Execute navigation commands immediately for same-update navigation
 		if cmd != nil {
 			if navMsg := cmd(); navMsg != nil {
-				switch navMsg.(type) {
-				case screens.GoBackMsg:
+				if _, ok := navMsg.(screens.GoBackMsg); ok {
 					a.currentScreen = ScreenMain
 				}
 			}
@@ -357,8 +356,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Execute navigation commands immediately for same-update navigation
 		if cmd != nil {
 			if navMsg := cmd(); navMsg != nil {
-				switch navMsg.(type) {
-				case screens.GoBackMsg:
+				if _, ok := navMsg.(screens.GoBackMsg); ok {
 					a.currentScreen = ScreenMain
 				}
 			}
@@ -374,8 +372,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Execute navigation commands immediately for same-update navigation
 		if cmd != nil {
 			if navMsg := cmd(); navMsg != nil {
-				switch navMsg.(type) {
-				case screens.GoBackMsg:
+				if _, ok := navMsg.(screens.GoBackMsg); ok {
 					a.currentScreen = ScreenMain
 				}
 			}
@@ -391,8 +388,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Execute navigation commands immediately for same-update navigation
 		if cmd != nil {
 			if navMsg := cmd(); navMsg != nil {
-				switch navMsg.(type) {
-				case screens.GoBackMsg:
+				if _, ok := navMsg.(screens.GoBackMsg); ok {
 					a.currentScreen = ScreenMain
 				}
 			}

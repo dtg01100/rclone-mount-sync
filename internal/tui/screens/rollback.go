@@ -71,7 +71,7 @@ func (r *RollbackManager) RollbackMount(data MountRollbackData, systemdFailed bo
 	var errs []error
 
 	if systemdFailed && data.Operation != OperationDelete {
-		if r.generator != nil {
+		if r.generator != nil && r.manager != nil {
 			serviceName := r.generator.ServiceName(data.MountID, "mount") + ".service"
 			if err := r.manager.Stop(serviceName); err != nil {
 				errs = append(errs, fmt.Errorf("failed to stop service: %w", err))
@@ -108,7 +108,7 @@ func (r *RollbackManager) RollbackSyncJob(data SyncJobRollbackData, systemdFaile
 	var errs []error
 
 	if systemdFailed && data.Operation != OperationDelete {
-		if r.generator != nil {
+		if r.generator != nil && r.manager != nil {
 			serviceName := r.generator.ServiceName(data.JobID, "sync") + ".service"
 			timerName := r.generator.ServiceName(data.JobID, "sync") + ".timer"
 			if err := r.manager.Stop(serviceName); err != nil {
