@@ -200,14 +200,12 @@ func runMain(args []string, stdout, stderr io.Writer) int {
 	return runMainWithDeps(args, DefaultAppDeps(stdout, stderr))
 }
 
-func main() {
-	args := os.Args[1:]
-
-	if len(args) == 0 {
-		os.Exit(runMain(args, os.Stdout, os.Stderr))
-	}
-
-	cliCommands := map[string]bool{
+// CLICommands returns the set of subcommand names that are routed to the
+// CLI dispatcher (cobra) rather than the TUI. Exported so tests can verify
+// the routing set matches what main actually uses, rather than the previous
+// tautological pattern of hardcoding the same list in the test.
+func CLICommands() map[string]bool {
+	return map[string]bool{
 		"mount":      true,
 		"sync":       true,
 		"services":   true,
@@ -219,6 +217,16 @@ func main() {
 		"help":       true,
 		"completion": true,
 	}
+}
+
+func main() {
+	args := os.Args[1:]
+
+	if len(args) == 0 {
+		os.Exit(runMain(args, os.Stdout, os.Stderr))
+	}
+
+	cliCommands := CLICommands()
 
 	// Route to CLI if first arg is a known command
 	firstArg := args[0]

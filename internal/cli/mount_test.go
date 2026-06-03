@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
@@ -487,27 +489,47 @@ func TestMountCreateValidationMissingFields(t *testing.T) {
 	}
 }
 
-func TestMountCreateSaveConfigError(t *testing.T) {
+// TestMountCreateLoadConfigError tests the early-return path when loadConfig
+// itself fails. The previous "TestMountCreateSaveConfigError" mock returned
+// an error from loadConfig which is checked before cfg.Save() is ever
+// reached — it therefore exercised the wrong seam. Renamed and pointed at
+// the correct path; the actual cfg.Save() failure is exercised by
+// TestMountCreateSaveConfigError_RealSaveFailure via a read-only tmpdir.
+func TestMountCreateLoadConfigError(t *testing.T) {
 	oldLoadConfig := loadConfig
-	oldMountCreateName := mountCreateName
-	oldMountCreateRemote := mountCreateRemote
-	oldMountCreateMountPoint := mountCreateMountPoint
-	defer func() {
-		loadConfig = oldLoadConfig
-		mountCreateName = oldMountCreateName
-		mountCreateRemote = oldMountCreateRemote
-		mountCreateMountPoint = oldMountCreateMountPoint
-	}()
+	t.Cleanup(func() { loadConfig = oldLoadConfig })
 
 	loadConfig = func() (*config.Config, error) {
-		return &config.Config{}, fmt.Errorf("config save failed")
+		return nil, fmt.Errorf("simulated config load failure")
 	}
-	mountCreateName = "test-mount"
-	mountCreateRemote = "gdrive:"
-	mountCreateMountPoint = "/home/user/mnt"
 
 	if err := runMountCreate(nil, nil); err == nil {
-		t.Fatal("expected runMountCreate to fail when config save fails")
+		t.Fatal("expected runMountCreate to fail when loadConfig fails")
+	}
+}
+
+// TestMountCreateSaveConfigError_RealSaveFailure makes Save() fail by
+// pointing XDG_CONFIG_HOME at a read-only directory so config.Save()
+// fails when it tries to write config.yaml. The previous version of
+// this test set cfgFile, but cfgFile is only consulted during
+// PersistentPreRun and runMountCreate calls loadConfig() directly, so
+// the override was inert. Set XDG_CONFIG_HOME directly instead.
+func TestMountCreateSaveConfigError_RealSaveFailure(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("read-only directory check is bypassed when running as root")
+	}
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+	if err := os.Mkdir(readOnlyDir, 0o500); err != nil {
+		t.Fatalf("create read-only dir: %v", err)
+	}
+
+	oldXDG := os.Getenv("XDG_CONFIG_HOME")
+	t.Cleanup(func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) })
+	_ = os.Setenv("XDG_CONFIG_HOME", readOnlyDir)
+
+	if err := runMountCreate(nil, nil); err == nil {
+		t.Fatal("expected runMountCreate to fail when cfg.Save() fails")
 	}
 }
 

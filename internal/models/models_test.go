@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -1411,7 +1412,12 @@ func TestSyncJobConfigNestedOptions(t *testing.T) {
 	}
 }
 
-func TestJSONEmptyVsOmitEmpty(t *testing.T) {
+// TestJSON_RequiredFieldsMarshal verifies the JSON shape of a minimal
+// MountConfig. Renamed from the previous "TestJSONEmptyVsOmitEmpty"
+// which, despite the name, only asserted the presence of required fields
+// and never actually verified the omitempty behavior on optional fields.
+// A separate TestJSON_OmitEmptyFields below covers the omitempty path.
+func TestJSON_RequiredFieldsMarshal(t *testing.T) {
 	config := MountConfig{
 		ID:         "omitempty-test",
 		Name:       "test",
@@ -1427,15 +1433,35 @@ func TestJSONEmptyVsOmitEmpty(t *testing.T) {
 
 	jsonStr := string(data)
 
-	if config.Description != "" {
-		t.Error("Description should be empty for this test")
-	}
-
 	requiredFields := []string{`"id"`, `"name"`, `"remote"`, `"remote_path"`, `"mount_point"`}
 	for _, field := range requiredFields {
 		if !contains(jsonStr, field) {
 			t.Errorf("JSON should contain field %q", field)
 		}
+	}
+}
+
+func TestJSON_OmitEmptyFields(t *testing.T) {
+	// A zero-value MountConfig should NOT emit the Description field
+	// (the only optional string field with `omitempty`). Note that
+	// time.Time's zero value ("0001-01-01T00:00:00Z") is NOT considered
+	// empty by encoding/json — that's a known Go limitation we
+	// document but don't fight here.
+	config := MountConfig{
+		ID:         "id",
+		Name:       "name",
+		Remote:     "remote:",
+		RemotePath: "/",
+		MountPoint: "/mnt",
+	}
+	data, err := json.Marshal(config)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	jsonStr := string(data)
+
+	if contains(jsonStr, `"description"`) {
+		t.Errorf(`JSON should NOT contain "description" when zero; got: %s`, jsonStr)
 	}
 }
 
@@ -1454,21 +1480,28 @@ func containsHelper(s, substr string) bool {
 
 func TestMountConfigValidate(t *testing.T) {
 	tests := []struct {
-		name    string
-		mutate  func(m *MountConfig)
-		wantErr bool
+		name      string
+		mutate    func(m *MountConfig)
+		wantErr   bool
+		errSubstr string // substring expected in err (when wantErr is true)
 	}{
-		{"valid", func(m *MountConfig) {}, false},
-		{"empty name", func(m *MountConfig) { m.Name = "" }, true},
-		{"whitespace name", func(m *MountConfig) { m.Name = "   " }, true},
-		{"name with newline", func(m *MountConfig) { m.Name = "bad\nname" }, true},
-		{"empty remote", func(m *MountConfig) { m.Remote = "" }, true},
-		{"empty mountpoint", func(m *MountConfig) { m.MountPoint = "" }, true},
-		{"shell injection in mountpoint", func(m *MountConfig) { m.MountPoint = "/tmp/x; rm -rf /" }, true},
-		{"shell injection in remote", func(m *MountConfig) { m.Remote = "foo$bar" }, true},
-		{"shell injection in remote path", func(m *MountConfig) { m.RemotePath = "/x y" }, true},
-		{"valid with spaces in path", func(m *MountConfig) { m.MountPoint = "/mnt/My Drive" }, true},
-		{"valid with trailing colon", func(m *MountConfig) { m.Remote = "gdrive:" }, false},
+		{"valid", func(m *MountConfig) {}, false, ""},
+		{"empty name", func(m *MountConfig) { m.Name = "" }, true, "empty"},
+		{"whitespace name", func(m *MountConfig) { m.Name = "   " }, true, "empty"},
+		{"name with newline", func(m *MountConfig) { m.Name = "bad\nname" }, true, "newline"},
+		{"empty remote", func(m *MountConfig) { m.Remote = "" }, true, "empty"},
+		{"empty mountpoint", func(m *MountConfig) { m.MountPoint = "" }, true, "empty"},
+		{"shell injection in mountpoint", func(m *MountConfig) { m.MountPoint = "/tmp/x; rm -rf /" }, true, "illegal character"},
+		{"shell injection in remote", func(m *MountConfig) { m.Remote = "foo$bar" }, true, "illegal character"},
+		{"shell injection in remote path", func(m *MountConfig) { m.RemotePath = "/x y" }, true, "illegal character"},
+		{"rejects spaces in mountpoint", func(m *MountConfig) { m.MountPoint = "/mnt/My Drive" }, true, "illegal character"},
+		{"valid with trailing colon", func(m *MountConfig) { m.Remote = "gdrive:" }, false, ""},
+		{"name at max length", func(m *MountConfig) {
+			m.Name = strings.Repeat("a", 200)
+		}, false, ""},
+		{"name too long", func(m *MountConfig) {
+			m.Name = strings.Repeat("a", 201)
+		}, true, "200 characters"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -1482,24 +1515,29 @@ func TestMountConfigValidate(t *testing.T) {
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Validate() err = %v, wantErr %v", err, tt.wantErr)
 			}
+			if tt.wantErr && tt.errSubstr != "" && err != nil && !strings.Contains(err.Error(), tt.errSubstr) {
+				t.Errorf("Validate() err = %q, want substring %q", err, tt.errSubstr)
+			}
 		})
 	}
 }
 
 func TestSyncJobConfigValidate(t *testing.T) {
 	tests := []struct {
-		name    string
-		mutate  func(j *SyncJobConfig)
-		wantErr bool
+		name      string
+		mutate    func(j *SyncJobConfig)
+		wantErr   bool
+		errSubstr string
 	}{
-		{"valid", func(j *SyncJobConfig) {}, false},
-		{"empty source", func(j *SyncJobConfig) { j.Source = "" }, true},
-		{"source without colon", func(j *SyncJobConfig) { j.Source = "/just/a/path" }, true},
-		{"shell injection in destination", func(j *SyncJobConfig) { j.Destination = "/tmp/x; cat /etc/passwd" }, true},
-		{"invalid direction", func(j *SyncJobConfig) { j.SyncOptions.Direction = "rm -rf /" }, true},
-		{"valid direction copy", func(j *SyncJobConfig) { j.SyncOptions.Direction = "copy" }, false},
-		{"valid direction bisync", func(j *SyncJobConfig) { j.SyncOptions.Direction = "bisync" }, false},
-		{"newline in name", func(j *SyncJobConfig) { j.Name = "evil\nExecStart" }, true},
+		{"valid", func(j *SyncJobConfig) {}, false, ""},
+		{"empty source", func(j *SyncJobConfig) { j.Source = "" }, true, "empty"},
+		{"source without colon", func(j *SyncJobConfig) { j.Source = "/just/a/path" }, true, "must contain a colon"},
+		{"shell injection in destination", func(j *SyncJobConfig) { j.Destination = "/tmp/x; cat /etc/passwd" }, true, "illegal character"},
+		{"invalid direction", func(j *SyncJobConfig) { j.SyncOptions.Direction = "rm -rf /" }, true, "invalid direction"},
+		{"valid direction copy", func(j *SyncJobConfig) { j.SyncOptions.Direction = "copy" }, false, ""},
+		{"valid direction bisync", func(j *SyncJobConfig) { j.SyncOptions.Direction = "bisync" }, false, ""},
+		{"newline in name", func(j *SyncJobConfig) { j.Name = "evil\nExecStart" }, true, "newline"},
+		{"name too long", func(j *SyncJobConfig) { j.Name = strings.Repeat("a", 201) }, true, "200 characters"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

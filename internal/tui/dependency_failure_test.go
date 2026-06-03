@@ -15,16 +15,20 @@ import (
 
 // TestApp_InitError_ConfigLoadFailure tests handling when config directory is inaccessible.
 func TestApp_InitError_ConfigLoadFailure(t *testing.T) {
-	// Create a temporary directory with restricted permissions
+	if os.Getuid() == 0 {
+		t.Skip("permission test cannot be enforced when running as root")
+	}
+
+	// Create a temporary directory with restricted permissions.
 	tmpDir := t.TempDir()
 	restrictedDir := filepath.Join(tmpDir, "restricted")
 	if err := os.Mkdir(restrictedDir, 0000); err != nil {
-		t.Skip("Cannot create restricted directory (may be running as root)")
+		t.Fatalf("cannot create restricted directory: %v", err)
 	}
 
 	// Save and restore XDG_CONFIG_HOME
 	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
+	t.Cleanup(func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) })
 
 	// Point to restricted directory
 	_ = os.Setenv("XDG_CONFIG_HOME", restrictedDir)
@@ -32,72 +36,57 @@ func TestApp_InitError_ConfigLoadFailure(t *testing.T) {
 	app := NewApp("dev")
 	msg := app.initializeServices()
 
-	// Should return AppInitError due to permission issues
+	// The previous version of this test logged and returned when
+	// initialization succeeded — which is the wrong direction for a
+	// "ConfigLoadFailure" test. We are running as non-root and have
+	// pointed the config at a directory we cannot read, so the test
+	// should observe an AppInitError; if it doesn't, that is a real
+	// regression in the failure path and must fail.
 	initErr, ok := msg.(AppInitError)
 	if !ok {
-		// If it didn't error, that's also acceptable (depends on OS permissions)
-		t.Logf("Initialization succeeded with restricted dir (message type: %T)", msg)
-		return
+		t.Fatalf("expected AppInitError from unreadable config dir, got %T: %v", msg, msg)
 	}
-
 	if initErr.Err == nil {
-		t.Error("AppInitError should have an error")
+		t.Error("AppInitError should have a non-nil error")
 	}
-	t.Logf("Got expected error: %v", initErr.Err)
 }
 
-// TestApp_InitError_SystemdGeneratorFailure tests handling of systemd generator initialization failure.
+// TestApp_InitError_SystemdGeneratorFailure tests handling of systemd
+// generator initialization failure.
+//
+// Skipped by design: the production config.Load() falls back to defaults
+// when the config file is missing rather than erroring, and the systemd
+// generator's NewGenerator() does not fail in any portable way. A previous
+// version of this test set XDG_CONFIG_HOME=/proc/nonexistent and asserted
+// an AppInitError, but the production code returns AppInitDone in that
+// scenario (config falls back to defaults). The "test by XDG env var"
+// approach was a false-positive, so we now skip and document.
 func TestApp_InitError_SystemdGeneratorFailure(t *testing.T) {
-	// Point to a non-existent, non-creatable path
-	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
-
-	// Use a path that will fail to create
-	_ = os.Setenv("XDG_CONFIG_HOME", "/proc/nonexistent")
-
-	app := NewApp("dev")
-	msg := app.initializeServices()
-
-	// Should return AppInitError due to generator failure
-	initErr, ok := msg.(AppInitError)
-	if !ok {
-		t.Logf("Initialization succeeded (message type: %T)", msg)
-		return
-	}
-
-	if initErr.Err == nil {
-		t.Error("AppInitError should have an error")
-	}
-	t.Logf("Got expected error: %v", initErr.Err)
+	t.Skip("Skipped: production code falls back to defaults when the XDG config dir is missing, so this failure cannot be induced via env vars alone. See git history for the previous implementation.")
 }
 
 // TestApp_InitError_RcloneNotAvailable tests graceful handling when rclone is not in PATH.
 func TestApp_InitError_RcloneNotAvailable(t *testing.T) {
-	// Save and restore PATH
 	oldPath := os.Getenv("PATH")
-	defer func() { _ = os.Setenv("PATH", oldPath) }()
+	t.Cleanup(func() { _ = os.Setenv("PATH", oldPath) })
 
-	// Set PATH to only include non-existent directory
+	// Set PATH to only include a non-existent directory.
 	tmpDir := t.TempDir()
 	_ = os.Setenv("PATH", tmpDir)
 
 	app := NewApp("dev")
 	msg := app.initializeServices()
 
-	// Should NOT fail - rclone unavailability should be handled gracefully
+	// Rclone unavailability should NOT crash init. We require either
+	// AppInitDone or ReconciliationMsg (the expected success types).
 	_, isInitDone := msg.(AppInitDone)
 	_, isReconcile := msg.(ReconciliationMsg)
-
 	if !isInitDone && !isReconcile {
-		if initErr, ok := msg.(AppInitError); ok {
-			// If it does error, it should be informative
-			t.Logf("Got init error (may be acceptable): %v", initErr.Err)
-		}
+		t.Errorf("expected AppInitDone or ReconciliationMsg, got %T: %v", msg, msg)
 	}
-
-	// Rclone client should be initialized (even if binary not found)
+	// Rclone client should always be initialized.
 	if app.rclone == nil {
-		t.Log("Warning: rclone client is nil (may be expected if initialization failed)")
+		t.Error("rclone client should be set after initialization (even if rclone binary is absent)")
 	}
 }
 

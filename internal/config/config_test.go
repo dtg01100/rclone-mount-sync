@@ -2415,3 +2415,125 @@ func TestAddMountRejectsIDCollision(t *testing.T) {
 		t.Error("AddMount should reject a mount whose ID collides with an existing one")
 	}
 }
+
+func TestAddSyncJobRejectsShellInjectionInSource(t *testing.T) {
+	cfg := newConfigWithDefaults()
+	err := cfg.AddSyncJob(models.SyncJobConfig{
+		Name:        "test",
+		Source:      "gdrive:/; rm -rf /",
+		Destination: "/backup",
+	})
+	if err == nil {
+		t.Error("AddSyncJob should reject source with shell metacharacters")
+	}
+	if !strings.Contains(err.Error(), "illegal character") {
+		t.Errorf("error should mention illegal character, got: %v", err)
+	}
+}
+
+func TestAddSyncJobRejectsShellInjectionInDestination(t *testing.T) {
+	cfg := newConfigWithDefaults()
+	err := cfg.AddSyncJob(models.SyncJobConfig{
+		Name:        "test",
+		Source:      "gdrive:/Photos",
+		Destination: "/tmp/x; cat /etc/passwd",
+	})
+	if err == nil {
+		t.Error("AddSyncJob should reject destination with shell metacharacters")
+	}
+	if !strings.Contains(err.Error(), "illegal character") {
+		t.Errorf("error should mention illegal character, got: %v", err)
+	}
+}
+
+func TestAddSyncJobRejectsIDCollision(t *testing.T) {
+	cfg := newConfigWithDefaults()
+	job := models.SyncJobConfig{
+		ID:          "duplicate-sync-id",
+		Name:        "first",
+		Source:      "gdrive:/a",
+		Destination: "/backup/a",
+	}
+	if err := cfg.AddSyncJob(job); err != nil {
+		t.Fatalf("first AddSyncJob: %v", err)
+	}
+	dup := job
+	dup.Name = "second"
+	dup.Source = "gdrive:/b"
+	dup.Destination = "/backup/b"
+	if err := cfg.AddSyncJob(dup); err == nil {
+		t.Error("AddSyncJob should reject a sync job whose ID collides with an existing one")
+	} else if !strings.Contains(err.Error(), "ID") {
+		t.Errorf("error should mention ID, got: %v", err)
+	}
+}
+
+func TestFindMount(t *testing.T) {
+	cfg := newConfigWithDefaults()
+	mounts := []models.MountConfig{
+		{ID: "id-1", Name: "alpha", Remote: "gdrive:", MountPoint: "/mnt/alpha"},
+		{ID: "id-2", Name: "beta", Remote: "dropbox:", MountPoint: "/mnt/beta"},
+	}
+	for _, m := range mounts {
+		if err := cfg.AddMount(m); err != nil {
+			t.Fatalf("AddMount(%q): %v", m.Name, err)
+		}
+	}
+
+	// Lookup by name
+	if got := cfg.FindMount("alpha"); got == nil || got.ID != "id-1" {
+		t.Errorf("FindMount(alpha) = %v, want ID=id-1", got)
+	}
+	// Lookup by ID
+	if got := cfg.FindMount("id-2"); got == nil || got.Name != "beta" {
+		t.Errorf("FindMount(id-2) = %v, want Name=beta", got)
+	}
+	// Lookup of nonexistent returns nil
+	if got := cfg.FindMount("nonexistent"); got != nil {
+		t.Errorf("FindMount(nonexistent) = %v, want nil", got)
+	}
+}
+
+func TestFindSyncJob(t *testing.T) {
+	cfg := newConfigWithDefaults()
+	jobs := []models.SyncJobConfig{
+		{ID: "id-1", Name: "alpha", Source: "gdrive:/a", Destination: "/backup/a"},
+		{ID: "id-2", Name: "beta", Source: "dropbox:/b", Destination: "/backup/b"},
+	}
+	for _, j := range jobs {
+		if err := cfg.AddSyncJob(j); err != nil {
+			t.Fatalf("AddSyncJob(%q): %v", j.Name, err)
+		}
+	}
+
+	if got := cfg.FindSyncJob("alpha"); got == nil || got.ID != "id-1" {
+		t.Errorf("FindSyncJob(alpha) = %v, want ID=id-1", got)
+	}
+	if got := cfg.FindSyncJob("id-2"); got == nil || got.Name != "beta" {
+		t.Errorf("FindSyncJob(id-2) = %v, want Name=beta", got)
+	}
+	if got := cfg.FindSyncJob("nonexistent"); got != nil {
+		t.Errorf("FindSyncJob(nonexistent) = %v, want nil", got)
+	}
+}
+
+func TestFindMount_ReturnsCopy(t *testing.T) {
+	// Defensive: the returned pointer must be a copy of the in-memory
+	// struct so a concurrent mutator cannot corrupt the slice.
+	cfg := newConfigWithDefaults()
+	if err := cfg.AddMount(models.MountConfig{
+		ID: "id-1", Name: "alpha", Remote: "gdrive:", MountPoint: "/mnt/alpha",
+	}); err != nil {
+		t.Fatalf("AddMount: %v", err)
+	}
+	got := cfg.FindMount("id-1")
+	if got == nil {
+		t.Fatal("FindMount returned nil")
+	}
+	got.Name = "mutated"
+	// Re-fetch and confirm the in-memory value was not affected.
+	again := cfg.FindMount("id-1")
+	if again == nil || again.Name != "alpha" {
+		t.Errorf("FindMount returned a shared reference; Name after mutation = %q, want %q", again.Name, "alpha")
+	}
+}

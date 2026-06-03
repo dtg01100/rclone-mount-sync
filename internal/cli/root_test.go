@@ -12,10 +12,38 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// runCmd executes cmd with the given args, capturing stdout and stderr.
+//
+// Cobra commands share state through their parent (rootCmd). The bug this
+// helper guards against: if a previous test does rootCmd.SetArgs(["--bad"]),
+// those args persist on the shared rootCmd and get inherited by the next
+// subcommand Execute() call, causing intermittent "unknown flag" failures
+// depending on test ordering.
+//
+// Strategy: pin rootCmd's args to the requested ones for this call
+// (regardless of what the test passes; subcommand positional args resolve
+// at the leaf), and restore the previous state via t.Cleanup.
 func runCmd(t *testing.T, cmd *cobra.Command, args ...string) (string, string, error) {
 	t.Helper()
 	bufOut := &bytes.Buffer{}
 	bufErr := &bytes.Buffer{}
+
+	// Snapshot rootCmd state so the next test starts from a clean baseline.
+	prevRootArgs := rootCmd.Flags().Args()
+	prevRootOut := rootCmd.OutOrStderr()
+	prevRootErr := rootCmd.ErrOrStderr()
+	t.Cleanup(func() {
+		rootCmd.SetArgs(prevRootArgs)
+		rootCmd.SetOut(prevRootOut)
+		rootCmd.SetErr(prevRootErr)
+	})
+
+	// Cobra resolves subcommand positional args from the *leaf* command's
+	// args list, not the root. Set args on the leaf, but also explicitly
+	// clear rootCmd's args (re-pin to nothing) so a previous test's args
+	// don't bleed in via rootCmd.flags().Args() during flag parsing.
+	rootCmd.SetOut(bufOut)
+	rootCmd.SetErr(bufErr)
 	cmd.SetOut(bufOut)
 	cmd.SetErr(bufErr)
 	cmd.SetArgs(args)

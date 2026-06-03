@@ -2,6 +2,8 @@ package systemd
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -1963,8 +1965,11 @@ func TestParseServiceListLine_VariousStates(t *testing.T) {
 	}
 }
 
-// TestParseServiceListLine_EnabledCaseInsensitive tests that enabled check is case-sensitive.
-func TestParseServiceListLine_EnabledCaseInsensitive(t *testing.T) {
+// TestParseServiceListLine_CaseSensitive documents the case-sensitive
+// behavior of the enabled-flag check. The previous test name
+// "EnabledCaseInsensitive" was inverted (the test asserts the
+// production code is case-sensitive, not case-insensitive).
+func TestParseServiceListLine_CaseSensitive(t *testing.T) {
 	tests := []struct {
 		state       string
 		wantEnabled bool
@@ -2011,6 +2016,54 @@ func TestParseServiceListLine_SpecialCharactersInName(t *testing.T) {
 			}
 			if name != tt.wantName {
 				t.Errorf("parseServiceListLine() name = %q, want %q", name, tt.wantName)
+			}
+		})
+	}
+}
+
+// TestManager_IsActive_ExitCodeSemantics uses a mock-script systemctl to
+// exercise the production IsActive branches for exit codes 0 (active),
+// 3 (inactive), 4 (no such unit), and 1 (unexpected error). This is the
+// only test that exercises the new "exit 4 is (false, nil)" path added
+// in commit 8ce11f4.
+func TestManager_IsActive_ExitCodeSemantics(t *testing.T) {
+	tmpDir := t.TempDir()
+	mockPath := filepath.Join(tmpDir, "mock-systemctl")
+	script := `#!/bin/sh
+if [ "$2" = "is-active" ]; then
+    case "$3" in
+        active)    echo "active"; exit 0 ;;
+        inactive)  echo "inactive"; exit 3 ;;
+        notfound)  exit 4 ;;
+        broken)    echo "garbled output"; exit 1 ;;
+    esac
+fi
+exit 0
+`
+	if err := os.WriteFile(mockPath, []byte(script), 0o755); err != nil { //nolint:gosec
+		t.Fatalf("write mock: %v", err)
+	}
+	m := &Manager{systemctlPath: mockPath}
+
+	cases := []struct {
+		name    string
+		unit    string
+		want    bool
+		wantErr bool
+	}{
+		{"active returns true", "active", true, false},
+		{"inactive exit 3 returns false,nil", "inactive", false, false},
+		{"not-found exit 4 returns false,nil", "notfound", false, false},
+		{"exit 1 is an error", "broken", false, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := m.IsActive(tc.unit)
+			if got != tc.want {
+				t.Errorf("IsActive() = %v, want %v", got, tc.want)
+			}
+			if (err != nil) != tc.wantErr {
+				t.Errorf("IsActive() err = %v, wantErr %v", err, tc.wantErr)
 			}
 		})
 	}

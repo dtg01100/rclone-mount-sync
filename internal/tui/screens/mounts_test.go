@@ -437,6 +437,29 @@ func TestMountsScreen_MountDeletedMsg(t *testing.T) {
 	}
 }
 
+func TestMountsScreen_MountDeletedMsgClearsCachedStatus(t *testing.T) {
+	// Regression test: a mount created with the same name as a previously
+	// deleted mount must not inherit the stale status. The fix is the
+	// delete(s.statuses, msg.Name) in the MountDeletedMsg handler.
+	screen := NewMountsScreen()
+	screen.SetSize(80, 24)
+	screen.mounts = createTestMounts()
+	screen.statuses = map[string]*systemd.UnitStatus{
+		"Dropbox": {Name: "Dropbox", Active: true, State: "active"},
+		"Google":  {Name: "Google", Active: false, State: "inactive"},
+	}
+
+	screen.Update(MountDeletedMsg{Name: "Dropbox"})
+
+	if _, ok := screen.statuses["Dropbox"]; ok {
+		t.Error("stale status for deleted mount was not cleared from cache")
+	}
+	// Sibling status should be untouched.
+	if _, ok := screen.statuses["Google"]; !ok {
+		t.Error("deleting one mount cleared an unrelated cached status")
+	}
+}
+
 func TestMountsScreen_MountStatusMsg(t *testing.T) {
 	screen := NewMountsScreen()
 	screen.statuses = make(map[string]*systemd.UnitStatus)
@@ -1978,69 +2001,81 @@ func TestMountsScreen_StartEditForm_RcloneNotInstalled(t *testing.T) {
 	}
 }
 
-// Tests for MountDetails keyboard shortcuts
-
-func TestMountDetails_StartKey(t *testing.T) {
+// Tests for MountDetails keyboard shortcuts. The earlier version of these
+// tests only asserted that the view was not "done" after the keypress —
+// which is true for every keypress including ones that should be no-ops.
+// They were silent tautologies. The new table-driven version actually
+// exercises the async action path: key -> Update -> cmd -> cmd() ->
+// MountDetailsActionMsg -> re-feed into Update -> state.
+func TestMountDetails_ActionKeys(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
-	mgr := &systemd.Manager{}
-	details := NewMountDetails(mount, mgr, gen)
-	details.width = 80
+	cases := []struct {
+		key    string
+		action string
+	}{
+		{"s", "s"},
+		{"x", "x"},
+		{"e", "e"},
+		{"d", "d"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.key, func(t *testing.T) {
+			mock := &systemd.MockManager{}
+			gen := &systemd.Generator{}
+			details := NewMountDetails(mount, mock, gen)
+			details.width = 80
 
-	// Press 's' to start service
-	details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
+			_, cmd := details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tc.key)})
+			if cmd == nil {
+				t.Fatalf("action key %q should return a cmd", tc.key)
+			}
+			msg := cmd()
+			actionMsg, ok := msg.(MountDetailsActionMsg)
+			if !ok {
+				t.Fatalf("cmd() returned %T, want MountDetailsActionMsg", msg)
+			}
+			if actionMsg.Action != tc.action {
+				t.Errorf("Action = %q, want %q", actionMsg.Action, tc.action)
+			}
+			if actionMsg.Name != mount.Name {
+				t.Errorf("Name = %q, want %q", actionMsg.Name, mount.Name)
+			}
+			if actionMsg.Err != nil {
+				t.Errorf("mock manager should not error, got: %v", actionMsg.Err)
+			}
 
-	// Should not be done
-	if details.done {
-		t.Error("details should not be done after 's' key")
+			// Feed the message back; the screen should surface it as lastErr
+			// so the View can display the (one-shot) error banner.
+			details.Update(actionMsg)
+			if details.lastErr != nil {
+				t.Errorf("lastErr = %v, want nil (mock returned no error)", details.lastErr)
+			}
+		})
 	}
 }
 
-func TestMountDetails_StopKey(t *testing.T) {
+func TestMountDetails_ActionKeys_NilManager(t *testing.T) {
+	// When manager/generator are nil, the action cmd should still
+	// return a non-nil cmd that yields an error message — never block
+	// the TUI or panic.
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
-	mgr := &systemd.Manager{}
-	details := NewMountDetails(mount, mgr, gen)
-	details.width = 80
+	details := &MountDetails{mount: mount, width: 80}
 
-	// Press 'x' to stop service
-	details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
-
-	// Should not be done
-	if details.done {
-		t.Error("details should not be done after 'x' key")
-	}
-}
-
-func TestMountDetails_EnableKey(t *testing.T) {
-	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
-	mgr := &systemd.Manager{}
-	details := NewMountDetails(mount, mgr, gen)
-	details.width = 80
-
-	// Press 'e' to enable service
-	details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
-
-	// Should not be done
-	if details.done {
-		t.Error("details should not be done after 'e' key")
-	}
-}
-
-func TestMountDetails_DisableKey(t *testing.T) {
-	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
-	mgr := &systemd.Manager{}
-	details := NewMountDetails(mount, mgr, gen)
-	details.width = 80
-
-	// Press 'd' to disable service
-	details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-
-	// Should not be done
-	if details.done {
-		t.Error("details should not be done after 'd' key")
+	for _, key := range []string{"s", "x", "e", "d"} {
+		t.Run(key, func(t *testing.T) {
+			_, cmd := details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+			if cmd == nil {
+				t.Fatalf("nil-manager path should still return a cmd for key %q", key)
+			}
+			msg := cmd()
+			actionMsg, ok := msg.(MountDetailsActionMsg)
+			if !ok {
+				t.Fatalf("cmd() returned %T, want MountDetailsActionMsg", msg)
+			}
+			if actionMsg.Err == nil {
+				t.Errorf("nil manager should produce an error for key %q", key)
+			}
+		})
 	}
 }
 
@@ -2051,10 +2086,12 @@ func TestMountDetails_RefreshKey(t *testing.T) {
 	details := NewMountDetails(mount, mgr, gen)
 	details.width = 80
 
-	// Press 'r' to refresh
-	details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
-
-	// Should not be done
+	// 'r' is a refresh — synchronous, no cmd. Just confirm it doesn't
+	// mark the view as done.
+	_, cmd := details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+	if cmd != nil {
+		t.Errorf("'r' (refresh) should be synchronous, got cmd: %T", cmd)
+	}
 	if details.done {
 		t.Error("details should not be done after 'r' key")
 	}

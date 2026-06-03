@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -85,13 +86,26 @@ exit 1
 		RetryMultiplier: 2.0,
 	})
 
+	// Capture the call count by reading the mock's invocation log.
+	// createMockRcloneForRetry writes nothing to disk for tracking, so we
+	// infer "no retry" by checking the elapsed time: with InitialDelay=10ms
+	// and 3 retries we'd sleep ~70ms; if no retries happen we finish in
+	// well under 50ms. Using a strict upper bound is the cleanest way to
+	// prove the retry loop was bypassed.
+	start := time.Now()
 	_, err := c.ListRemotes(context.Background())
+	elapsed := time.Since(start)
+
 	if err == nil {
 		t.Fatal("ListRemotes() should return error for permanent error")
 	}
-
 	if !IsPermanentError(err) {
-		t.Logf("error type check - error may be wrapped: %v", err)
+		t.Errorf("expected permanent error, got: %v", err)
+	}
+	// Three retries with backoff would take >= ~70ms; one call should
+	// take well under 30ms. A 100ms budget is generous to avoid CI flakes.
+	if elapsed > 100*time.Millisecond {
+		t.Errorf("ListRemotes took %v; expected no retry (under 100ms)", elapsed)
 	}
 }
 
@@ -507,20 +521,25 @@ func TestDoRetryFailureAfterMaxRetries(t *testing.T) {
 		RetryMultiplier: 2.0,
 	}
 
+	// Use a single sentinel so errors.Is can match the wrapped error
+	// returned by doRetry. A previous version of this test constructed
+	// a fresh sentinel inside errors.Is, which never matches.
+	persistent := NewRetryableError(errors.New("persistent transient error"))
+
 	callCount := 0
 	err := doRetry(context.Background(), config, func() error {
 		callCount++
-		return NewRetryableError(errors.New("persistent transient error"))
+		return persistent
 	})
 
 	if err == nil {
-		t.Error("doRetry() should return error after max retries")
+		t.Fatal("doRetry() should return error after max retries")
 	}
 	if callCount != 3 {
 		t.Errorf("operation called %d times, want 3", callCount)
 	}
-	if !errors.Is(err, NewRetryableError(errors.New("test"))) {
-		t.Logf("error is: %v", err)
+	if !errors.Is(err, persistent) {
+		t.Errorf("expected wrapped retryable error, got: %v", err)
 	}
 }
 
@@ -676,6 +695,10 @@ func TestExponentialBackoff(t *testing.T) {
 		RetryMultiplier: 2.0,
 	}
 
+	// With MaxRetries=3 there are 3 sleep periods between the 4 calls
+	// (MaxRetries+1 total attempts): 50ms, 100ms, 200ms. A previous
+	// version of this test used t.Skip when fewer than 2 delays were
+	// captured, allowing a backoff regression to silently pass.
 	var delays []time.Duration
 	start := time.Now()
 
@@ -689,22 +712,25 @@ func TestExponentialBackoff(t *testing.T) {
 		return nil, NewRetryableError(errors.New("error"))
 	})
 
-	if len(delays) < 2 {
-		t.Skip("not enough delays captured")
+	if callCount != 4 {
+		t.Fatalf("expected 4 attempts (MaxRetries+1), got %d", callCount)
+	}
+	if len(delays) != 3 {
+		t.Fatalf("expected 3 delays, got %d", len(delays))
 	}
 
 	expectedDelays := []time.Duration{
 		50 * time.Millisecond,
 		100 * time.Millisecond,
+		200 * time.Millisecond,
 	}
 
 	for i, expected := range expectedDelays {
-		if i >= len(delays) {
-			break
-		}
+		// 50% tolerance to absorb scheduler jitter on busy CI runners.
+		// Without the assertion the test was a t.Logf that never failed.
 		tolerance := expected / 2
 		if delays[i] < expected-tolerance || delays[i] > expected+tolerance {
-			t.Logf("delay[%d] = %v, expected approximately %v", i, delays[i], expected)
+			t.Errorf("delay[%d] = %v, expected approximately %v (±%v)", i, delays[i], expected, tolerance)
 		}
 	}
 }
@@ -991,7 +1017,86 @@ func TestNetOpErrorWithNoSuchHost(t *testing.T) {
 }
 
 func TestUnexpectedEOFIsRetryable(t *testing.T) {
-	if !IsRetryableError(fmt.Errorf("wrapped: %w", errors.New("unexpected EOF"))) {
-		t.Log("unexpected EOF pattern check")
+	// io.ErrUnexpectedEOF is the sentinel; a plain errors.New("unexpected EOF")
+	// does not match errors.Is(err, io.ErrUnexpectedEOF), which is what the
+	// production code checks. Wrap the real sentinel and assert the result
+	// is retryable.
+	if !IsRetryableError(fmt.Errorf("wrapped: %w", io.ErrUnexpectedEOF)) {
+		t.Error("wrapped io.ErrUnexpectedEOF should be retryable")
 	}
+	// The plain-message variant is NOT retryable — it should not be treated
+	// as the sentinel just because the text matches.
+	if IsRetryableError(errors.New("unexpected EOF")) {
+		t.Error("plain errors.New(\"unexpected EOF\") should not be retryable (it is not the io.ErrUnexpectedEOF sentinel)")
+	}
+}
+
+// TestDoRetryBackoffGuardsAgainstInf verifies that with a very large
+// RetryMultiplier the per-iteration delay caps at MaxDelay instead of
+// overflowing to +Inf (which would make the `<= 0 || > MaxDelay` check
+// critical to trigger).
+func TestDoRetryBackoffGuardsAgainstInf(t *testing.T) {
+	config := RetryConfig{
+		MaxRetries:      5,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        30 * time.Millisecond,
+		RetryMultiplier: 1e9, // deliberately absurd
+	}
+
+	// Cap the entire test in time so a regression to +Inf doesn't
+	// hang the suite for a very long sleep.
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = doRetry(context.Background(), config, func() error {
+			return NewRetryableError(errors.New("retryable"))
+		})
+	}()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("doRetry did not return within 2s; the +Inf guard likely regressed")
+	}
+}
+
+// TestDoRetryContextCancelDuringOp verifies that a context that becomes
+// done while the op is running causes doRetry to return ctx.Err()
+// immediately, rather than retrying.
+func TestDoRetryContextCancelDuringOp(t *testing.T) {
+	config := RetryConfig{
+		MaxRetries:      5,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        50 * time.Millisecond,
+		RetryMultiplier: 2.0,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	callCount := 0
+	start := time.Now()
+	err := doRetry(ctx, config, func() error {
+		callCount++
+		// Cancel the context inside the very first op so that
+		// doRetry sees ctx.Err() != nil on the post-op check.
+		if callCount == 1 {
+			cancel()
+			// Wait a beat to ensure ctx.Done() is observed.
+			time.Sleep(5 * time.Millisecond)
+		}
+		return NewRetryableError(errors.New("retryable"))
+	})
+	elapsed := time.Since(start)
+
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("expected context.Canceled, got: %v", err)
+	}
+	// Should not have retried. With InitialDelay=10ms and 5 retries,
+	// even one retry would push elapsed well over 15ms; cap at 50ms.
+	if callCount > 1 {
+		t.Errorf("expected at most 1 call (no retry after ctx cancel), got %d", callCount)
+	}
+	if elapsed > 100*time.Millisecond {
+		t.Errorf("doRetry took %v after ctx cancel; expected quick return", elapsed)
+	}
+	// Make sure the cancel resource is released.
+	cancel()
 }

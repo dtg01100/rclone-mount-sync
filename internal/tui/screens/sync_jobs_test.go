@@ -337,6 +337,28 @@ func TestSyncJobsScreen_SyncJobDeletedMsg(t *testing.T) {
 	}
 }
 
+func TestSyncJobsScreen_SyncJobDeletedMsgClearsCachedStatus(t *testing.T) {
+	// Regression test: a job created with the same name as a previously
+	// deleted job must not inherit the stale status. Mirrors the mount
+	// counterpart in TestMountsScreen_MountDeletedMsgClearsCachedStatus.
+	screen := NewSyncJobsScreen()
+	screen.SetSize(80, 24)
+	screen.jobs = createTestSyncJobs()
+	screen.statuses = map[string]*models.ServiceStatus{
+		"Photo Sync": {Name: "Photo Sync", Type: "sync", ActiveState: "active"},
+		"Doc Backup": {Name: "Doc Backup", Type: "sync", ActiveState: "inactive"},
+	}
+
+	screen.Update(SyncJobDeletedMsg{Name: "Photo Sync"})
+
+	if _, ok := screen.statuses["Photo Sync"]; ok {
+		t.Error("stale status for deleted sync job was not cleared from cache")
+	}
+	if _, ok := screen.statuses["Doc Backup"]; !ok {
+		t.Error("deleting one job cleared an unrelated cached status")
+	}
+}
+
 func TestSyncJobsScreen_SyncJobStatusMsg(t *testing.T) {
 	screen := NewSyncJobsScreen()
 	screen.statuses = make(map[string]*models.ServiceStatus)
@@ -2275,69 +2297,76 @@ func TestSyncJobsScreen_RunSyncJobNow_CommandReturnsMessage(t *testing.T) {
 	}
 }
 
-// Tests for SyncJobDetails keyboard shortcuts
-
-func TestSyncJobDetails_RunNowKey(t *testing.T) {
+// Tests for SyncJobDetails keyboard shortcuts. Like the mount counterpart,
+// these were tautologies that only asserted "view not done" — true for any
+// key. The table-driven version actually exercises the async action path
+// and asserts on the resulting SyncJobDetailsActionMsg.
+func TestSyncJobDetails_ActionKeys(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
-	mgr := &systemd.Manager{}
-	details := NewSyncJobDetails(job, mgr, gen)
-	details.width = 80
+	cases := []struct {
+		key    string
+		action string
+	}{
+		{"r", "r"},
+		{"t", "t"},
+		{"e", "e"},
+		{"d", "d"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.key, func(t *testing.T) {
+			mock := &systemd.MockManager{
+				// NewSyncJobDetails calls loadStatus which invokes
+				// GetDetailedStatus; a non-nil result avoids a nil
+				// dereference in the production code path.
+				GetDetailedStatusResult: &models.ServiceStatus{Name: job.Name, Type: "sync"},
+				// Some action keys (toggle) consult IsActive.
+				IsActiveResult: false,
+			}
+			gen := &systemd.Generator{}
+			details := NewSyncJobDetails(job, mock, gen)
+			details.width = 80
 
-	// Press 'r' to run sync job now
-	details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
-
-	// Should not be done
-	if details.done {
-		t.Error("details should not be done after 'r' key")
+			_, cmd := details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(tc.key)})
+			if cmd == nil {
+				t.Fatalf("action key %q should return a cmd", tc.key)
+			}
+			msg := cmd()
+			actionMsg, ok := msg.(SyncJobDetailsActionMsg)
+			if !ok {
+				t.Fatalf("cmd() returned %T, want SyncJobDetailsActionMsg", msg)
+			}
+			if actionMsg.Action != tc.action {
+				t.Errorf("Action = %q, want %q", actionMsg.Action, tc.action)
+			}
+			if actionMsg.Name != job.Name {
+				t.Errorf("Name = %q, want %q", actionMsg.Name, job.Name)
+			}
+			if actionMsg.Err != nil {
+				t.Errorf("mock manager should not error, got: %v", actionMsg.Err)
+			}
+		})
 	}
 }
 
-func TestSyncJobDetails_ToggleTimerKey(t *testing.T) {
+func TestSyncJobDetails_ActionKeys_NilManager(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
-	mgr := &systemd.Manager{}
-	details := NewSyncJobDetails(job, mgr, gen)
-	details.width = 80
+	details := &SyncJobDetails{job: job, width: 80}
 
-	// Press 't' to toggle timer
-	details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
-
-	// Should not be done
-	if details.done {
-		t.Error("details should not be done after 't' key")
-	}
-}
-
-func TestSyncJobDetails_EnableTimerKey(t *testing.T) {
-	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
-	mgr := &systemd.Manager{}
-	details := NewSyncJobDetails(job, mgr, gen)
-	details.width = 80
-
-	// Press 'e' to enable timer
-	details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
-
-	// Should not be done
-	if details.done {
-		t.Error("details should not be done after 'e' key")
-	}
-}
-
-func TestSyncJobDetails_DisableTimerKey(t *testing.T) {
-	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
-	mgr := &systemd.Manager{}
-	details := NewSyncJobDetails(job, mgr, gen)
-	details.width = 80
-
-	// Press 'd' to disable timer
-	details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-
-	// Should not be done
-	if details.done {
-		t.Error("details should not be done after 'd' key")
+	for _, key := range []string{"r", "t", "e", "d"} {
+		t.Run(key, func(t *testing.T) {
+			_, cmd := details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(key)})
+			if cmd == nil {
+				t.Fatalf("nil-manager path should still return a cmd for key %q", key)
+			}
+			msg := cmd()
+			actionMsg, ok := msg.(SyncJobDetailsActionMsg)
+			if !ok {
+				t.Fatalf("cmd() returned %T, want SyncJobDetailsActionMsg", msg)
+			}
+			if actionMsg.Err == nil {
+				t.Errorf("nil manager should produce an error for key %q", key)
+			}
+		})
 	}
 }
 
@@ -2348,10 +2377,11 @@ func TestSyncJobDetails_RefreshKey(t *testing.T) {
 	details := NewSyncJobDetails(job, mgr, gen)
 	details.width = 80
 
-	// Press 'R' (uppercase) to refresh
-	details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
-
-	// Should not be done
+	// 'R' (uppercase) is a refresh — synchronous, no cmd.
+	_, cmd := details.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	if cmd != nil {
+		t.Errorf("'R' (refresh) should be synchronous, got cmd: %T", cmd)
+	}
 	if details.done {
 		t.Error("details should not be done after 'R' key")
 	}

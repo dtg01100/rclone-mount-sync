@@ -63,6 +63,17 @@ func TestApp_StateMachine_Navigation(t *testing.T) {
 			if tt.expectQuit {
 				if cmd == nil {
 					t.Error("Expected quit command, got nil")
+				} else {
+					// A bare `cmd != nil` is necessary but not
+					// sufficient: a NavigateToMsg-wrapping cmd is
+					// also non-nil. Invoke the cmd and assert it
+					// actually produces a tea.QuitMsg — otherwise a
+					// regression that returned a navigation cmd from
+					// "q" would silently pass.
+					got := cmd()
+					if _, ok := got.(tea.QuitMsg); !ok {
+						t.Errorf("quit cmd produced %T, want tea.QuitMsg", got)
+					}
 				}
 			} else {
 				if app.currentScreen != tt.expectScreen {
@@ -183,30 +194,18 @@ func TestApp_StateMachine_ScreenChangeMsg(t *testing.T) {
 // are handled without panicking and produce expected state changes.
 func TestApp_MessageHandling_AllMessageTypes(t *testing.T) {
 	t.Run("LoadingMsg", func(t *testing.T) {
-		app := NewApp("dev")
-		app.width = 80
-		app.height = 24
-		app.loading = false
-
-		// Note: LoadingMsg is not currently handled in Update()
-		// This test documents that behavior
-		_, _ = app.Update(LoadingMsg{})
-
-		// Loading state doesn't change via Update - it's set elsewhere
-		t.Log("LoadingMsg is not handled in Update() - loading state unchanged")
+		// LoadingMsg is not currently handled in Update(); the production
+		// code initializes `app.loading = true` directly at startup. A
+		// previous version of this test only logged and never asserted;
+		// skipping instead keeps the gap visible without false coverage.
+		t.Skip("LoadingMsg is not handled in Update(); loading state is set elsewhere")
 	})
 
 	t.Run("LoadingDoneMsg", func(t *testing.T) {
-		app := NewApp("dev")
-		app.width = 80
-		app.height = 24
-		app.loading = true
-
-		// Note: LoadingDoneMsg is not currently handled in Update()
-		_, _ = app.Update(LoadingDoneMsg{})
-
-		// Loading state doesn't change via Update - it's set elsewhere
-		t.Log("LoadingDoneMsg is not handled in Update() - loading state unchanged")
+		// Same as LoadingMsg: not handled. Future improvement: add a
+		// case in Update() to set loading=false and a View() overlay,
+		// then assert here.
+		t.Skip("LoadingDoneMsg is not handled in Update(); loading state is set elsewhere")
 	})
 
 	t.Run("AppInitError", func(t *testing.T) {

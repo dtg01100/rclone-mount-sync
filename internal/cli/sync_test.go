@@ -268,27 +268,43 @@ func TestSyncCreateValidationMissingFields(t *testing.T) {
 	}
 }
 
-func TestSyncCreateSaveConfigError(t *testing.T) {
+// TestSyncCreateLoadConfigError tests the early-return path when loadConfig
+// itself fails. The previous "TestSyncCreateSaveConfigError" mock returned
+// an error from loadConfig which is checked before cfg.Save() is ever
+// reached — it therefore exercised the wrong seam.
+func TestSyncCreateLoadConfigError(t *testing.T) {
 	oldLoadConfig := loadConfig
-	oldSyncCreateName := syncCreateName
-	oldSyncCreateSource := syncCreateSource
-	oldSyncCreateDestination := syncCreateDestination
-	defer func() {
-		loadConfig = oldLoadConfig
-		syncCreateName = oldSyncCreateName
-		syncCreateSource = oldSyncCreateSource
-		syncCreateDestination = oldSyncCreateDestination
-	}()
+	t.Cleanup(func() { loadConfig = oldLoadConfig })
 
 	loadConfig = func() (*config.Config, error) {
-		return &config.Config{}, fmt.Errorf("config save failed")
+		return nil, fmt.Errorf("simulated config load failure")
 	}
-	syncCreateName = "test-sync"
-	syncCreateSource = "gdrive:/Photos"
-	syncCreateDestination = "/home/user/Backup"
 
 	if err := runSyncCreate(nil, nil); err == nil {
-		t.Fatal("expected runSyncCreate to fail when config save fails")
+		t.Fatal("expected runSyncCreate to fail when loadConfig fails")
+	}
+}
+
+// TestSyncCreateSaveConfigError_RealSaveFailure makes Save() fail by
+// pointing XDG_CONFIG_HOME at a read-only directory so config.Save()
+// fails when it tries to write config.yaml. See the mount counterpart
+// for why cfgFile is not used.
+func TestSyncCreateSaveConfigError_RealSaveFailure(t *testing.T) {
+	if os.Getuid() == 0 {
+		t.Skip("read-only directory check is bypassed when running as root")
+	}
+	tmpDir := t.TempDir()
+	readOnlyDir := filepath.Join(tmpDir, "readonly")
+	if err := os.Mkdir(readOnlyDir, 0o500); err != nil {
+		t.Fatalf("create read-only dir: %v", err)
+	}
+
+	oldXDG := os.Getenv("XDG_CONFIG_HOME")
+	t.Cleanup(func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) })
+	_ = os.Setenv("XDG_CONFIG_HOME", readOnlyDir)
+
+	if err := runSyncCreate(nil, nil); err == nil {
+		t.Fatal("expected runSyncCreate to fail when cfg.Save() fails")
 	}
 }
 
