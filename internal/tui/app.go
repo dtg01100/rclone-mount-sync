@@ -18,6 +18,19 @@ import (
 // Version is set at build time via ldflags.
 var Version = "dev"
 
+// newSystemdGenerator is a package-level function variable that
+// initializeServices calls to create the systemd Generator. It is
+// reassigned in tests so the failure path of initializeServices
+// (systemd generator error) can be exercised without a real
+// filesystem. Production behavior is identical to calling
+// systemd.NewGenerator directly.
+var newSystemdGenerator = systemd.NewGenerator
+
+// newSystemdManager is the equivalent for the systemd Manager. It
+// is also reassigned in tests; production behavior is identical to
+// calling systemd.NewManager directly.
+var newSystemdManager = systemd.NewManager
+
 // Screen represents a TUI screen in the application.
 type Screen int
 
@@ -54,6 +67,11 @@ func (s Screen) String() string {
 type ScreenChangeMsg struct {
 	Screen Screen
 }
+
+// LoadingMsg and LoadingDoneMsg are signal messages for async UI
+// updates. They are handled by the cases below in the Update
+// switch. The tests in this file assert that they actually flip
+// a.loading as expected.
 
 // LoadingMsg is sent when a loading state starts.
 type LoadingMsg struct{}
@@ -137,14 +155,14 @@ func (a *App) initializeServices() tea.Msg {
 	a.rclone = rclone.NewClient()
 
 	// Initialize systemd generator
-	gen, err := systemd.NewGenerator()
+	gen, err := newSystemdGenerator()
 	if err != nil {
 		return AppInitError{Err: err}
 	}
 	a.generator = gen
 
 	// Initialize systemd manager
-	a.manager = systemd.NewManager()
+	a.manager = newSystemdManager()
 
 	// Pass services to screens
 	a.mounts.SetServices(cfg, a.rclone, gen, a.manager)
@@ -283,6 +301,17 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AppInitDone:
 		cmds = append(cmds, a.mounts.Init(), a.syncJobs.Init(), a.services.Init())
+
+	case LoadingMsg:
+		// Loading state is now signal-driven. A producer sends
+		// LoadingMsg when it kicks off async work; LoadingDoneMsg
+		// flips it back. This lets screens and async commands
+		// (orphan import, config save) participate in the same
+		// loading UI without reaching into App state directly.
+		a.loading = true
+
+	case LoadingDoneMsg:
+		a.loading = false
 
 	case OrphanActionMsg:
 		a.loading = false
