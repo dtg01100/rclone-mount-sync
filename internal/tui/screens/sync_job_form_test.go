@@ -748,6 +748,9 @@ func TestSyncJobForm_DeleteModeHandling(t *testing.T) {
 			mgr := createTestManager()
 			form := NewSyncJobForm(nil, createTestRemotes(), nil, gen, mgr, nil, false)
 			form.deleteMode = tt.deleteMode
+			form.sourcePath = "/Photos"
+			form.destPath = t.TempDir()
+			form.name = "test-sync"
 
 			msg := form.submitForm()
 			createdMsg, ok := msg.(SyncJobCreatedMsg)
@@ -886,6 +889,9 @@ func TestSyncJobForm_MaxTransfersParsing(t *testing.T) {
 			mgr := createTestManager()
 			form := NewSyncJobForm(nil, createTestRemotes(), nil, gen, mgr, nil, false)
 			form.maxTransfers = tt.maxTransfers
+			form.sourcePath = "/Photos"
+			form.destPath = t.TempDir()
+			form.name = "test-sync"
 
 			msg := form.submitForm()
 			createdMsg, ok := msg.(SyncJobCreatedMsg)

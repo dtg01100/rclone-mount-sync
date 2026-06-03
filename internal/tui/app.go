@@ -68,7 +68,7 @@ type ReconciliationMsg struct {
 
 // App is the main TUI application model.
 type App struct {
-	version    string // Build version, set via NewApp/Run
+	version        string // Build version, set via NewApp/Run
 	currentScreen  Screen
 	previousScreen Screen
 	width          int
@@ -105,7 +105,7 @@ type App struct {
 // NewApp creates a new TUI application with the given version.
 func NewApp(version string) *App {
 	return &App{
-		version:       version,
+		version:        version,
 		currentScreen:  ScreenMain,
 		previousScreen: ScreenMain,
 		mainMenu:       screens.NewMainMenuScreen(),
@@ -245,6 +245,9 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.currentScreen = ScreenHelp
 				a.showHelp = true
 				a.helpScrollY = 0 // Reset scroll position
+				// Recompute the help content length up front so View()
+				// doesn't have to mutate state during rendering.
+				a.helpContentLen = a.computeHelpContentLen()
 			}
 			return a, nil
 		}
@@ -258,6 +261,11 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.syncJobs.SetSize(a.width, a.height)
 		a.services.SetSize(a.width, a.height)
 		a.settings.SetSize(a.width, a.height)
+		// If the help screen is open, a width change may affect line
+		// wrapping, so recompute the help content length.
+		if a.showHelp {
+			a.helpContentLen = a.computeHelpContentLen()
+		}
 
 	case ScreenChangeMsg:
 		a.currentScreen = msg.Screen
@@ -300,7 +308,13 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Update the current screen
+	// Update the current screen. Screens may return a tea.Cmd that
+	// produces a NavigateToMsg or GoBackMsg; we invoke the cmd inline
+	// (in this same Update cycle) so a single keypress navigates in
+	// one cycle. To keep this the single source of truth for screen
+	// transitions, the duplicate switch that used to live at the
+	// bottom of this function has been removed.
+	var screenCmd tea.Cmd
 	switch a.currentScreen {
 	case ScreenMain:
 		model, cmd := a.mainMenu.Update(msg)
@@ -308,27 +322,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.mainMenu = m
 		}
 		cmds = append(cmds, cmd)
-
-		// Execute navigation commands immediately for same-update navigation
-		if cmd != nil {
-			if navMsg := cmd(); navMsg != nil {
-				switch m := navMsg.(type) {
-				case screens.NavigateToMsg:
-					switch m.Target {
-					case "mounts":
-						a.currentScreen = ScreenMounts
-					case "sync_jobs":
-						a.currentScreen = ScreenSyncJobs
-					case "services":
-						a.currentScreen = ScreenServices
-					case "settings":
-						a.currentScreen = ScreenSettings
-					}
-				case screens.GoBackMsg:
-					a.currentScreen = ScreenMain
-				}
-			}
-		}
+		screenCmd = cmd
 
 	case ScreenMounts:
 		model, cmd := a.mounts.Update(msg)
@@ -336,15 +330,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.mounts = m
 		}
 		cmds = append(cmds, cmd)
-
-		// Execute navigation commands immediately for same-update navigation
-		if cmd != nil {
-			if navMsg := cmd(); navMsg != nil {
-				if _, ok := navMsg.(screens.GoBackMsg); ok {
-					a.currentScreen = ScreenMain
-				}
-			}
-		}
+		screenCmd = cmd
 
 	case ScreenSyncJobs:
 		model, cmd := a.syncJobs.Update(msg)
@@ -352,15 +338,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.syncJobs = m
 		}
 		cmds = append(cmds, cmd)
-
-		// Execute navigation commands immediately for same-update navigation
-		if cmd != nil {
-			if navMsg := cmd(); navMsg != nil {
-				if _, ok := navMsg.(screens.GoBackMsg); ok {
-					a.currentScreen = ScreenMain
-				}
-			}
-		}
+		screenCmd = cmd
 
 	case ScreenServices:
 		model, cmd := a.services.Update(msg)
@@ -368,15 +346,7 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.services = m
 		}
 		cmds = append(cmds, cmd)
-
-		// Execute navigation commands immediately for same-update navigation
-		if cmd != nil {
-			if navMsg := cmd(); navMsg != nil {
-				if _, ok := navMsg.(screens.GoBackMsg); ok {
-					a.currentScreen = ScreenMain
-				}
-			}
-		}
+		screenCmd = cmd
 
 	case ScreenSettings:
 		model, cmd := a.settings.Update(msg)
@@ -384,32 +354,29 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.settings = m
 		}
 		cmds = append(cmds, cmd)
-
-		// Execute navigation commands immediately for same-update navigation
-		if cmd != nil {
-			if navMsg := cmd(); navMsg != nil {
-				if _, ok := navMsg.(screens.GoBackMsg); ok {
-					a.currentScreen = ScreenMain
-				}
-			}
-		}
+		screenCmd = cmd
 	}
 
-	// Handle navigation messages from screens (must be processed in same Update)
-	switch msg := msg.(type) {
-	case screens.NavigateToMsg:
-		switch msg.Target {
-		case "mounts":
-			a.currentScreen = ScreenMounts
-		case "sync_jobs":
-			a.currentScreen = ScreenSyncJobs
-		case "services":
-			a.currentScreen = ScreenServices
-		case "settings":
-			a.currentScreen = ScreenSettings
+	// Apply navigation results inline so a single keypress changes
+	// the screen in the same Update.
+	if screenCmd != nil {
+		if navMsg := screenCmd(); navMsg != nil {
+			switch m := navMsg.(type) {
+			case screens.NavigateToMsg:
+				switch m.Target {
+				case "mounts":
+					a.currentScreen = ScreenMounts
+				case "sync_jobs":
+					a.currentScreen = ScreenSyncJobs
+				case "services":
+					a.currentScreen = ScreenServices
+				case "settings":
+					a.currentScreen = ScreenSettings
+				}
+			case screens.GoBackMsg:
+				a.currentScreen = ScreenMain
+			}
 		}
-	case screens.GoBackMsg:
-		a.currentScreen = ScreenMain
 	}
 
 	return a, tea.Batch(cmds...)
@@ -492,114 +459,94 @@ func (a *App) renderStatusBar() string {
 }
 
 // renderHelp renders the help screen.
-func (a *App) renderHelp() string {
+// helpSections returns the help-screen content as a single string. It is
+// the single source of truth for what renderHelp shows and how many lines
+// it spans; computeHelpContentLen counts the lines in this string.
+func (a *App) helpSections() string {
+	groups := []struct {
+		title string
+		items []components.HelpItem
+	}{
+		{
+			title: "Global Keybindings",
+			items: []components.HelpItem{
+				{Key: "↑/k", Desc: "Move up"},
+				{Key: "↓/j", Desc: "Move down"},
+				{Key: "Enter", Desc: "Select/confirm"},
+				{Key: "Esc", Desc: "Go back/cancel"},
+				{Key: "q", Desc: "Quit (from main menu) or go back"},
+				{Key: "Ctrl+C", Desc: "Force quit"},
+				{Key: "?", Desc: "Toggle this help screen"},
+			},
+		},
+		{
+			title: "Screen Navigation",
+			items: []components.HelpItem{
+				{Key: "M", Desc: "Mount Management"},
+				{Key: "S", Desc: "Sync Job Management"},
+				{Key: "V", Desc: "Service Status"},
+				{Key: "T", Desc: "Settings"},
+			},
+		},
+		{
+			title: "Mount Management",
+			items: []components.HelpItem{
+				{Key: "a", Desc: "Add new mount"},
+				{Key: "e", Desc: "Edit selected mount"},
+				{Key: "d", Desc: "Delete selected mount"},
+				{Key: "s", Desc: "Start mount"},
+				{Key: "x", Desc: "Stop mount"},
+				{Key: "Enter", Desc: "View details"},
+				{Key: "r", Desc: "Refresh status"},
+			},
+		},
+		{
+			title: "Sync Job Management",
+			items: []components.HelpItem{
+				{Key: "a", Desc: "Add new sync job"},
+				{Key: "e", Desc: "Edit selected sync job"},
+				{Key: "d", Desc: "Delete selected sync job"},
+				{Key: "r", Desc: "Run sync job now"},
+				{Key: "t", Desc: "Toggle timer"},
+			},
+		},
+		{
+			title: "Service Status",
+			items: []components.HelpItem{
+				{Key: "s", Desc: "Start service"},
+				{Key: "x", Desc: "Stop service"},
+				{Key: "e", Desc: "Enable service"},
+				{Key: "d", Desc: "Disable service"},
+				{Key: "l", Desc: "View logs"},
+				{Key: "r", Desc: "Refresh status"},
+			},
+		},
+	}
+
 	var b strings.Builder
-
-	// Title
-	title := components.Styles.Title.Render("Help & Keybindings")
-	b.WriteString(title + "\n\n")
-
-	// Global keybindings
-	b.WriteString(components.Styles.Subtitle.Render("Global Keybindings") + "\n")
-	globalKeys := []components.HelpItem{
-		{Key: "↑/k", Desc: "Move up"},
-		{Key: "↓/j", Desc: "Move down"},
-		{Key: "Enter", Desc: "Select/confirm"},
-		{Key: "Esc", Desc: "Go back/cancel"},
-		{Key: "q", Desc: "Quit (from main menu) or go back"},
-		{Key: "Ctrl+C", Desc: "Force quit"},
-		{Key: "?", Desc: "Toggle this help screen"},
+	b.WriteString(components.Styles.Title.Render("Help & Keybindings") + "\n\n")
+	for _, g := range groups {
+		b.WriteString(components.Styles.Subtitle.Render(g.title) + "\n")
+		for _, item := range g.items {
+			fmt.Fprintf(&b, "  %s  %s\n",
+				components.Styles.MenuKey.Render(item.Key),
+				components.Styles.Normal.Render(item.Desc))
+		}
+		b.WriteString("\n")
 	}
+	return b.String()
+}
 
-	for _, item := range globalKeys {
-		line := fmt.Sprintf("  %s  %s",
-			components.Styles.MenuKey.Render(item.Key),
-			components.Styles.Normal.Render(item.Desc))
-		b.WriteString(line + "\n")
-	}
+// computeHelpContentLen returns the number of lines the help screen will
+// produce for the current state. Called from Update (when help is opened
+// or the window is resized) so View() doesn't have to mutate state.
+func (a *App) computeHelpContentLen() int {
+	return strings.Count(a.helpSections(), "\n")
+}
 
-	b.WriteString("\n")
-
-	// Screen-specific keybindings
-	b.WriteString(components.Styles.Subtitle.Render("Screen Navigation") + "\n")
-	screenKeys := []components.HelpItem{
-		{Key: "M", Desc: "Mount Management"},
-		{Key: "S", Desc: "Sync Job Management"},
-		{Key: "V", Desc: "Service Status"},
-		{Key: "T", Desc: "Settings"},
-	}
-
-	for _, item := range screenKeys {
-		line := fmt.Sprintf("  %s  %s",
-			components.Styles.MenuKey.Render(item.Key),
-			components.Styles.Normal.Render(item.Desc))
-		b.WriteString(line + "\n")
-	}
-
-	b.WriteString("\n")
-
-	// Mount screen keybindings
-	b.WriteString(components.Styles.Subtitle.Render("Mount Management") + "\n")
-	mountKeys := []components.HelpItem{
-		{Key: "a", Desc: "Add new mount"},
-		{Key: "e", Desc: "Edit selected mount"},
-		{Key: "d", Desc: "Delete selected mount"},
-		{Key: "s", Desc: "Start mount"},
-		{Key: "x", Desc: "Stop mount"},
-		{Key: "Enter", Desc: "View details"},
-		{Key: "r", Desc: "Refresh status"},
-	}
-
-	for _, item := range mountKeys {
-		line := fmt.Sprintf("  %s  %s",
-			components.Styles.MenuKey.Render(item.Key),
-			components.Styles.Normal.Render(item.Desc))
-		b.WriteString(line + "\n")
-	}
-
-	b.WriteString("\n")
-
-	// Sync job screen keybindings
-	b.WriteString(components.Styles.Subtitle.Render("Sync Job Management") + "\n")
-	syncKeys := []components.HelpItem{
-		{Key: "a", Desc: "Add new sync job"},
-		{Key: "e", Desc: "Edit selected sync job"},
-		{Key: "d", Desc: "Delete selected sync job"},
-		{Key: "r", Desc: "Run sync job now"},
-		{Key: "t", Desc: "Toggle timer"},
-	}
-
-	for _, item := range syncKeys {
-		line := fmt.Sprintf("  %s  %s",
-			components.Styles.MenuKey.Render(item.Key),
-			components.Styles.Normal.Render(item.Desc))
-		b.WriteString(line + "\n")
-	}
-
-	b.WriteString("\n")
-
-	// Services screen keybindings
-	b.WriteString(components.Styles.Subtitle.Render("Service Status") + "\n")
-	serviceKeys := []components.HelpItem{
-		{Key: "s", Desc: "Start service"},
-		{Key: "x", Desc: "Stop service"},
-		{Key: "e", Desc: "Enable service"},
-		{Key: "d", Desc: "Disable service"},
-		{Key: "l", Desc: "View logs"},
-		{Key: "r", Desc: "Refresh status"},
-	}
-
-	for _, item := range serviceKeys {
-		line := fmt.Sprintf("  %s  %s",
-			components.Styles.MenuKey.Render(item.Key),
-			components.Styles.Normal.Render(item.Desc))
-		b.WriteString(line + "\n")
-	}
-
-	// Get the full content
-	fullContent := b.String()
+func (a *App) renderHelp() string {
+	fullContent := a.helpSections()
 	lines := strings.Split(fullContent, "\n")
-	a.helpContentLen = len(lines)
 
 	// Calculate visible area
 	availableHeight := a.height - 6 // Account for border and status

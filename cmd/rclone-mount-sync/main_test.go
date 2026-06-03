@@ -75,10 +75,10 @@ func TestParseFlags(t *testing.T) {
 			wantErr:       false,
 		},
 		{
-			name:         "short version flag",
-			args:         []string{"-v"},
-			wantErr:      false,
-			wantVersion:  true,
+			name:        "short version flag",
+			args:        []string{"-v"},
+			wantErr:     false,
+			wantVersion: true,
 		},
 	}
 
@@ -880,5 +880,3 @@ func BenchmarkPrintVersion(b *testing.B) {
 		printVersion(&buf, "1.0.0")
 	}
 }
-
-

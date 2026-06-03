@@ -1451,3 +1451,68 @@ func containsHelper(s, substr string) bool {
 	}
 	return false
 }
+
+func TestMountConfigValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(m *MountConfig)
+		wantErr bool
+	}{
+		{"valid", func(m *MountConfig) {}, false},
+		{"empty name", func(m *MountConfig) { m.Name = "" }, true},
+		{"whitespace name", func(m *MountConfig) { m.Name = "   " }, true},
+		{"name with newline", func(m *MountConfig) { m.Name = "bad\nname" }, true},
+		{"empty remote", func(m *MountConfig) { m.Remote = "" }, true},
+		{"empty mountpoint", func(m *MountConfig) { m.MountPoint = "" }, true},
+		{"shell injection in mountpoint", func(m *MountConfig) { m.MountPoint = "/tmp/x; rm -rf /" }, true},
+		{"shell injection in remote", func(m *MountConfig) { m.Remote = "foo$bar" }, true},
+		{"shell injection in remote path", func(m *MountConfig) { m.RemotePath = "/x y" }, true},
+		{"valid with spaces in path", func(m *MountConfig) { m.MountPoint = "/mnt/My Drive" }, true},
+		{"valid with trailing colon", func(m *MountConfig) { m.Remote = "gdrive:" }, false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := &MountConfig{
+				Name:       "test",
+				Remote:     "gdrive",
+				MountPoint: "/mnt/test",
+			}
+			tt.mutate(m)
+			err := m.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() err = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSyncJobConfigValidate(t *testing.T) {
+	tests := []struct {
+		name    string
+		mutate  func(j *SyncJobConfig)
+		wantErr bool
+	}{
+		{"valid", func(j *SyncJobConfig) {}, false},
+		{"empty source", func(j *SyncJobConfig) { j.Source = "" }, true},
+		{"source without colon", func(j *SyncJobConfig) { j.Source = "/just/a/path" }, true},
+		{"shell injection in destination", func(j *SyncJobConfig) { j.Destination = "/tmp/x; cat /etc/passwd" }, true},
+		{"invalid direction", func(j *SyncJobConfig) { j.SyncOptions.Direction = "rm -rf /" }, true},
+		{"valid direction copy", func(j *SyncJobConfig) { j.SyncOptions.Direction = "copy" }, false},
+		{"valid direction bisync", func(j *SyncJobConfig) { j.SyncOptions.Direction = "bisync" }, false},
+		{"newline in name", func(j *SyncJobConfig) { j.Name = "evil\nExecStart" }, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			j := &SyncJobConfig{
+				Name:        "test",
+				Source:      "gdrive:/Photos",
+				Destination: "/backup/photos",
+			}
+			tt.mutate(j)
+			err := j.Validate()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Validate() err = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}

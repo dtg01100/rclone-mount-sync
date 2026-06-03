@@ -189,8 +189,11 @@ func (m *Manager) IsEnabled(name string) (bool, error) {
 }
 
 // IsActive checks if a unit is currently active.
-// Returns (false, err) if the check itself fails, allowing callers
-// to distinguish "inactive" from "check failed".
+// Returns (false, nil) when the unit is inactive/failed (systemctl exit
+// code 3), (false, nil) when the unit does not exist (exit code 4, but
+// callers should treat "not found" the same as "inactive" for our use
+// cases), or (false, error) for any other failure (DBus down, systemctl
+// not found, etc.).
 func (m *Manager) IsActive(name string) (bool, error) {
 	cmd := exec.Command(m.systemctlPath, "--user", "is-active", name) //nolint:gosec
 	cmd.Env = append(os.Environ(), "LC_ALL=C")
@@ -201,8 +204,15 @@ func (m *Manager) IsActive(name string) (bool, error) {
 		// from expected "inactive" status.
 		var exitErr *exec.ExitError
 		if errors.As(err, &exitErr) {
-			// Normal non-success exit: unit is not active
-			return false, nil
+			// Exit codes 3 (inactive/deactivating) and 4 (no such unit)
+			// are both "not active" outcomes and not errors. Anything
+			// else is a real failure.
+			switch exitErr.ExitCode() {
+			case 3, 4:
+				return false, nil
+			default:
+				return false, fmt.Errorf("unexpected exit code %d from is-active %s: %w", exitErr.ExitCode(), name, err)
+			}
 		}
 		// Unexpected error (e.g., systemctl not found)
 		return false, fmt.Errorf("failed to check active status for %s: %w", name, err)
@@ -603,32 +613,32 @@ type ServiceManager interface {
 // MockManager is a mock implementation of ServiceManager for testing.
 type MockManager struct {
 	IsSystemdAvailableResult bool
-	DaemonReloadErr error
-	EnableErr error
-	DisableErr error
-	StartErr error
-	StopErr error
-	RestartErr error
-	StatusResult *UnitStatus
-	StatusErr error
-	IsEnabledResult bool
-	IsEnabledErr error
-	IsActiveResult bool
-	IsActiveErr error
-	ListServicesResult []UnitStatus
-	ListServicesErr error
-	GetLogsResult string
-	GetLogsErr error
-	GetDetailedStatusResult *models.ServiceStatus
-	GetDetailedStatusErr error
-	GetTimerNextRunResult time.Time
-	GetTimerNextRunErr error
-	StartTimerErr error
-	StopTimerErr error
-	EnableTimerErr error
-	DisableTimerErr error
-	RunSyncNowErr error
-	ResetFailedErr error
+	DaemonReloadErr          error
+	EnableErr                error
+	DisableErr               error
+	StartErr                 error
+	StopErr                  error
+	RestartErr               error
+	StatusResult             *UnitStatus
+	StatusErr                error
+	IsEnabledResult          bool
+	IsEnabledErr             error
+	IsActiveResult           bool
+	IsActiveErr              error
+	ListServicesResult       []UnitStatus
+	ListServicesErr          error
+	GetLogsResult            string
+	GetLogsErr               error
+	GetDetailedStatusResult  *models.ServiceStatus
+	GetDetailedStatusErr     error
+	GetTimerNextRunResult    time.Time
+	GetTimerNextRunErr       error
+	StartTimerErr            error
+	StopTimerErr             error
+	EnableTimerErr           error
+	DisableTimerErr          error
+	RunSyncNowErr            error
+	ResetFailedErr           error
 
 	// LastOpName records the name argument of the most recent operation.
 	LastOpName string

@@ -1,8 +1,7 @@
+// Package testutil provides testing utilities.
 package testutil
 
-import (
-	"strings"
-)
+import "strings"
 
 // ContainsString checks if s contains substr (case-sensitive).
 func ContainsString(s, substr string) bool {

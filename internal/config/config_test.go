@@ -2193,10 +2193,11 @@ func TestCreateBackupSuccess(t *testing.T) {
 		t.Errorf("Backup content = %q, want %q", string(backupContent), srcContent)
 	}
 
-	srcInfo, _ := os.Stat(srcPath)
 	backupInfo, _ := os.Stat(backupPath)
-	if srcInfo.Mode() != backupInfo.Mode() {
-		t.Errorf("Backup mode = %v, want %v", backupInfo.Mode(), srcInfo.Mode())
+	// Backups are always written with mode 0600 so a previously
+	// world-readable config doesn't carry that perm forward.
+	if backupInfo.Mode().Perm() != 0o600 {
+		t.Errorf("Backup mode = %v, want 0600", backupInfo.Mode().Perm())
 	}
 }
 
@@ -2353,5 +2354,64 @@ func TestReloadConfigWithSyncJobs(t *testing.T) {
 
 	if cfg.SyncJobs[0].Name != "sync1" {
 		t.Errorf("SyncJob name = %q, want %q", cfg.SyncJobs[0].Name, "sync1")
+	}
+}
+
+func TestSaveSetsConfigFilePermissions0600(t *testing.T) {
+	tmpDir := t.TempDir()
+	oldGetConfigDir := getConfigDir
+	getConfigDir = func() (string, error) { return tmpDir, nil }
+	t.Cleanup(func() { getConfigDir = oldGetConfigDir })
+
+	cfg := newConfigWithDefaults()
+	if err := cfg.AddMount(models.MountConfig{
+		Name:       "test",
+		Remote:     "gdrive:",
+		MountPoint: "/mnt/test",
+	}); err != nil {
+		t.Fatalf("AddMount: %v", err)
+	}
+	if err := cfg.Save(); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	info, err := os.Stat(filepath.Join(tmpDir, "config.yaml"))
+	if err != nil {
+		t.Fatalf("Stat: %v", err)
+	}
+	if got := info.Mode().Perm(); got != 0o600 {
+		t.Errorf("config file mode = %o, want 0600", got)
+	}
+}
+
+func TestAddMountRejectsShellInjectionInMountPoint(t *testing.T) {
+	cfg := newConfigWithDefaults()
+	err := cfg.AddMount(models.MountConfig{
+		Name:       "test",
+		Remote:     "gdrive:",
+		MountPoint: "/tmp/x; rm -rf /",
+	})
+	if err == nil {
+		t.Error("AddMount should reject mount point with shell metacharacters")
+	}
+}
+
+func TestAddMountRejectsIDCollision(t *testing.T) {
+	cfg := newConfigWithDefaults()
+	mount := models.MountConfig{
+		ID:         "duplicate-id",
+		Name:       "first",
+		Remote:     "gdrive:",
+		MountPoint: "/mnt/first",
+	}
+	if err := cfg.AddMount(mount); err != nil {
+		t.Fatalf("first AddMount: %v", err)
+	}
+	// Same ID, different name: should be rejected.
+	dup := mount
+	dup.Name = "second"
+	dup.MountPoint = "/mnt/second"
+	if err := cfg.AddMount(dup); err == nil {
+		t.Error("AddMount should reject a mount whose ID collides with an existing one")
 	}
 }

@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"text/tabwriter"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
@@ -117,12 +118,12 @@ func runMountCreate(cmd *cobra.Command, args []string) error {
 	}
 
 	mount := models.MountConfig{
-		Name:         mountCreateName,
-		Remote:       mountCreateRemote,
-		RemotePath:   mountCreateRemotePath,
-		MountPoint:   mountCreateMountPoint,
-		Enabled:      mountCreateEnabled,
-		AutoStart:    mountCreateAutoStart,
+		Name:       mountCreateName,
+		Remote:     mountCreateRemote,
+		RemotePath: mountCreateRemotePath,
+		MountPoint: mountCreateMountPoint,
+		Enabled:    mountCreateEnabled,
+		AutoStart:  mountCreateAutoStart,
 		MountOptions: models.MountOptions{
 			VFSCacheMode: cfg.Defaults.Mount.VFSCacheMode,
 			BufferSize:   cfg.Defaults.Mount.BufferSize,
@@ -150,7 +151,17 @@ func runMountCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to retrieve saved mount")
 	}
 
-	if _, err := generator.WriteMountService(savedMount); err != nil {
+	servicePath, err := generator.WriteMountService(savedMount)
+	if err != nil {
+		// WriteMountService may have partially written the unit file
+		// before returning the error. Clean it up so we don't leave
+		// a half-written unit that systemd could try to load.
+		if servicePath != "" {
+			serviceName := filepath.Base(servicePath)
+			if remErr := generator.RemoveUnit(serviceName); remErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to remove partial service unit %s: %v\n", serviceName, remErr)
+			}
+		}
 		_ = cfg.RemoveMount(mount.Name)
 		_ = cfg.Save()
 		return fmt.Errorf("failed to write systemd unit: %w", err)

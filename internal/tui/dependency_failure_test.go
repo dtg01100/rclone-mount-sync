@@ -322,7 +322,7 @@ func TestApp_OrphanAction_Error(t *testing.T) {
 	}
 
 	_, _ = app.Update(OrphanActionMsg{
-		Index: 0,
+		Index:  0,
 		Action: "remove",
 		Err:    fmt.Errorf("failed to stop service"),
 	})

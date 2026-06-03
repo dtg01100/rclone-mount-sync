@@ -3,8 +3,8 @@ package components
 import (
 	"testing"
 
-	"github.com/dtg01100/rclone-mount-sync/internal/testutil"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/dtg01100/rclone-mount-sync/internal/testutil"
 )
 
 func TestConfirmDialog_NewConfirmDialog(t *testing.T) {

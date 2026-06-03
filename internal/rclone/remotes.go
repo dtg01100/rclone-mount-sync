@@ -15,6 +15,35 @@ type Remote struct {
 	RootPath string // Root path for the remote (e.g., "gdrive:")
 }
 
+// ValidateRemoteName returns nil if name is a syntactically valid rclone
+// remote name. rclone's own rules are intentionally permissive (any non-empty
+// name is accepted), but this app uses `remote + ":" + path` to build the
+// final path string, so a name containing `:` would let a caller smuggle
+// a different remote. We restrict the set to a safe character class to
+// prevent that and to avoid surprises in unit-file generation.
+func ValidateRemoteName(name string) error {
+	if name == "" {
+		return fmt.Errorf("remote name must not be empty")
+	}
+	if strings.HasPrefix(name, "-") {
+		return fmt.Errorf("remote name %q must not start with -", name)
+	}
+	if strings.Contains(name, ":") {
+		return fmt.Errorf("remote name %q must not contain a colon (the app adds the separator)", name)
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '_' || r == '-' || r == '.' || r == '@' || r == '+' || r == '!':
+		default:
+			return fmt.Errorf("remote name %q contains illegal character %q", name, r)
+		}
+	}
+	return nil
+}
+
 // RemotePath represents a path on an rclone remote.
 type RemotePath struct {
 	Remote string // Remote name (e.g., "gdrive")
@@ -56,8 +85,8 @@ func (c *Client) ListRemotes(ctx context.Context) ([]Remote, error) {
 		// Get the remote type
 		remoteType, err := c.GetRemoteType(ctx, name)
 		if err != nil {
-		// Log warning but continue - remote might still be usable
-		fmt.Fprintf(os.Stderr, "Warning: failed to get remote type for %s: %v\n", name, err)
+			// Log warning but continue - remote might still be usable
+			fmt.Fprintf(os.Stderr, "Warning: failed to get remote type for %s: %v\n", name, err)
 			remoteType = "unknown"
 		}
 

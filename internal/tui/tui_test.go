@@ -1163,9 +1163,9 @@ func TestApp_Messages(t *testing.T) {
 	t.Run("AppInitError", func(t *testing.T) {
 		err := &testError{msg: "test"}
 		msg := AppInitError{Err: err}
-	if !errors.Is(msg.Err, err) {
-		t.Error("AppInitError should contain the error")
-	}
+		if !errors.Is(msg.Err, err) {
+			t.Error("AppInitError should contain the error")
+		}
 	})
 
 	t.Run("AppInitDone", func(t *testing.T) {

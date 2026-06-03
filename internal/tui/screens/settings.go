@@ -43,21 +43,21 @@ type SettingsScreen struct {
 
 // ActionItem represents an action item in settings.
 type ActionItem struct {
-	Name string
+	Name        string
 	Description string
-	Key string
-	ActionType string
+	Key         string
+	ActionType  string
 }
 
 // SettingItem represents a setting item.
 type SettingItem struct {
-	Name string
+	Name        string
 	Description string
-	Value string
-	Key string
+	Value       string
+	Key         string
 	SettingType string // "string", "int", "select"
-	SelectOpts []string
-ConfigKey string // Key path in config (e.g., "defaults.mount.vfs_cache_mode")
+	SelectOpts  []string
+	ConfigKey   string // Key path in config (e.g., "defaults.mount.vfs_cache_mode")
 }
 
 // NewSettingsScreen creates a new settings screen.
@@ -329,7 +329,8 @@ func (s *SettingsScreen) updateForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if f, ok := form.(*huh.Form); ok {
 		s.form = f
 	} else {
-		return s, nil
+		// Defensive: propagate cmd rather than silently dropping it.
+		return s, cmd
 	}
 
 	// Check if form is complete

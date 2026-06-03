@@ -180,6 +180,9 @@ func (s *MountsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 		}
+		// Clear the cached status so a later mount created with the same
+		// name doesn't inherit a stale status from the deleted entry.
+		delete(s.statuses, msg.Name)
 		s.success = fmt.Sprintf("Mount '%s' deleted successfully", msg.Name)
 		s.mode = MountsModeList
 		s.cursor = 0
@@ -988,6 +991,11 @@ func (d *MountDetails) Init() tea.Cmd {
 }
 
 // Update handles updates.
+//
+// The start/stop/enable/disable actions shell out to systemctl, which can
+// take seconds; performing them synchronously here would freeze the TUI
+// for the duration. Instead we kick off a tea.Cmd that performs the I/O
+// and emits a MountDetailsActionMsg reporting the result.
 func (d *MountDetails) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
@@ -995,37 +1003,55 @@ func (d *MountDetails) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.done = true
 		case "tab":
 			d.tab = (d.tab + 1) % 2
-		case "s":
-			if d.generator != nil && d.manager != nil {
-				serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
-				d.lastErr = d.manager.Start(serviceName)
-				d.loadStatus()
-			}
-		case "x":
-			if d.generator != nil && d.manager != nil {
-				serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
-				d.lastErr = d.manager.Stop(serviceName)
-				d.loadStatus()
-			}
-		case "e":
-			if d.generator != nil && d.manager != nil {
-				serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
-				d.lastErr = d.manager.Enable(serviceName)
-				d.loadStatus()
-			}
-		case "d":
-			if d.generator != nil && d.manager != nil {
-				serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
-				d.lastErr = d.manager.Disable(serviceName)
-				d.loadStatus()
-			}
+		case "s", "x", "e", "d":
+			return d, d.actionCmd(msg.String())
 		case "r":
 			d.loadStatus()
 			d.loadLogs()
 		}
 	}
+	if msg, ok := msg.(MountDetailsActionMsg); ok {
+		d.lastErr = msg.Err
+		d.loadStatus()
+	}
 
 	return d, nil
+}
+
+// actionCmd returns a command that performs the given mount action
+// ("s"=start, "x"=stop, "e"=enable, "d"=disable) asynchronously and
+// reports the result via MountDetailsActionMsg.
+func (d *MountDetails) actionCmd(action string) tea.Cmd {
+	if d.generator == nil || d.manager == nil {
+		return func() tea.Msg {
+			return MountDetailsActionMsg{Err: fmt.Errorf("systemd services not initialized")}
+		}
+	}
+	serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
+	mountName := d.mount.Name
+	manager := d.manager
+	return func() tea.Msg {
+		var err error
+		switch action {
+		case "s":
+			err = manager.Start(serviceName)
+		case "x":
+			err = manager.Stop(serviceName)
+		case "e":
+			err = manager.Enable(serviceName)
+		case "d":
+			err = manager.Disable(serviceName)
+		}
+		return MountDetailsActionMsg{Action: action, Name: mountName, Err: err}
+	}
+}
+
+// MountDetailsActionMsg is the async result of a start/stop/enable/disable
+// request from the MountDetails view.
+type MountDetailsActionMsg struct {
+	Action string
+	Name   string
+	Err    error
 }
 
 // IsDone returns true if the view is done.

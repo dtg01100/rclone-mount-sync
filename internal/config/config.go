@@ -91,8 +91,11 @@ func Load() (*Config, error) {
 
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
+	// Only look in the XDG config dir. Adding "." would silently load a
+	// config.yaml from the current working directory when the XDG file
+	// is absent — a real exploitable surprise if the user runs the TUI
+	// from an untrusted directory.
 	v.AddConfigPath(configDir)
-	v.AddConfigPath(".")
 
 	// Set defaults
 	setDefaults(v)
@@ -129,7 +132,6 @@ func (c *Config) Reload() error {
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
 	v.AddConfigPath(configDir)
-	v.AddConfigPath(".")
 
 	setDefaults(v)
 
@@ -211,6 +213,16 @@ func (c *Config) Save() error {
 		return fmt.Errorf("failed to write config file: %w", err)
 	}
 
+	// Lock down permissions before the file becomes visible at its final
+	// path. The config may hold references to rclone remotes and paths;
+	// world-readable (0644) would expose them.
+	if err := os.Chmod(tempPath, 0o600); err != nil {
+		if rmErr := os.Remove(tempPath); rmErr != nil && !os.IsNotExist(rmErr) {
+			return fmt.Errorf("failed to chmod config: %w; cleanup failed: %w", err, rmErr)
+		}
+		return fmt.Errorf("failed to chmod config: %w", err)
+	}
+
 	if err := os.Rename(tempPath, configPath); err != nil {
 		if rmErr := os.Remove(tempPath); rmErr != nil && !os.IsNotExist(rmErr) {
 			return fmt.Errorf("failed to rename temp file: %w; cleanup failed: %w", err, rmErr)
@@ -247,12 +259,7 @@ func RestoreFromBackup() error {
 		}
 	}()
 
-	srcInfo, err := src.Stat()
-	if err != nil {
-		return fmt.Errorf("failed to stat backup file: %w", err)
-	}
-
-	dst, err := os.OpenFile(configPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode()) //nolint:gosec
+	dst, err := os.OpenFile(configPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("failed to create config file: %w", err)
 	}
@@ -268,6 +275,11 @@ func RestoreFromBackup() error {
 
 	if err := dst.Sync(); err != nil {
 		return fmt.Errorf("failed to sync config file: %w", err)
+	}
+
+	// Force 0600 even if the backup file itself was world-readable.
+	if err := os.Chmod(configPath, 0o600); err != nil {
+		return fmt.Errorf("failed to chmod restored config: %w", err)
 	}
 
 	return nil
@@ -293,6 +305,9 @@ func HasBackup() (bool, error) {
 
 // createBackup creates a backup of the existing config file.
 // It overwrites any existing backup to keep only the most recent one.
+// The backup is written with mode 0600 regardless of the source file's
+// permissions so that a previously-world-readable config doesn't carry
+// that perm forward into the backup.
 func createBackup(configPath, backupPath string) error {
 	srcFile, err := os.Open(configPath) //nolint:gosec
 	if err != nil {
@@ -304,12 +319,7 @@ func createBackup(configPath, backupPath string) error {
 		}
 	}()
 
-	srcInfo, err := srcFile.Stat()
-	if err != nil {
-		return fmt.Errorf("failed to stat config file: %w", err)
-	}
-
-	dstFile, err := os.OpenFile(backupPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, srcInfo.Mode()) //nolint:gosec
+	dstFile, err := os.OpenFile(backupPath, os.O_WRONLY|os.O_CREATE|os.O_TRUNC, 0o600) //nolint:gosec
 	if err != nil {
 		return fmt.Errorf("failed to create backup file: %w", err)
 	}
@@ -339,14 +349,8 @@ func (c *Config) AddMount(mount models.MountConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if strings.TrimSpace(mount.Name) == "" {
-		return fmt.Errorf("mount name is required")
-	}
-	if strings.TrimSpace(mount.Remote) == "" {
-		return fmt.Errorf("mount remote is required")
-	}
-	if strings.TrimSpace(mount.MountPoint) == "" {
-		return fmt.Errorf("mount point is required")
+	if err := mount.Validate(); err != nil {
+		return err
 	}
 
 	if mount.RemotePath == "" {
@@ -367,6 +371,9 @@ func (c *Config) AddMount(mount models.MountConfig) error {
 	for _, m := range c.Mounts {
 		if m.Name == mount.Name {
 			return fmt.Errorf("mount with name %q already exists", mount.Name)
+		}
+		if m.ID == mount.ID {
+			return fmt.Errorf("mount with ID %q already exists", mount.ID)
 		}
 	}
 
@@ -404,19 +411,29 @@ func (c *Config) GetMount(name string) *models.MountConfig {
 	return nil
 }
 
+// FindMount returns a copy of the mount whose ID or name matches idOrName.
+// Returns nil if no such mount exists. The returned pointer is to a copy
+// and is safe for concurrent access.
+func (c *Config) FindMount(idOrName string) *models.MountConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for i := range c.Mounts {
+		if c.Mounts[i].ID == idOrName || c.Mounts[i].Name == idOrName {
+			result := c.Mounts[i] // copy
+			return &result
+		}
+	}
+	return nil
+}
+
 // AddSyncJob adds a new sync job configuration.
 func (c *Config) AddSyncJob(job models.SyncJobConfig) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if strings.TrimSpace(job.Name) == "" {
-		return fmt.Errorf("sync job name is required")
-	}
-	if strings.TrimSpace(job.Source) == "" {
-		return fmt.Errorf("sync job source is required")
-	}
-	if strings.TrimSpace(job.Destination) == "" {
-		return fmt.Errorf("sync job destination is required")
+	if err := job.Validate(); err != nil {
+		return err
 	}
 	if strings.TrimSpace(job.SyncOptions.Direction) == "" {
 		job.SyncOptions.Direction = "sync"
@@ -436,6 +453,9 @@ func (c *Config) AddSyncJob(job models.SyncJobConfig) error {
 	for _, j := range c.SyncJobs {
 		if j.Name == job.Name {
 			return fmt.Errorf("sync job with name %q already exists", job.Name)
+		}
+		if j.ID == job.ID {
+			return fmt.Errorf("sync job with ID %q already exists", job.ID)
 		}
 	}
 
@@ -467,6 +487,10 @@ func (c *Config) SetMounts(mounts []models.MountConfig) {
 // UpdateMount updates an existing mount configuration by ID.
 // Returns an error if the mount is not found.
 func (c *Config) UpdateMount(updated models.MountConfig) error {
+	if err := updated.Validate(); err != nil {
+		return err
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -493,6 +517,10 @@ func (c *Config) SetSyncJobs(jobs []models.SyncJobConfig) {
 // UpdateSyncJob updates an existing sync job configuration by ID.
 // Returns an error if the sync job is not found.
 func (c *Config) UpdateSyncJob(updated models.SyncJobConfig) error {
+	if err := updated.Validate(); err != nil {
+		return err
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -518,6 +546,22 @@ func (c *Config) GetSyncJob(name string) *models.SyncJobConfig {
 
 	for i := range c.SyncJobs {
 		if c.SyncJobs[i].Name == name {
+			result := c.SyncJobs[i] // copy
+			return &result
+		}
+	}
+	return nil
+}
+
+// FindSyncJob returns a copy of the sync job whose ID or name matches
+// idOrName. Returns nil if no such sync job exists. The returned pointer is
+// to a copy and is safe for concurrent access.
+func (c *Config) FindSyncJob(idOrName string) *models.SyncJobConfig {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	for i := range c.SyncJobs {
+		if c.SyncJobs[i].ID == idOrName || c.SyncJobs[i].Name == idOrName {
 			result := c.SyncJobs[i] // copy
 			return &result
 		}

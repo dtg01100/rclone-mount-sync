@@ -163,6 +163,9 @@ func runServicesLogs(cmd *cobra.Command, args []string) error {
 	manager := loadManager()
 
 	if logsFollow {
+		// --follow isn't implemented in the CLI; print the equivalent
+		// journalctl command so the user can run it directly. Hiding
+		// the flag would be cleaner but might break existing scripts.
 		fmt.Println("Follow mode is not supported in this context.")
 		fmt.Println("Use: journalctl --user -u " + name + " -f")
 		return nil

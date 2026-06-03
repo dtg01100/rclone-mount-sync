@@ -67,13 +67,13 @@ func TestSettingsScreen_SettingItems(t *testing.T) {
 			t.Errorf("setting %d key = %q, want %q", i, screen.settings[i].Key, expected.key)
 		}
 
-			if screen.settings[i].SettingType != expected.settingType {
-				t.Errorf("setting %d SettingType = %q, want %q", i, screen.settings[i].SettingType, expected.settingType)
-			}
+		if screen.settings[i].SettingType != expected.settingType {
+			t.Errorf("setting %d SettingType = %q, want %q", i, screen.settings[i].SettingType, expected.settingType)
+		}
 
-			if screen.settings[i].ConfigKey != expected.configKey {
-				t.Errorf("setting %d ConfigKey = %q, want %q", i, screen.settings[i].ConfigKey, expected.configKey)
-			}
+		if screen.settings[i].ConfigKey != expected.configKey {
+			t.Errorf("setting %d ConfigKey = %q, want %q", i, screen.settings[i].ConfigKey, expected.configKey)
+		}
 	}
 }
 

@@ -75,7 +75,7 @@ func TestIntegration_AppInitAndRender(t *testing.T) {
 // menu navigate to the correct screen.
 func TestIntegration_MainMenuQuickJumpKeys(t *testing.T) {
 	tests := []struct {
-		key          string
+		key            string
 		expectedScreen Screen
 	}{
 		{"m", ScreenMounts},
@@ -102,9 +102,9 @@ func TestIntegration_MainMenuQuickJumpKeys(t *testing.T) {
 func TestIntegration_EscapeReturnsToMain(t *testing.T) {
 	// Navigate to each sub-screen, then press Escape, then verify we're back at main.
 	screens := []struct {
-		name     string
-		screen   Screen
-		jumpKey  string
+		name    string
+		screen  Screen
+		jumpKey string
 	}{
 		{"Mounts", ScreenMounts, "m"},
 		{"SyncJobs", ScreenSyncJobs, "s"},
@@ -647,7 +647,6 @@ func TestIntegration_OrphanModeEscapeReturnsToList(t *testing.T) {
 		t.Error("showOrphanPrompt = false after Escape from action menu, want true (stays in prompt)")
 	}
 }
-
 
 // --- test helpers ---
 

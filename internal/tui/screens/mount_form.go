@@ -411,7 +411,10 @@ func (f *MountForm) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if form, ok := form.(*huh.Form); ok {
 		f.form = form
 	} else {
-		return f, nil
+		// Defensive: huh normally returns a *huh.Form. If it ever
+		// returns a different model, propagate the command rather than
+		// dropping it so the form's I/O isn't silently swallowed.
+		return f, cmd
 	}
 	cmds = append(cmds, cmd)
 
@@ -437,9 +440,13 @@ func (f *MountForm) submitForm() tea.Msg {
 	}
 
 	// Build the mount configuration
+	remote := f.remote
+	if remote != "" && !strings.HasSuffix(remote, ":") {
+		remote += ":"
+	}
 	mount := models.MountConfig{
 		Name:       f.name,
-		Remote:     strings.TrimSuffix(f.remote, ":"),
+		Remote:     remote,
 		RemotePath: f.remotePath,
 		MountPoint: f.mountPoint,
 		MountOptions: models.MountOptions{

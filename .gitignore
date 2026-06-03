@@ -48,3 +48,7 @@ temp/
 config.local.yaml
 config.local.yml
 coverage.html
+
+# CLIO (managed automatically)
+.clio/*
+!.clio/instructions.md

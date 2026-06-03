@@ -18,7 +18,7 @@ func TestServicesListNoSystemd(t *testing.T) {
 	// Mock manager that indicates systemd is not available
 	mock := &systemd.MockManager{
 		IsSystemdAvailableResult: false,
-		ListServicesErr:         fmt.Errorf("systemd user session not available"),
+		ListServicesErr:          fmt.Errorf("systemd user session not available"),
 	}
 	loadManager = func() systemd.ServiceManager { return mock }
 

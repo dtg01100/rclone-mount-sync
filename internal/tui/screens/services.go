@@ -3,8 +3,8 @@ package screens
 
 import (
 	"fmt"
-	"os/exec"
 	"os"
+	"os/exec"
 	"sort"
 	"strings"
 	"time"

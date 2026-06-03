@@ -287,7 +287,7 @@ func TestApp_View_EmptyLines(t *testing.T) {
 
 	// Log the max consecutive empty lines for documentation
 	t.Logf("Max consecutive empty lines: %d", maxConsecutiveBlanks)
-	
+
 	// Flag only if truly excessive (more than 10)
 	if maxConsecutiveBlanks > 10 {
 		t.Errorf("Found %d consecutive empty lines (excessive)", maxConsecutiveBlanks)

@@ -932,7 +932,6 @@ func TestErrorMessageFormat(t *testing.T) {
 	}
 }
 
-
 func TestZeroRetries(t *testing.T) {
 	config := RetryConfig{
 		MaxRetries:      0,

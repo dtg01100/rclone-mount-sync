@@ -159,6 +159,9 @@ func DefaultAppDeps(stdout, stderr io.Writer) *AppDeps {
 func runMainWithDeps(args []string, deps *AppDeps) int {
 	cfg, err := deps.ParseFlags(args)
 	if err != nil {
+		// flag.ContinueOnError + io.Discard output means ParseFlags only
+		// returns errors for actual parse failures (bad value, unknown
+		// flag). Those are usage errors → exit 2 per POSIX convention.
 		_, _ = fmt.Fprintf(deps.Stderr, "Error parsing flags: %v\n", err)
 		return 2
 	}

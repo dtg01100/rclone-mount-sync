@@ -38,6 +38,51 @@ func IsAlpha(s string) bool {
 	return true
 }
 
+// allowedShellValueRune is the set of runes considered safe in values that
+// flow into shell-evaluated systemd directives (ExecStartPre/ExecStopPost)
+// and into positional ExecStart args where word-splitting would be dangerous.
+// We keep this set intentionally narrow: alphanumerics plus the characters
+// that legitimately appear in rclone remote paths, file paths, and
+// rclone-style key=value arguments. Anything else is rejected so the user
+// is told their input is unsafe rather than having it silently interpreted
+// by a shell when systemd starts the unit.
+func allowedShellValueRune(r rune) bool {
+	switch {
+	case r >= 'a' && r <= 'z':
+	case r >= 'A' && r <= 'Z':
+	case r >= '0' && r <= '9':
+	case r == '/' || r == '_' || r == '-' || r == '.' || r == '=' || r == ':' || r == '@':
+	default:
+		return false
+	}
+	return true
+}
+
+// ValidateShellValue returns nil if value contains only characters that are
+// safe to interpolate unquoted into a shell-evaluated systemd directive.
+// Callers should reject the surrounding config when this returns an error.
+func ValidateShellValue(value, field string) error {
+	if value == "" {
+		return fmt.Errorf("%s must not be empty", field)
+	}
+	for _, r := range value {
+		if !allowedShellValueRune(r) {
+			return fmt.Errorf("%s contains illegal character %q: only alphanumerics and / _ - . = : @ are allowed (systemd passes this value to a shell)", field, r)
+		}
+	}
+	return nil
+}
+
+// ValidateIniValue returns nil if value does not contain characters that
+// would break out of a systemd unit-file directive (newlines, carriage
+// returns, NUL bytes). Any other character is allowed, including spaces.
+func ValidateIniValue(value, field string) error {
+	if strings.ContainsAny(value, "\r\n\x00") {
+		return fmt.Errorf("%s must not contain newline, carriage return, or NUL characters (systemd unit-file injection risk)", field)
+	}
+	return nil
+}
+
 // MountConfig represents the configuration for an rclone mount.
 type MountConfig struct {
 	// Identification
@@ -60,6 +105,55 @@ type MountConfig struct {
 	// Metadata
 	CreatedAt  time.Time `json:"created_at" yaml:"created_at" mapstructure:"created_at"`
 	ModifiedAt time.Time `json:"modified_at" yaml:"modified_at" mapstructure:"modified_at"`
+}
+
+// Validate checks that the mount configuration is internally consistent and
+// safe to render into a systemd unit file. It enforces: non-empty trimmed
+// Name/Remote/MountPoint, shell-safe Remote/RemotePath/MountPoint, and that
+// the Remote name doesn't try to smuggle a colon-separated rclone path
+// (the colon is added by the generator). It is the single source of truth
+// for mount validation; config.AddMount and the CLI runMountCreate both
+// delegate here.
+func (m *MountConfig) Validate() error {
+	name := strings.TrimSpace(m.Name)
+	if name == "" {
+		return fmt.Errorf("mount name must not be empty")
+	}
+	m.Name = name
+	if len(name) > 200 {
+		return fmt.Errorf("mount name must be at most 200 characters")
+	}
+	if err := ValidateIniValue(m.Name, "Name"); err != nil {
+		return err
+	}
+
+	remote := strings.TrimSpace(m.Remote)
+	if remote == "" {
+		return fmt.Errorf("remote must not be empty")
+	}
+	m.Remote = remote
+	if err := ValidateShellValue(remote, "Remote"); err != nil {
+		return err
+	}
+
+	remotePath := strings.TrimSpace(m.RemotePath)
+	if remotePath != "" {
+		if err := ValidateShellValue(remotePath, "RemotePath"); err != nil {
+			return err
+		}
+	}
+	m.RemotePath = remotePath
+
+	mountPoint := strings.TrimSpace(m.MountPoint)
+	if mountPoint == "" {
+		return fmt.Errorf("mount point must not be empty")
+	}
+	m.MountPoint = mountPoint
+	if err := ValidateShellValue(mountPoint, "MountPoint"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // MountOptions contains all configurable options for an rclone mount.
@@ -124,6 +218,55 @@ type SyncJobConfig struct {
 	LastRun    time.Time `json:"last_run,omitempty" yaml:"last_run,omitempty" mapstructure:"last_run,omitempty"`
 }
 
+// Validate checks that the sync-job configuration is internally consistent
+// and safe to render into a systemd unit file. It enforces non-empty trimmed
+// Name/Source/Destination, shell-safe Source/Destination, and a Source that
+// looks like an rclone remote path. Direction is also validated against an
+// allow-list so a stray CLI input ("rm -rf /") cannot reach the unit file.
+func (s *SyncJobConfig) Validate() error {
+	name := strings.TrimSpace(s.Name)
+	if name == "" {
+		return fmt.Errorf("sync job name must not be empty")
+	}
+	s.Name = name
+	if len(name) > 200 {
+		return fmt.Errorf("sync job name must be at most 200 characters")
+	}
+	if err := ValidateIniValue(s.Name, "Name"); err != nil {
+		return err
+	}
+
+	source := strings.TrimSpace(s.Source)
+	if source == "" {
+		return fmt.Errorf("source must not be empty")
+	}
+	if !strings.Contains(source, ":") {
+		return fmt.Errorf("source %q must contain a colon (e.g., \"myremote:/path\")", source)
+	}
+	s.Source = source
+	if err := ValidateShellValue(source, "Source"); err != nil {
+		return err
+	}
+
+	destination := strings.TrimSpace(s.Destination)
+	if destination == "" {
+		return fmt.Errorf("destination must not be empty")
+	}
+	s.Destination = destination
+	if err := ValidateShellValue(destination, "Destination"); err != nil {
+		return err
+	}
+
+	switch s.SyncOptions.Direction {
+	case "", "sync", "copy", "move", "bisync":
+		// ok
+	default:
+		return fmt.Errorf("invalid direction %q: must be sync, copy, move, or bisync", s.SyncOptions.Direction)
+	}
+
+	return nil
+}
+
 // SyncOptions contains all configurable options for an rclone sync job.
 type SyncOptions struct {
 	// Sync Direction & Behavior
@@ -179,30 +322,30 @@ type ScheduleConfig struct {
 
 // ServiceStatus represents the status of a systemd service.
 type ServiceStatus struct {
-	Name string `json:"name" yaml:"name" mapstructure:"name"`
-	Type string `json:"type" yaml:"type" mapstructure:"type"` // "mount" or "sync"
+	Name     string `json:"name" yaml:"name" mapstructure:"name"`
+	Type     string `json:"type" yaml:"type" mapstructure:"type"` // "mount" or "sync"
 	UnitFile string `json:"unit_file" yaml:"unit_file" mapstructure:"unit_file"`
 
 	// Systemd Status
-	LoadState string `json:"load_state" yaml:"load_state" mapstructure:"load_state"` // "loaded", "not-found", etc.
+	LoadState   string `json:"load_state" yaml:"load_state" mapstructure:"load_state"`       // "loaded", "not-found", etc.
 	ActiveState string `json:"active_state" yaml:"active_state" mapstructure:"active_state"` // "active", "inactive", "failed"
-	SubState string `json:"sub_state" yaml:"sub_state" mapstructure:"sub_state"` // "running", "exited", "dead", etc.
+	SubState    string `json:"sub_state" yaml:"sub_state" mapstructure:"sub_state"`          // "running", "exited", "dead", etc.
 
 	// Service Details
-	Enabled bool `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
-	MainPID int `json:"main_pid,omitempty" yaml:"main_pid,omitempty" mapstructure:"main_pid,omitempty"`
-	ExitCode int `json:"exit_code,omitempty" yaml:"exit_code,omitempty" mapstructure:"exit_code,omitempty"`
+	Enabled  bool `json:"enabled" yaml:"enabled" mapstructure:"enabled"`
+	MainPID  int  `json:"main_pid,omitempty" yaml:"main_pid,omitempty" mapstructure:"main_pid,omitempty"`
+	ExitCode int  `json:"exit_code,omitempty" yaml:"exit_code,omitempty" mapstructure:"exit_code,omitempty"`
 
 	// Timestamps
 	ActivatedAt time.Time `json:"activated_at,omitempty" yaml:"activated_at,omitempty" mapstructure:"activated_at,omitempty"`
-	InactiveAt time.Time `json:"inactive_at,omitempty" yaml:"inactive_at,omitempty" mapstructure:"inactive_at,omitempty"`
+	InactiveAt  time.Time `json:"inactive_at,omitempty" yaml:"inactive_at,omitempty" mapstructure:"inactive_at,omitempty"`
 
 	// For mounts
 	MountPoint string `json:"mount_point,omitempty" yaml:"mount_point,omitempty" mapstructure:"mount_point,omitempty"`
-	IsMounted bool `json:"is_mounted,omitempty" yaml:"is_mounted,omitempty" mapstructure:"is_mounted,omitempty"`
+	IsMounted  bool   `json:"is_mounted,omitempty" yaml:"is_mounted,omitempty" mapstructure:"is_mounted,omitempty"`
 
 	// For sync jobs
-	LastRun time.Time `json:"last_run,omitempty" yaml:"last_run,omitempty" mapstructure:"last_run,omitempty"`
-	NextRun time.Time `json:"next_run,omitempty" yaml:"next_run,omitempty" mapstructure:"next_run,omitempty"`
-	TimerActive bool `json:"timer_active,omitempty" yaml:"timer_active,omitempty" mapstructure:"timer_active,omitempty"`
+	LastRun     time.Time `json:"last_run,omitempty" yaml:"last_run,omitempty" mapstructure:"last_run,omitempty"`
+	NextRun     time.Time `json:"next_run,omitempty" yaml:"next_run,omitempty" mapstructure:"next_run,omitempty"`
+	TimerActive bool      `json:"timer_active,omitempty" yaml:"timer_active,omitempty" mapstructure:"timer_active,omitempty"`
 }

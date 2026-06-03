@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"errors"
 	"os"
+	"os/user"
 	"path/filepath"
 	"testing"
 )
@@ -32,11 +34,11 @@ func TestExpandHome(t *testing.T) {
 			input:    "",
 			expected: "",
 		},
-	{
-		name:     "tilde only",
-		input:    "~",
-		expected: home,
-	},
+		{
+			name:     "tilde only",
+			input:    "~",
+			expected: home,
+		},
 		{
 			name:     "tilde in middle",
 			input:    "/home/user~/test",
@@ -52,6 +54,56 @@ func TestExpandHome(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExpandHome_Errors(t *testing.T) {
+	// Save original functions
+	origHomeDir := osUserHomeDir
+	origUserLookup := userLookup
+	t.Cleanup(func() {
+		osUserHomeDir = origHomeDir
+		userLookup = origUserLookup
+	})
+
+	t.Run("UserHomeDir error with tilde only", func(t *testing.T) {
+		osUserHomeDir = func() (string, error) {
+			return "", errors.New("no home dir")
+		}
+		result := ExpandHome("~")
+		if result != "~" {
+			t.Errorf("ExpandHome(~) = %q, want ~", result)
+		}
+	})
+
+	t.Run("UserHomeDir error with ~/path", func(t *testing.T) {
+		osUserHomeDir = func() (string, error) {
+			return "", errors.New("no home dir")
+		}
+		result := ExpandHome("~/test")
+		if result != "~/test" {
+			t.Errorf("ExpandHome(~/test) = %q, want ~/test", result)
+		}
+	})
+
+	t.Run("user.Lookup error with ~user", func(t *testing.T) {
+		userLookup = func(username string) (*user.User, error) {
+			return nil, errors.New("user not found")
+		}
+		result := ExpandHome("~nonexistentuser/test")
+		if result != "~nonexistentuser/test" {
+			t.Errorf("ExpandHome(~nonexistentuser/test) = %q, want ~nonexistentuser/test", result)
+		}
+	})
+
+	t.Run("~user without slash returns home dir", func(t *testing.T) {
+		userLookup = func(username string) (*user.User, error) {
+			return &user.User{HomeDir: "/home/testuser"}, nil
+		}
+		result := ExpandHome("~testuser")
+		if result != "/home/testuser" {
+			t.Errorf("ExpandHome(~testuser) = %q, want /home/testuser", result)
+		}
+	})
 }
 
 func TestExpandPath(t *testing.T) {
@@ -193,6 +245,47 @@ func TestEnsureDir(t *testing.T) {
 	if err := EnsureDir(newDir); err != nil {
 		t.Errorf("EnsureDir(%q) on existing dir error = %v", newDir, err)
 	}
+}
+
+func TestEnsureDir_Errors(t *testing.T) {
+	// Save original function
+	origMkdirAll := osMkdirAll
+	t.Cleanup(func() {
+		osMkdirAll = origMkdirAll
+	})
+
+	t.Run("osMkdirAll error", func(t *testing.T) {
+		osMkdirAll = func(path string, perm os.FileMode) error {
+			return errors.New("permission denied")
+		}
+		err := EnsureDir("/some/path")
+		if err == nil {
+			t.Error("EnsureDir should return error on osMkdirAll failure")
+		}
+	})
+
+	t.Run("propagates non-EEXIST errors", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		// Create the dir with the real osMkdirAll first.
+		osMkdirAll = os.MkdirAll
+		if err := EnsureDir(tmpDir); err != nil {
+			t.Fatalf("Setup failed: %v", err)
+		}
+		// Now simulate os.MkdirAll returning a non-fs.ErrExist error.
+		// EnsureDir should propagate it rather than swallow it.
+		called := false
+		osMkdirAll = func(path string, perm os.FileMode) error {
+			called = true
+			return errors.New("file exists")
+		}
+		err := EnsureDir(tmpDir)
+		if err == nil {
+			t.Error("EnsureDir should return error when osMkdirAll fails with a non-EEXIST error")
+		}
+		if !called {
+			t.Error("osMkdirAll should be called")
+		}
+	})
 }
 
 func TestGetHomeDir(t *testing.T) {

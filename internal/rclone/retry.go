@@ -228,6 +228,15 @@ func doRetry(ctx context.Context, config RetryConfig, op Operation) error {
 			return nil
 		}
 
+		// If the parent context was cancelled or its deadline expired
+		// while the op was running, return immediately rather than
+		// sleeping and trying again. The previous behavior of treating
+		// context.DeadlineExceeded as retryable caused the loop to
+		// sleep the full InitialDelay and then run another doomed op.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
+		}
+
 		err = classifyExitError(err)
 		lastErr = err
 
@@ -246,7 +255,10 @@ func doRetry(ctx context.Context, config RetryConfig, op Operation) error {
 		}
 
 		delay = time.Duration(float64(delay) * config.RetryMultiplier)
-		if delay > config.MaxDelay {
+		// Guard against math overflow / +Inf when RetryMultiplier is
+		// very large. Cap before comparison because +Inf > MaxDelay is
+		// false in IEEE 754.
+		if delay <= 0 || delay > config.MaxDelay {
 			delay = config.MaxDelay
 		}
 	}

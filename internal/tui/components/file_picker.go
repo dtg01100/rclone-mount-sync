@@ -131,7 +131,7 @@ type EnhancedFilePicker struct {
 
 	// Quick jump state
 	showRecentMenu bool
-	recentCursor int
+	recentCursor   int
 
 	// Recent paths store
 	recentStore *RecentPathsStore
@@ -143,10 +143,10 @@ type EnhancedFilePicker struct {
 // NewEnhancedFilePicker creates a new enhanced file picker.
 func NewEnhancedFilePicker() *EnhancedFilePicker {
 	return &EnhancedFilePicker{
-		dirAllowed: true,
+		dirAllowed:  true,
 		fileAllowed: true,
-		showHidden: false,
-		focused: true,
+		showHidden:  false,
+		focused:     true,
 		recentStore: defaultRecentStore,
 	}
 }
@@ -275,9 +275,9 @@ func (p *EnhancedFilePicker) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if _, err := os.Stat("/media"); err == nil {
 					return p, p.jumpToDirectory("/media")
 				}
-		case "r":
-			// Toggle recent locations menu
-			if len(p.recentStore.Get()) > 0 {
+			case "r":
+				// Toggle recent locations menu
+				if len(p.recentStore.Get()) > 0 {
 					p.showRecentMenu = true
 					p.recentCursor = 0
 					return p, nil

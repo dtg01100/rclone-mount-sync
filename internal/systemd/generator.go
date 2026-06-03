@@ -84,11 +84,28 @@ func (g *Generator) GenerateMountService(mount *models.MountConfig) (string, err
 	mountPoint := expandPath(mount.MountPoint)
 	mountOptions := g.buildMountOptions(&mount.MountOptions)
 
+	safeName, err := sanitizeIniValue(mount.Name, "Name")
+	if err != nil {
+		return "", err
+	}
+	safeRemote, err := sanitizeIniValue(mount.Remote, "Remote")
+	if err != nil {
+		return "", err
+	}
+	safeRemotePath, err := sanitizeIniValue(mount.RemotePath, "RemotePath")
+	if err != nil {
+		return "", err
+	}
+	safeMountPoint, err := sanitizeShellValue(mountPoint, "MountPoint")
+	if err != nil {
+		return "", err
+	}
+
 	data := MountUnitData{
-		Name:           mount.Name,
-		Remote:         mount.Remote,
-		RemotePath:     mount.RemotePath,
-		MountPoint:     mountPoint,
+		Name:           safeName,
+		Remote:         safeRemote,
+		RemotePath:     safeRemotePath,
+		MountPoint:     safeMountPoint,
 		MountOptions:   mountOptions,
 		RclonePath:     g.rclonePath,
 		FusermountPath: g.fusermountPath,
@@ -138,10 +155,23 @@ func (g *Generator) GenerateSyncService(job *models.SyncJobConfig) (string, erro
 		execCondition = `/bin/sh -c 'test "$(dbus-send --system --print-reply=literal --dest=org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.DBus.Properties.Get string:org.freedesktop.NetworkManager string:Metered 2>/dev/null | grep -o "\"[0-9]*\"" | tr -d "\"")" != "4" || exit 0; exit 1'`
 	}
 
+	safeName, err := sanitizeIniValue(job.Name, "Name")
+	if err != nil {
+		return "", err
+	}
+	safeSource, err := sanitizeShellValue(job.Source, "Source")
+	if err != nil {
+		return "", err
+	}
+	safeDest, err := sanitizeShellValue(expandPath(job.Destination), "Destination")
+	if err != nil {
+		return "", err
+	}
+
 	data := SyncUnitData{
-		Name:             job.Name,
-		Source:           job.Source,
-		Destination:      expandPath(job.Destination),
+		Name:             safeName,
+		Source:           safeSource,
+		Destination:      safeDest,
 		Direction:        direction,
 		SyncOptions:      syncOptions,
 		RclonePath:       g.rclonePath,
@@ -169,8 +199,13 @@ func (g *Generator) GenerateSyncService(job *models.SyncJobConfig) (string, erro
 func (g *Generator) GenerateSyncTimer(job *models.SyncJobConfig) (string, error) {
 	timerDirectives := g.buildTimerDirectives(&job.Schedule)
 
+	safeName, err := sanitizeIniValue(job.Name, "Name")
+	if err != nil {
+		return "", err
+	}
+
 	data := TimerUnitData{
-		Name:            job.Name,
+		Name:            safeName,
 		TimerDirectives: timerDirectives,
 	}
 
@@ -240,17 +275,52 @@ func (g *Generator) RemoveUnit(name string) error {
 
 // WriteUnitFile writes a unit file to the systemd user directory.
 // The filename must not contain path separators or ".." to prevent path traversal.
+// The write is atomic: the content is written to a temp file in the same
+// directory, fsync'd, and then renamed to the final name. This prevents
+// systemd from reading a truncated/partial unit file if the process is
+// killed mid-write.
 func (g *Generator) WriteUnitFile(filename, content string) error {
 	if err := validateUnitFilename(filename); err != nil {
 		return fmt.Errorf("invalid unit filename: %w", err)
 	}
-	// Ensure directory exists
-	if err := os.MkdirAll(g.systemdDir, 0750); err != nil {
+	// Ensure directory exists with restrictive permissions: the systemd
+	// user directory may hold service files whose ExecStart lines embed
+	// user-controlled paths.
+	if err := os.MkdirAll(g.systemdDir, 0o700); err != nil {
 		return fmt.Errorf("failed to create systemd directory: %w", err)
 	}
 
-	path := filepath.Join(g.systemdDir, filename)
-	return os.WriteFile(path, []byte(content), 0644) //nolint:gosec
+	finalPath := filepath.Join(g.systemdDir, filename)
+	tmp, err := os.CreateTemp(g.systemdDir, filename+".tmp-*")
+	if err != nil {
+		return fmt.Errorf("failed to create temp unit file: %w", err)
+	}
+	tmpName := tmp.Name()
+	// Ensure the temp file is removed if we fail before the rename.
+	defer func() {
+		if _, statErr := os.Stat(tmpName); statErr == nil {
+			_ = os.Remove(tmpName)
+		}
+	}()
+
+	if _, err := tmp.Write([]byte(content)); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to write unit file: %w", err)
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return fmt.Errorf("failed to sync unit file: %w", err)
+	}
+	if err := tmp.Close(); err != nil {
+		return fmt.Errorf("failed to close unit file: %w", err)
+	}
+	if err := os.Chmod(tmpName, 0o600); err != nil {
+		return fmt.Errorf("failed to chmod unit file: %w", err)
+	}
+	if err := os.Rename(tmpName, finalPath); err != nil {
+		return fmt.Errorf("failed to rename unit file: %w", err)
+	}
+	return nil
 }
 
 // validateUnitFilename ensures a unit filename doesn't contain path traversal.
@@ -487,7 +557,47 @@ func sanitizeExtraArgs(args string) string {
 	return strings.TrimSpace(args)
 }
 
+// sanitizeShellValue rejects values containing characters that would be
+// interpreted by a shell (or that could split systemd ExecStart arguments
+// unexpectedly). It is used for values that flow into shell-evaluated
+// directives (ExecStartPre/ExecStopPost) and into positional ExecStart args
+// where word-splitting would be dangerous.
+//
+// The allowed set is intentionally narrow: alphanumerics, the path-relevant
+// punctuation (/ _ - .), and '='. Anything else (spaces, quotes, semicolons,
+// backticks, $ ( ) { } | & < > * ? ! \n \r \t, etc.) is rejected with an
+// error so the caller can surface the problem instead of silently writing a
+// unit file that, when started, executes unintended commands.
+func sanitizeShellValue(value, field string) (string, error) {
+	if value == "" {
+		return "", fmt.Errorf("%s must not be empty", field)
+	}
+	for _, r := range value {
+		switch {
+		case r >= 'a' && r <= 'z':
+		case r >= 'A' && r <= 'Z':
+		case r >= '0' && r <= '9':
+		case r == '/' || r == '_' || r == '-' || r == '.' || r == '=' || r == ':' || r == '@':
+		default:
+			return "", fmt.Errorf("%s contains illegal character %q: only alphanumerics and / _ - . = : @ are allowed (systemd passes this value to a shell)", field, r)
+		}
+	}
+	return value, nil
+}
 
+// sanitizeIniValue strips characters that would break out of a systemd
+// unit-file directive: newlines, carriage returns, and NUL bytes. These are
+// the characters that would allow a value to start a new directive
+// (e.g. "innocent\nExecStart=/bin/sh -c 'rm -rf /'"). Any other character
+// is allowed, including spaces, because many systemd directives are
+// space-separated value lists and some values (like Description) may
+// legitimately contain spaces.
+func sanitizeIniValue(value, field string) (string, error) {
+	if strings.ContainsAny(value, "\r\n\x00") {
+		return "", fmt.Errorf("%s must not contain newline, carriage return, or NUL characters (systemd unit-file injection risk)", field)
+	}
+	return value, nil
+}
 
 // NewTestGenerator creates a generator for use in tests.
 // It uses the provided temp directory for all output.

@@ -542,8 +542,8 @@ func TestMountForm_SubmitFormCreatesMountConfig(t *testing.T) {
 		t.Errorf("mount.Name = %q, want 'Test Mount'", mount.Name)
 	}
 
-	if mount.Remote != "gdrive" {
-		t.Errorf("mount.Remote = %q, want 'gdrive'", mount.Remote)
+	if mount.Remote != "gdrive:" {
+		t.Errorf("mount.Remote = %q, want 'gdrive:'", mount.Remote)
 	}
 
 	if mount.RemotePath != "/Photos" {

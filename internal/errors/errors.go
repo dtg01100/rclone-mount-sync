@@ -113,15 +113,15 @@ var (
 
 	// ErrMountPointExists indicates that the mount point is already in use.
 	ErrMountPointExists = &AppError{
-		Code: "VAL_001",
-		Message: "Mount point is already in use",
+		Code:       "VAL_001",
+		Message:    "Mount point is already in use",
 		Suggestion: "Choose a different mount point or unmount the existing mount first using 'fusermount -u <mount-point>'",
 	}
 
 	// ErrMountPointNotDirectory indicates that the mount point is not a directory.
 	ErrMountPointNotDirectory = &AppError{
-		Code: "VAL_002",
-		Message: "Mount point is not a directory",
+		Code:       "VAL_002",
+		Message:    "Mount point is not a directory",
 		Suggestion: "Remove the existing file or choose a different mount point.",
 	}
 
@@ -203,20 +203,20 @@ func NewNoRemotesConfiguredError(cause error) *AppError {
 // NewMountPointExistsError creates a new ErrMountPointExists error with mount point details.
 func NewMountPointExistsError(mountPoint string, cause error) *AppError {
 	return &AppError{
-		Code: ErrMountPointExists.Code,
-		Message: fmt.Sprintf("Mount point %q is already in use", mountPoint),
+		Code:       ErrMountPointExists.Code,
+		Message:    fmt.Sprintf("Mount point %q is already in use", mountPoint),
 		Suggestion: ErrMountPointExists.Suggestion,
-		Cause: cause,
+		Cause:      cause,
 	}
 }
 
 // NewMountPointNotDirectoryError creates a new ErrMountPointNotDirectory error with mount point details.
 func NewMountPointNotDirectoryError(mountPoint string, cause error) *AppError {
 	return &AppError{
-		Code: ErrMountPointNotDirectory.Code,
-		Message: fmt.Sprintf("Mount point %q is not a directory", mountPoint),
+		Code:       ErrMountPointNotDirectory.Code,
+		Message:    fmt.Sprintf("Mount point %q is not a directory", mountPoint),
 		Suggestion: ErrMountPointNotDirectory.Suggestion,
-		Cause: cause,
+		Cause:      cause,
 	}
 }
 

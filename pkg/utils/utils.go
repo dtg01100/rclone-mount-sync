@@ -2,12 +2,21 @@
 package utils
 
 import (
+	"errors"
+	"io/fs"
 	"os"
 	"os/user"
 	"path/filepath"
 	"strings"
 
 	"github.com/google/uuid"
+)
+
+// Function variables for dependency injection (used in tests)
+var (
+	osUserHomeDir = os.UserHomeDir
+	userLookup    = user.Lookup
+	osMkdirAll    = os.MkdirAll
 )
 
 // ExpandHome expands ~ to the user's home directory in a path.
@@ -19,7 +28,7 @@ func ExpandHome(path string) string {
 	}
 
 	if path == "~" {
-		homeDir, err := os.UserHomeDir()
+		homeDir, err := osUserHomeDir()
 		if err != nil {
 			return path
 		}
@@ -27,7 +36,7 @@ func ExpandHome(path string) string {
 	}
 
 	if strings.HasPrefix(path, "~/") {
-		homeDir, err := os.UserHomeDir()
+		homeDir, err := osUserHomeDir()
 		if err != nil {
 			return path
 		}
@@ -45,7 +54,7 @@ func ExpandHome(path string) string {
 		if username == "" {
 			return path
 		}
-		u, err := user.Lookup(username)
+		u, err := userLookup(username)
 		if err != nil {
 			return path
 		}
@@ -90,9 +99,12 @@ func DirExists(path string) bool {
 }
 
 // EnsureDir creates a directory if it doesn't exist.
-// It creates all necessary parent directories with mode 0755.
+// It creates all necessary parent directories with mode 0700 so the
+// directory and its contents are not readable by other users; the
+// application stores credentials (rclone remote config references) in
+// directories created by this function.
 func EnsureDir(path string) error {
-	if err := os.MkdirAll(path, 0750); err != nil && !os.IsExist(err) {
+	if err := osMkdirAll(path, 0o700); err != nil && !errors.Is(err, fs.ErrExist) {
 		return err
 	}
 	return nil

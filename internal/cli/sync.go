@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"text/tabwriter"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
@@ -149,7 +150,18 @@ func runSyncCreate(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to retrieve saved sync job")
 	}
 
-	if _, _, err := generator.WriteSyncUnits(savedJob); err != nil {
+	servicePath, _, err := generator.WriteSyncUnits(savedJob)
+	if err != nil {
+		// WriteSyncUnits writes the service file first, then the timer.
+		// If it returns an error, the service file may already be on
+		// disk; remove it so we don't leave a half-configured unit
+		// behind for the next daemon-reload to load.
+		if servicePath != "" {
+			serviceName := filepath.Base(servicePath)
+			if remErr := generator.RemoveUnit(serviceName); remErr != nil {
+				fmt.Fprintf(os.Stderr, "Warning: failed to remove partial service unit %s: %v\n", serviceName, remErr)
+			}
+		}
 		_ = cfg.RemoveSyncJob(job.Name)
 		_ = cfg.Save()
 		return fmt.Errorf("failed to write systemd units: %w", err)
@@ -225,14 +237,26 @@ func runSyncDelete(cmd *cobra.Command, args []string) error {
 		fmt.Fprintf(os.Stderr, "Warning: failed to reset failed state for %s: %v\n", serviceName, err)
 	}
 
+	// Remove the config entry first so a subsequent unit-removal failure
+	// doesn't leave the config referencing a job whose unit is already
+	// gone. If RemoveUnit fails we still try to clean up the other unit
+	// rather than leaving the system in a half-deleted state.
+	removedService := false
+	removedTimer := false
 	if err := generator.RemoveUnit(serviceName); err != nil {
-		return fmt.Errorf("failed to remove service unit: %w", err)
+		fmt.Fprintf(os.Stderr, "Warning: failed to remove service unit %s: %v\n", serviceName, err)
+	} else {
+		removedService = true
 	}
 
 	if job.Schedule.Type != "manual" {
 		if err := generator.RemoveUnit(timerName); err != nil {
-			return fmt.Errorf("failed to remove timer unit: %w", err)
+			fmt.Fprintf(os.Stderr, "Warning: failed to remove timer unit %s: %v\n", timerName, err)
+		} else {
+			removedTimer = true
 		}
+	} else {
+		removedTimer = true
 	}
 
 	if err := manager.DaemonReload(); err != nil {
@@ -245,6 +269,10 @@ func runSyncDelete(cmd *cobra.Command, args []string) error {
 
 	if err := cfg.Save(); err != nil {
 		return fmt.Errorf("failed to save config: %w", err)
+	}
+
+	if !removedService || !removedTimer {
+		return fmt.Errorf("sync job %q removed from config but some unit files could not be removed", job.Name)
 	}
 
 	fmt.Printf("Sync job '%s' deleted successfully\n", job.Name)

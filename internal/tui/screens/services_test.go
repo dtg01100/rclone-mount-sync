@@ -14,6 +14,7 @@ import (
 
 // Test errors for services
 var errTestServiceNotFound = errors.New("service not found")
+
 // Helper function to create test service info
 func createTestServices() []ServiceInfo {
 	return []ServiceInfo{
@@ -657,10 +658,10 @@ func TestServicesScreen_CycleLogFilter(t *testing.T) {
 
 func TestServicesScreen_EscapeKey(t *testing.T) {
 	tests := []struct {
-		name          string
-		initialMode   string
-		expectedMode  string
-		expectGoBack  bool
+		name         string
+		initialMode  string
+		expectedMode string
+		expectGoBack bool
 	}{
 		{
 			name:         "Escape from list mode",

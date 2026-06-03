@@ -1998,3 +1998,112 @@ func TestGenerator_BuildSyncOptions_DefaultConfig(t *testing.T) {
 		t.Errorf("buildSyncOptions() should use default config, got: %s", result)
 	}
 }
+
+func TestSanitizeShellValue(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		field   string
+		wantErr bool
+	}{
+		{"empty", "", "MountPoint", true},
+		{"plain", "/mnt/test", "MountPoint", false},
+		{"remote path", "gdrive:/Photos", "Source", false},
+		{"semicolon injection", "/tmp/x; rm -rf /", "MountPoint", true},
+		{"command substitution", "$(whoami)", "MountPoint", true},
+		{"backticks", "`whoami`", "MountPoint", true},
+		{"newline", "/tmp/x\n[Service]", "MountPoint", true},
+		{"carriage return", "/tmp/x\r[Service]", "MountPoint", true},
+		{"tab", "/tmp/x\tfoo", "MountPoint", true},
+		{"space", "/tmp/My Drive", "MountPoint", true},
+		{"quote", "/tmp/x\"y", "MountPoint", true},
+		{"equals in value is ok", "key=value", "ExtraArgs", false},
+		{"colon in value is ok", "name:other", "Source", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := sanitizeShellValue(tt.value, tt.field)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("sanitizeShellValue(%q) err = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestSanitizeIniValue(t *testing.T) {
+	tests := []struct {
+		name    string
+		value   string
+		field   string
+		wantErr bool
+	}{
+		{"empty ok", "", "Name", false},
+		{"plain ok", "my mount", "Name", false},
+		{"newline rejected", "innocent\nExecStart=/bin/sh", "Name", true},
+		{"carriage return rejected", "innocent\r[Service]", "Name", true},
+		{"NUL byte rejected", "innocent\x00", "Name", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := sanitizeIniValue(tt.value, tt.field)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("sanitizeIniValue(%q) err = %v, wantErr %v", tt.value, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestGenerator_RejectsShellInjectionInMountPoint(t *testing.T) {
+	g := NewTestGenerator(t.TempDir())
+	mount := &models.MountConfig{
+		Name:       "evil",
+		Remote:     "gdrive:",
+		MountPoint: "/tmp/foo; touch /tmp/pwned",
+	}
+	if _, err := g.GenerateMountService(mount); err == nil {
+		t.Fatal("GenerateMountService should reject mount point with shell metacharacters")
+	}
+}
+
+func TestGenerator_RejectsIniInjectionInName(t *testing.T) {
+	g := NewTestGenerator(t.TempDir())
+	mount := &models.MountConfig{
+		Name:       "innocent\nExecStart=/bin/sh -c 'evil'",
+		Remote:     "gdrive:",
+		MountPoint: "/tmp/test",
+	}
+	if _, err := g.GenerateMountService(mount); err == nil {
+		t.Fatal("GenerateMountService should reject Name with embedded newline")
+	}
+}
+
+func TestWriteUnitFile_Atomic(t *testing.T) {
+	tmpDir := t.TempDir()
+	g := NewTestGenerator(tmpDir)
+
+	if err := g.WriteUnitFile("rclone-mount-abc12345.service", "content one"); err != nil {
+		t.Fatalf("first write: %v", err)
+	}
+	if err := g.WriteUnitFile("rclone-mount-abc12345.service", "content two"); err != nil {
+		t.Fatalf("second write: %v", err)
+	}
+
+	path := filepath.Join(tmpDir, "rclone-mount-abc12345.service")
+	got, err := os.ReadFile(path) //nolint:gosec
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if string(got) != "content two" {
+		t.Errorf("file content = %q, want %q", got, "content two")
+	}
+	// No leftover temp files should remain.
+	entries, err := os.ReadDir(tmpDir)
+	if err != nil {
+		t.Fatalf("readdir: %v", err)
+	}
+	for _, e := range entries {
+		if strings.Contains(e.Name(), ".tmp-") {
+			t.Errorf("temp file %q should have been cleaned up", e.Name())
+		}
+	}
+}

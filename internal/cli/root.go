@@ -27,6 +27,11 @@ var rootCmd = &cobra.Command{
 	Long: `rclone-mount-sync is a CLI tool for managing rclone mounts and sync jobs
 as systemd user services. It provides commands to create, list, start, stop,
 and delete mount points and sync jobs.`,
+	// SilenceUsage prevents cobra from dumping the full help text on
+	// every RunE error; we only want it shown for genuine usage errors
+	// (unknown command, bad flag, missing arg), which cobra handles
+	// before RunE runs.
+	SilenceUsage: true,
 }
 
 func init() {
@@ -82,25 +87,17 @@ func printError(err error) {
 }
 
 // findMountByIDOrName searches for a mount by ID or name in the config.
-// Returns nil if not found.
+// Returns nil if not found. The returned pointer is to a copy held under
+// the config's read lock, making it safe for concurrent access.
 func findMountByIDOrName(cfg *config.Config, idOrName string) *models.MountConfig {
-	for i := range cfg.Mounts {
-		if cfg.Mounts[i].ID == idOrName || cfg.Mounts[i].Name == idOrName {
-			return &cfg.Mounts[i]
-		}
-	}
-	return nil
+	return cfg.FindMount(idOrName)
 }
 
 // findSyncJobByIDOrName searches for a sync job by ID or name in the config.
-// Returns nil if not found.
+// Returns nil if not found. The returned pointer is to a copy held under
+// the config's read lock, making it safe for concurrent access.
 func findSyncJobByIDOrName(cfg *config.Config, idOrName string) *models.SyncJobConfig {
-	for i := range cfg.SyncJobs {
-		if cfg.SyncJobs[i].ID == idOrName || cfg.SyncJobs[i].Name == idOrName {
-			return &cfg.SyncJobs[i]
-		}
-	}
-	return nil
+	return cfg.FindSyncJob(idOrName)
 }
 
 var cleanupCmd = &cobra.Command{
@@ -128,17 +125,21 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		systemctlPath = manager.SystemctlPath()
 	}
 
-	cmd2 := exec.Command(systemctlPath, "--user", "list-units", "--state=failed", "--no-legend")
+	cmd2 := exec.Command(systemctlPath, "--user", "list-units", "--state=failed", "--no-legend") //nolint:gosec
 	output, err := cmd2.Output()
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) && exitErr.ExitCode() == 3 {
-		if len(strings.TrimSpace(string(output))) == 0 {
+	// `list-units --state=failed` exits non-zero when nothing matches
+	// (exit 1 in practice; older versions used 3). Treat both "no output"
+	// and the no-match exit code as "nothing to do". Any other error
+	// means systemctl itself failed (DBus down, etc.) and we surface it.
+	if err != nil {
+		var exitErr *exec.ExitError
+		if !errors.As(err, &exitErr) {
+			return fmt.Errorf("failed to list failed units: %w", err)
+		}
+		if strings.TrimSpace(string(output)) == "" {
 			fmt.Println("No failed units found.")
 			return nil
 		}
-	}
-	if err != nil {
-		return fmt.Errorf("failed to list failed units: %w", err)
 	}
 
 	lines := strings.Split(string(output), "\n")

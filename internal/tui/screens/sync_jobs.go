@@ -180,6 +180,9 @@ func (s *SyncJobsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				break
 			}
 		}
+		// Clear the cached status so a later job created with the same
+		// name doesn't inherit a stale status from the deleted entry.
+		delete(s.statuses, msg.Name)
 		s.success = fmt.Sprintf("Sync job '%s' deleted successfully", msg.Name)
 		s.mode = SyncJobsModeList
 		s.cursor = 0
@@ -809,6 +812,58 @@ func (d *SyncJobDetails) Init() tea.Cmd {
 	return nil
 }
 
+// actionCmd returns a command that performs the given sync action
+// ("r"=run-now, "t"=toggle timer, "e"=enable timer, "d"=disable timer)
+// asynchronously and reports the result via SyncJobDetailsActionMsg.
+func (d *SyncJobDetails) actionCmd(action string) tea.Cmd {
+	if d.generator == nil || d.manager == nil {
+		return func() tea.Msg {
+			return SyncJobDetailsActionMsg{Err: fmt.Errorf("systemd services not initialized")}
+		}
+	}
+	jobName := d.job.Name
+	jobID := d.job.ID
+	manager := d.manager
+	generator := d.generator
+	return func() tea.Msg {
+		serviceName := generator.ServiceName(jobID, "sync") + ".service"
+		timerName := generator.ServiceName(jobID, "sync") + ".timer"
+		var err error
+		switch action {
+		case "r":
+			err = manager.RunSyncNow(serviceName)
+		case "t":
+			isActive, _ := manager.IsActive(timerName)
+			if isActive {
+				if err = manager.StopTimer(timerName); err == nil {
+					err = manager.DisableTimer(timerName)
+				}
+			} else {
+				if err = manager.EnableTimer(timerName); err == nil {
+					err = manager.StartTimer(timerName)
+				}
+			}
+		case "e":
+			if err = manager.EnableTimer(timerName); err == nil {
+				err = manager.StartTimer(timerName)
+			}
+		case "d":
+			if err = manager.StopTimer(timerName); err == nil {
+				err = manager.DisableTimer(timerName)
+			}
+		}
+		return SyncJobDetailsActionMsg{Action: action, Name: jobName, Err: err}
+	}
+}
+
+// SyncJobDetailsActionMsg is the async result of a run/toggle/enable/disable
+// request from the SyncJobDetails view.
+type SyncJobDetailsActionMsg struct {
+	Action string
+	Name   string
+	Err    error
+}
+
 // Update handles updates.
 func (d *SyncJobDetails) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok {
@@ -817,52 +872,16 @@ func (d *SyncJobDetails) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.done = true
 		case "tab":
 			d.tab = (d.tab + 1) % 2
-		case "r":
-			if d.generator != nil && d.manager != nil {
-				serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
-				d.lastErr = d.manager.RunSyncNow(serviceName)
-				d.loadStatus()
-				d.loadLogs()
-			}
-		case "t":
-			if d.generator != nil && d.manager != nil {
-				timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
-				isActive, _ := d.manager.IsActive(timerName)
-				if isActive {
-					d.lastErr = d.manager.StopTimer(timerName)
-					if d.lastErr == nil {
-						d.lastErr = d.manager.DisableTimer(timerName)
-					}
-				} else {
-					d.lastErr = d.manager.EnableTimer(timerName)
-					if d.lastErr == nil {
-						d.lastErr = d.manager.StartTimer(timerName)
-					}
-				}
-				d.loadStatus()
-			}
-		case "e":
-			if d.generator != nil && d.manager != nil {
-				timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
-				d.lastErr = d.manager.EnableTimer(timerName)
-				if d.lastErr == nil {
-					d.lastErr = d.manager.StartTimer(timerName)
-				}
-				d.loadStatus()
-			}
-		case "d":
-			if d.generator != nil && d.manager != nil {
-				timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
-				d.lastErr = d.manager.StopTimer(timerName)
-				if d.lastErr == nil {
-					d.lastErr = d.manager.DisableTimer(timerName)
-				}
-				d.loadStatus()
-			}
+		case "r", "t", "e", "d":
+			return d, d.actionCmd(msg.String())
 		case "R":
 			d.loadStatus()
 			d.loadLogs()
 		}
+	}
+	if msg, ok := msg.(SyncJobDetailsActionMsg); ok {
+		d.lastErr = msg.Err
+		d.loadStatus()
 	}
 
 	return d, nil

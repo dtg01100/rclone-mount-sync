@@ -383,9 +383,9 @@ func TestWrap(t *testing.T) {
 		if !testutil.ContainsString(wrapped.Message, "outer context") || !testutil.ContainsString(wrapped.Message, "inner message") {
 			t.Errorf("expected wrapped message, got %s", wrapped.Message)
 		}
-	if !errors.Is(wrapped.Cause, inner) {
-		t.Error("cause should be the inner AppError (preserving error chain)")
-	}
+		if !errors.Is(wrapped.Cause, inner) {
+			t.Error("cause should be the inner AppError (preserving error chain)")
+		}
 	})
 
 	t.Run("wrap standard error", func(t *testing.T) {
@@ -483,5 +483,3 @@ func TestErrorsUnwrap(t *testing.T) {
 		t.Error("errors.Unwrap should return the cause")
 	}
 }
-
-

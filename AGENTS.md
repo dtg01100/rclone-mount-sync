@@ -185,7 +185,7 @@ if err != nil {
 - Rclone binary must be in PATH or `RCLONE_BINARY_PATH` set
 
 ### Thread Safety
-- Config loading/saving uses file locking
+- Config loading/saving is thread-safe within a single process (sync.RWMutex), but is not safe for concurrent processes — don't run the TUI and CLI against the same config simultaneously without external coordination
 - Be careful with shared state in TUI updates
 
 ---
