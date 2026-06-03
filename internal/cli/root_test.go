@@ -258,3 +258,71 @@ func TestRunCleanup_SystemctlNotAvailable(t *testing.T) {
 		t.Logf("runCleanup returned error (expected if systemctl unavailable): %v", err)
 	}
 }
+
+// TestExecute covers the bare Execute() entry point. It does the same
+// thing ExecuteWithVersion does, but without setting a version
+// first. We pass --help so Execute returns success and we can
+// distinguish success from a parsing error.
+//
+// Execute and ExecuteWithVersion were at 0% coverage because the
+// entry point is normally main(), which is not testable.
+
+// TestExecute covers the bare Execute() entry point. Execute() is a
+// thin wrapper around rootCmd.Execute(), and main() calls it. We
+// can't call main() from a test, but we can call Execute() directly
+// and verify it does the right thing with --help.
+//
+// Execute() writes cobra help to whatever writer rootCmd is
+// configured with; we redirect to a buffer so the test doesn't
+// pollute the test runner's stdout (a previous version of this
+// helper didn't, and the "Flags:" help text leaked into the test
+// log).
+func TestExecute(t *testing.T) {
+	prevOut := rootCmd.OutOrStdout()
+	prevArgs := rootCmd.Flags().Args()
+	prevVersion := rootCmd.Version
+	t.Cleanup(func() {
+		rootCmd.SetOut(prevOut)
+		rootCmd.SetArgs(prevArgs)
+		rootCmd.Version = prevVersion
+	})
+
+	buf := &bytes.Buffer{}
+	rootCmd.SetOut(buf)
+	rootCmd.SetArgs([]string{"--help"})
+	rootCmd.Version = ""
+
+	if err := Execute(); err != nil {
+		t.Fatalf("Execute(--help) returned error: %v", err)
+	}
+	if buf.Len() == 0 {
+		t.Error("Execute(--help) wrote nothing to rootCmd's output")
+	}
+}
+
+// TestExecuteWithVersion covers the versioned entry point. We invoke
+// ExecuteWithVersion with a known version and verify the version is
+// installed on rootCmd. The SetVersionTemplate output is exercised
+// in TestVersionFlag above; this test focuses on the
+// SetVersion-then-Execute sequence.
+func TestExecuteWithVersion(t *testing.T) {
+	prevOut := rootCmd.OutOrStdout()
+	prevArgs := rootCmd.Flags().Args()
+	prevVersion := rootCmd.Version
+	t.Cleanup(func() {
+		rootCmd.SetOut(prevOut)
+		rootCmd.SetArgs(prevArgs)
+		rootCmd.Version = prevVersion
+	})
+
+	buf := &bytes.Buffer{}
+	rootCmd.SetOut(buf)
+	rootCmd.SetArgs([]string{"--version"})
+
+	if err := ExecuteWithVersion("9.9.9-test"); err != nil {
+		t.Fatalf("ExecuteWithVersion returned error: %v", err)
+	}
+	if rootCmd.Version != "9.9.9-test" {
+		t.Errorf("rootCmd.Version = %q, want %q", rootCmd.Version, "9.9.9-test")
+	}
+}

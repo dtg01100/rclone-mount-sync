@@ -1554,3 +1554,61 @@ func TestSyncJobConfigValidate(t *testing.T) {
 		})
 	}
 }
+
+// TestValidateExtraArgs covers the security boundary for systemd
+// directive injection. ValidateExtraArgs rejects newlines and any
+// key=value pair whose key is purely alphabetic, since those are the
+// shape of systemd directives (Environment=, ExecStart=, etc.) that
+// must never reach a unit file from user-supplied extra args.
+func TestValidateExtraArgs(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errSub  string
+	}{
+		{"empty", "", false, ""},
+		{"plain flag", "--vfs-cache-mode full", false, ""},
+		{"key=value with non-alpha key (safe)", "--user-agent=myapp", false, ""},
+		{"alpha key=value rejected (looks like systemd directive)", "Environment=FOO=bar", true, "systemd directive"},
+		{"alpha key=value in middle", "--vfs-read-chunk-size 64M Environment=EVIL=1", true, "systemd directive"},
+		{"CRLF rejected", "FOO=bar\r\nExecStart=/bin/sh", true, "newline"},
+		{"LF rejected", "FOO=bar\nExecStart=/bin/sh", true, "newline"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := ValidateExtraArgs(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("ValidateExtraArgs(%q) err = %v, wantErr %v", tt.input, err, tt.wantErr)
+			}
+			if tt.wantErr && tt.errSub != "" && !strings.Contains(err.Error(), tt.errSub) {
+				t.Errorf("error %q should contain %q", err.Error(), tt.errSub)
+			}
+		})
+	}
+}
+
+// TestIsAlpha covers the helper used by ValidateExtraArgs to decide
+// whether a key=value token looks like a systemd directive.
+func TestIsAlpha(t *testing.T) {
+	tests := []struct {
+		input string
+		want  bool
+	}{
+		{"", false},
+		{"a", true},
+		{"Z", true},
+		{"Environment", true},
+		{"env1", false},    // digit present
+		{"env-foo", false}, // hyphen present
+		{"env_foo", false}, // underscore present
+		{"αβγ", false},     // non-ASCII alpha
+	}
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := IsAlpha(tt.input); got != tt.want {
+				t.Errorf("IsAlpha(%q) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
