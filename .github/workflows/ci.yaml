@@ -35,5 +35,41 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-      - name: Run tests
+      - name: Build
+        run: go build ./...
+
+      - name: Run tests (no race, all packages)
+        # Default test run: verbose, no cache, every package. This is
+        # the safety net for regressions that don't surface under -race.
         run: go test -v -count=1 ./...
+
+      - name: Run tests with race detector
+        # The race detector is the most expensive check but the one
+        # most likely to catch real concurrency bugs in the systemd
+        # manager, the config RWMutex, and the bubbletea Update loop.
+        # Pinned to ./internal/... because the cmd/ entrypoint has no
+        # testable concurrency of its own and the pkg/utils package
+        # is a pure-function surface.
+        run: go test -race -count=1 -timeout 120s ./internal/...
+
+      - name: Run tests with coverage (total)
+        # Coverage on every PR. coverage.out is generated for tooling
+        # but the step exists primarily to print the per-package
+        # coverage in the CI log so coverage regressions are visible
+        # in the PR conversation.
+        run: |
+          set -e
+          go test -coverprofile=coverage.out -covermode=atomic ./... > coverage.txt 2>&1 || (cat coverage.txt && exit 1)
+          echo "::group::per-package coverage"
+          go tool cover -func=coverage.out | tail -1
+          echo "::endgroup::"
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: |
+            coverage.out
+            coverage.txt
+          retention-days: 7
