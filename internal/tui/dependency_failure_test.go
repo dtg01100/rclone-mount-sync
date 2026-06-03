@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -52,17 +53,41 @@ func TestApp_InitError_ConfigLoadFailure(t *testing.T) {
 }
 
 // TestApp_InitError_SystemdGeneratorFailure tests handling of systemd
-// generator initialization failure.
+// generator initialization failure. The test swaps the package-level
+// newSystemdGenerator function variable (set up in app.go) for one
+// that returns an error, then asserts that initializeServices returns
+// an AppInitError.
 //
-// Skipped by design: the production config.Load() falls back to defaults
-// when the config file is missing rather than erroring, and the systemd
-// generator's NewGenerator() does not fail in any portable way. A previous
-// version of this test set XDG_CONFIG_HOME=/proc/nonexistent and asserted
-// an AppInitError, but the production code returns AppInitDone in that
-// scenario (config falls back to defaults). The "test by XDG env var"
-// approach was a false-positive, so we now skip and document.
+// Previously skipped with the rationale that NewGenerator() doesn't
+// fail in any portable way. The fix here is to make the constructor
+// injectable — the same pattern the cli package uses with
+// loadGenerator. Production behavior is unchanged: the variable
+// defaults to systemd.NewGenerator.
 func TestApp_InitError_SystemdGeneratorFailure(t *testing.T) {
-	t.Skip("Skipped: production code falls back to defaults when the XDG config dir is missing, so this failure cannot be induced via env vars alone. See git history for the previous implementation.")
+	prev := newSystemdGenerator
+	t.Cleanup(func() { newSystemdGenerator = prev })
+
+	boom := errors.New("synthetic generator failure: no systemd user dir")
+	newSystemdGenerator = func() (*systemd.Generator, error) {
+		return nil, boom
+	}
+
+	app := NewApp("dev")
+	msg := app.initializeServices()
+
+	initErr, ok := msg.(AppInitError)
+	if !ok {
+		t.Fatalf("initializeServices() = %T, want AppInitError", msg)
+	}
+	if !errors.Is(initErr.Err, boom) {
+		t.Errorf("AppInitError.Err = %v, want wraps %v", initErr.Err, boom)
+	}
+	if app.generator != nil {
+		t.Error("app.generator should be nil when NewGenerator returns an error")
+	}
+	if app.manager != nil {
+		t.Error("app.manager should be nil when NewGenerator fails (no manager should be created)")
+	}
 }
 
 // TestApp_InitError_RcloneNotAvailable tests graceful handling when rclone is not in PATH.

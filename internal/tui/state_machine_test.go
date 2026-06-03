@@ -194,18 +194,33 @@ func TestApp_StateMachine_ScreenChangeMsg(t *testing.T) {
 // are handled without panicking and produce expected state changes.
 func TestApp_MessageHandling_AllMessageTypes(t *testing.T) {
 	t.Run("LoadingMsg", func(t *testing.T) {
-		// LoadingMsg is not currently handled in Update(); the production
-		// code initializes `app.loading = true` directly at startup. A
-		// previous version of this test only logged and never asserted;
-		// skipping instead keeps the gap visible without false coverage.
-		t.Skip("LoadingMsg is not handled in Update(); loading state is set elsewhere")
+		// LoadingMsg flips a.loading=true. Production now has a case
+		// in App.Update() that handles this; the test asserts the
+		// state change. Used to skip with a TODO.
+		app := NewApp("dev")
+		app.width = 80
+		app.height = 24
+		app.loading = false
+
+		_, _ = app.Update(LoadingMsg{})
+
+		if !app.loading {
+			t.Error("LoadingMsg should set a.loading = true")
+		}
 	})
 
 	t.Run("LoadingDoneMsg", func(t *testing.T) {
-		// Same as LoadingMsg: not handled. Future improvement: add a
-		// case in Update() to set loading=false and a View() overlay,
-		// then assert here.
-		t.Skip("LoadingDoneMsg is not handled in Update(); loading state is set elsewhere")
+		// LoadingDoneMsg flips a.loading=false. Used to skip.
+		app := NewApp("dev")
+		app.width = 80
+		app.height = 24
+		app.loading = true
+
+		_, _ = app.Update(LoadingDoneMsg{})
+
+		if app.loading {
+			t.Error("LoadingDoneMsg should set a.loading = false")
+		}
 	})
 
 	t.Run("AppInitError", func(t *testing.T) {
