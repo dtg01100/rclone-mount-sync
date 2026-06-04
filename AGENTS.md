@@ -129,7 +129,7 @@ make install PREFIX=/opt/rclone-mount-sync   # custom prefix
 | `internal/testutil/` | Shared test helpers (mocks, fixtures) |
 | `pkg/utils/` | Public utility functions (importable by external projects) |
 | `plans/` | Architecture and design documents |
-| `docs/` | (currently empty — see `README.md` and `CONTRIBUTING.md`) |
+| `docs/` | TUI-specific deep-dive documents (e.g. validation strategy) |
 | `.github/workflows/ci.yaml` | CI: `go vet` + `go test -v -count=1 ./...` on Go 1.23 |
 
 **Key entry points:**
