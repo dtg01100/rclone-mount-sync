@@ -260,6 +260,27 @@ func TestNewMountPointNotFoundError(t *testing.T) {
 	}
 }
 
+func TestNewMountPointNotDirectoryError(t *testing.T) {
+	cause := fmt.Errorf("not a directory")
+	err := NewMountPointNotDirectoryError("/mnt/file", cause)
+
+	if err.Code != ErrMountPointNotDirectory.Code {
+		t.Errorf("expected code %s, got %s", ErrMountPointNotDirectory.Code, err.Code)
+	}
+	if !testutil.ContainsString(err.Message, "/mnt/file") {
+		t.Errorf("expected message to contain mount point, got %s", err.Message)
+	}
+	if !testutil.ContainsString(err.Message, "not a directory") {
+		t.Errorf("expected message to mention 'not a directory', got %s", err.Message)
+	}
+	if !errors.Is(err.Cause, cause) {
+		t.Errorf("expected cause %v, got %v", cause, err.Cause)
+	}
+	if err.Suggestion == "" {
+		t.Error("expected non-empty suggestion")
+	}
+}
+
 func TestNewServiceNotFoundError(t *testing.T) {
 	cause := fmt.Errorf("unit not loaded")
 	err := NewServiceNotFoundError("rclone-mount-test", cause)
