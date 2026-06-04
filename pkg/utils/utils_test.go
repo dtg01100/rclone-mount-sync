@@ -428,3 +428,30 @@ func TestValidateMountPath(t *testing.T) {
 		})
 	}
 }
+
+func TestGenerateID(t *testing.T) {
+	// Length: 8 characters (per the contract — truncated UUID).
+	// Charset: 0-9a-f (hex, since uuid.New() emits hex).
+	// Uniqueness: a small sample should produce no duplicates.
+
+	const sample = 1000
+	seen := make(map[string]struct{}, sample)
+
+	for i := range sample {
+		id := GenerateID()
+
+		if len(id) != 8 {
+			t.Fatalf("GenerateID() length = %d, want 8 (got %q on iteration %d)", len(id), id, i)
+		}
+		for _, r := range id {
+			if r < '0' || (r > '9' && r < 'a') || r > 'f' {
+				t.Errorf("GenerateID() = %q, contains non-hex char %q", id, r)
+				break
+			}
+		}
+		if _, dup := seen[id]; dup {
+			t.Errorf("GenerateID() returned duplicate %q after %d iterations", id, i)
+		}
+		seen[id] = struct{}{}
+	}
+}
