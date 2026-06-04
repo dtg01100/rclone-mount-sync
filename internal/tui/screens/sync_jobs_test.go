@@ -2174,7 +2174,11 @@ func TestSyncJobDeleteConfirm_DeleteServiceOnly_HappyPath(t *testing.T) {
 	}
 }
 
-func TestSyncJobDeleteConfirm_DeleteServiceOnly_StopErrorReturnsErrorMsg(t *testing.T) {
+// TestSyncJobDeleteConfirm_DeleteServiceOnly_StopErrorTreatedAsWarning verifies
+// the behavior documented in further_work.md P1#4: a Stop failure on a
+// never-started service no longer blocks the delete. The dialog should log
+// a warning and continue, ultimately producing SyncJobDeletedMsg.
+func TestSyncJobDeleteConfirm_DeleteServiceOnly_StopErrorTreatedAsWarning(t *testing.T) {
 	job := models.SyncJobConfig{
 		ID:          "test1234",
 		Name:        "TestJob",
@@ -2190,12 +2194,12 @@ func TestSyncJobDeleteConfirm_DeleteServiceOnly_StopErrorReturnsErrorMsg(t *test
 	cmd := dialog.deleteServiceOnly()
 	msg := cmd()
 
-	errMsg, ok := msg.(SyncJobsErrorMsg)
+	deletedMsg, ok := msg.(SyncJobDeletedMsg)
 	if !ok {
-		t.Fatalf("msg = %T, want SyncJobsErrorMsg", msg)
+		t.Fatalf("msg = %T (%v), want SyncJobDeletedMsg (Stop error should be a warning, not fatal)", msg, msg)
 	}
-	if !strings.Contains(errMsg.Err.Error(), "failed to stop sync service") {
-		t.Errorf("error = %q, want it to mention 'failed to stop sync service'", errMsg.Err)
+	if deletedMsg.Name != "TestJob" {
+		t.Errorf("Name = %q, want %q", deletedMsg.Name, "TestJob")
 	}
 }
 
@@ -2228,14 +2232,17 @@ func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_HappyPath(t *testing.T) {
 	}
 }
 
-func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_StopTimerErrorReturnsErrorMsg(t *testing.T) {
+// TestSyncJobDeleteConfirm_DeleteServiceAndConfig_StopTimerErrorTreatedAsWarning
+// verifies the behavior documented in further_work.md P1#4: a StopTimer failure
+// no longer aborts the delete-and-cleanup path. The dialog should log a
+// warning and continue, ultimately producing SyncJobDeletedMsg.
+func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_StopTimerErrorTreatedAsWarning(t *testing.T) {
 	existingJob := createTestSyncJobs()[0]
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	cfg := createTestConfigWithSyncJobs()
 	dialog := NewSyncJobDeleteConfirm(existingJob)
 	dialog.manager = &systemd.MockManager{
-		// Stop logs to stderr and continues; StopTimer is the
-		// first hard-fail point in deleteServiceAndConfig.
+		// Stop and StopTimer both log to stderr and continue.
 		StopTimerErr: errors.New("synthetic stop-timer failure"),
 	}
 	dialog.generator = systemd.NewTestGenerator(t.TempDir())
@@ -2244,12 +2251,12 @@ func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_StopTimerErrorReturnsErrorM
 	cmd := dialog.deleteServiceAndConfig()
 	msg := cmd()
 
-	errMsg, ok := msg.(SyncJobsErrorMsg)
+	deletedMsg, ok := msg.(SyncJobDeletedMsg)
 	if !ok {
-		t.Fatalf("msg = %T, want SyncJobsErrorMsg", msg)
+		t.Fatalf("msg = %T (%v), want SyncJobDeletedMsg (StopTimer error should be a warning, not fatal)", msg, msg)
 	}
-	if !strings.Contains(errMsg.Err.Error(), "failed to stop timer") {
-		t.Errorf("error = %q, want it to mention 'failed to stop timer'", errMsg.Err)
+	if deletedMsg.Name != existingJob.Name {
+		t.Errorf("Name = %q, want %q", deletedMsg.Name, existingJob.Name)
 	}
 }
 

@@ -1881,7 +1881,11 @@ func TestDeleteConfirm_DeleteServiceOnly_HappyPath(t *testing.T) {
 	}
 }
 
-func TestDeleteConfirm_DeleteServiceOnly_StopErrorReturnsErrorMsg(t *testing.T) {
+// TestDeleteConfirm_DeleteServiceOnly_StopErrorTreatedAsWarning verifies the
+// behavior documented in further_work.md P1#11: a Stop failure no longer
+// aborts the delete (the service may not be loaded yet). The dialog should
+// log a warning and continue, ultimately producing MountDeletedMsg.
+func TestDeleteConfirm_DeleteServiceOnly_StopErrorTreatedAsWarning(t *testing.T) {
 	mount := models.MountConfig{
 		ID:         "test1234",
 		Name:       "TestMount",
@@ -1898,12 +1902,12 @@ func TestDeleteConfirm_DeleteServiceOnly_StopErrorReturnsErrorMsg(t *testing.T) 
 	cmd := dialog.deleteServiceOnly()
 	msg := cmd()
 
-	errMsg, ok := msg.(MountsErrorMsg)
+	deletedMsg, ok := msg.(MountDeletedMsg)
 	if !ok {
-		t.Fatalf("msg = %T, want MountsErrorMsg", msg)
+		t.Fatalf("msg = %T (%v), want MountDeletedMsg (Stop error should be a warning, not fatal)", msg, msg)
 	}
-	if !strings.Contains(errMsg.Err.Error(), "failed to stop mount") {
-		t.Errorf("error = %q, want it to mention 'failed to stop mount'", errMsg.Err)
+	if deletedMsg.Name != "TestMount" {
+		t.Errorf("Name = %q, want %q", deletedMsg.Name, "TestMount")
 	}
 }
 
