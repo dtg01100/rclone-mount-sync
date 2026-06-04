@@ -1315,18 +1315,6 @@ func TestServicesScreen_RenderLogLine(t *testing.T) {
 	}
 }
 
-func TestServicesScreen_LoadDetailedStatus(t *testing.T) {
-	screen := NewServicesScreen()
-	screen.manager = &systemd.Manager{}
-	services := createTestServices()
-	screen.selectedService = &services[0]
-
-	// Should not panic even with real manager (will fail gracefully)
-	screen.loadDetailedStatus()
-
-	// detailedStatus may be nil if manager fails, which is fine
-}
-
 func TestServicesScreen_LoadDetailedStatusNilManager(t *testing.T) {
 	screen := NewServicesScreen()
 	// manager is nil

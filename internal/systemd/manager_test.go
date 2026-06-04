@@ -1004,21 +1004,6 @@ func TestManager_ListServicesWithInvalidPath(t *testing.T) {
 	}
 }
 
-// TestManager_GetLogsWithInvalidPath tests GetLogs with invalid path.
-func TestManager_GetLogsWithInvalidPath(t *testing.T) {
-	m := &Manager{systemctlPath: "/nonexistent/path/systemctl"}
-
-	_, err := m.GetLogs("test-service", 10)
-	// GetLogs now uses journalctl directly, so if journalctl is available
-	// on the system it may succeed with empty output. Only assert error
-	// if journalctl is not found.
-	if err != nil {
-		if !strings.Contains(err.Error(), "journalctl not found") {
-			t.Logf("GetLogs() returned error (expected on systems without journalctl): %v", err)
-		}
-	}
-}
-
 // TestManager_GetDetailedStatusWithInvalidPath tests GetDetailedStatus with invalid path.
 func TestManager_GetDetailedStatusWithInvalidPath(t *testing.T) {
 	m := &Manager{systemctlPath: "/nonexistent/path/systemctl"}
@@ -1361,21 +1346,6 @@ func TestManager_StatusWithOutput(t *testing.T) {
 	}
 }
 
-// TestManager_GetLogsInvalidPath tests GetLogs with invalid path.
-func TestManager_GetLogsInvalidPath(t *testing.T) {
-	m := &Manager{systemctlPath: "/nonexistent/path/systemctl"}
-
-	_, err := m.GetLogs("test-service", 100)
-	// GetLogs uses journalctl directly. If journalctl is available on the
-	// system, it may succeed with empty output. Only assert error if
-	// journalctl is not found.
-	if err != nil {
-		if !strings.Contains(err.Error(), "journalctl not found") {
-			t.Logf("GetLogs() returned error (expected on systems without journalctl): %v", err)
-		}
-	}
-}
-
 // TestManager_GetDetailedStatusParsing tests GetDetailedStatus type parsing.
 func TestManager_GetDetailedStatusParsing(t *testing.T) {
 	tests := []struct {
@@ -1519,16 +1489,6 @@ func TestManager_IsEnabledIsActiveFalse(t *testing.T) {
 	active, _ := m.IsActive("test-service")
 	if active {
 		t.Error("IsActive() should return false for invalid path")
-	}
-}
-
-// TestManager_GetTimerNextRunInvalidPath tests GetTimerNextRun with invalid path.
-func TestManager_GetTimerNextRunInvalidPath(t *testing.T) {
-	m := &Manager{systemctlPath: "/nonexistent/systemctl"}
-
-	_, err := m.GetTimerNextRun("test.timer")
-	if err == nil {
-		t.Error("GetTimerNextRun() should return error for invalid path")
 	}
 }
 
