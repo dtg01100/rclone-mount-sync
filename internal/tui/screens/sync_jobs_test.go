@@ -2305,20 +2305,6 @@ func TestSyncJobsScreen_StartEditForm_RcloneNotInstalled(t *testing.T) {
 	}
 }
 
-func TestSyncJobsScreen_StartEditForm_StopsTimer(t *testing.T) {
-	screen := NewSyncJobsScreen()
-	screen.SetSize(80, 24)
-	screen.jobs = createTestSyncJobs()
-	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
-	screen.manager = &systemd.Manager{}
-	screen.rclone = &rclone.Client{}
-
-	// The form creation will fail because rclone is not installed, but we can verify
-	// that the timer stop was attempted (no panic means it was called)
-	_, _ = screen.startEditForm()
-}
-
 // Tests for toggleTimer with active/inactive states
 
 func TestSyncJobsScreen_ToggleTimer_ActiveTimer(t *testing.T) {

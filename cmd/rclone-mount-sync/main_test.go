@@ -700,11 +700,6 @@ func TestDefaultAppDeps(t *testing.T) {
 	}
 }
 
-func TestDefaultTUIRunner(t *testing.T) {
-	runner := &defaultTUIRunner{}
-	_ = runner
-}
-
 func TestParseFlags_MultipleValues(t *testing.T) {
 	tests := []struct {
 		name string

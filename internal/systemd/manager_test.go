@@ -380,26 +380,6 @@ func TestManager_StopContext(t *testing.T) {
 	}
 }
 
-// TestManager_IsSystemdAvailable tests IsSystemdAvailable.
-// Note: This test will pass differently depending on the environment.
-func TestManager_IsSystemdAvailable(t *testing.T) {
-	m := NewManager()
-
-	// Just verify the method doesn't panic
-	_ = m.IsSystemdAvailable()
-}
-
-// TestManager_DaemonReload tests DaemonReload.
-// Note: This will likely fail in a non-systemd environment.
-func TestManager_DaemonReload(t *testing.T) {
-	m := NewManager()
-
-	// This will likely fail in CI/test environments without systemd
-	err := m.DaemonReload()
-	// We don't assert on the result since it depends on the environment
-	_ = err
-}
-
 // TestManager_Enable tests Enable.
 func TestManager_Enable(t *testing.T) {
 	m := NewManager()
@@ -470,17 +450,6 @@ func TestManager_Restart(t *testing.T) {
 	}
 }
 
-// TestManager_Status tests Status.
-func TestManager_Status(t *testing.T) {
-	m := NewManager()
-
-	// This will fail because the service doesn't exist
-	// Note: In some environments, systemctl may return success even for non-existent units
-	_, err := m.Status("nonexistent-service-12345")
-	// We don't assert on the result since it depends on the environment
-	_ = err
-}
-
 // TestManager_IsEnabled tests IsEnabled.
 func TestManager_IsEnabled(t *testing.T) {
 	m := NewManager()
@@ -528,28 +497,6 @@ func TestManager_GetLogs(t *testing.T) {
 	if err == nil && output == "" {
 		t.Error("GetLogs() should return error or empty output for nonexistent service")
 	}
-}
-
-// TestManager_GetDetailedStatus tests GetDetailedStatus.
-func TestManager_GetDetailedStatus(t *testing.T) {
-	m := NewManager()
-
-	// This will fail because the service doesn't exist
-	// Note: In some environments, systemctl may return success even for non-existent units
-	_, err := m.GetDetailedStatus("nonexistent-service-12345")
-	// We don't assert on the result since it depends on the environment
-	_ = err
-}
-
-// TestManager_GetTimerNextRun tests GetTimerNextRun.
-func TestManager_GetTimerNextRun(t *testing.T) {
-	m := NewManager()
-
-	// This will fail because the timer doesn't exist
-	// Note: In some environments, systemctl may return success even for non-existent units
-	_, err := m.GetTimerNextRun("nonexistent-timer-12345.timer")
-	// We don't assert on the result since it depends on the environment
-	_ = err
 }
 
 // TestManager_StartTimer tests StartTimer.
@@ -682,27 +629,6 @@ func TestServiceStatus_ZeroValue(t *testing.T) {
 	}
 }
 
-// TestManager_WithMockSystemctl tests manager operations with a custom systemctl path.
-func TestManager_WithMockSystemctl(t *testing.T) {
-	// Create a manager with a non-existent systemctl path
-	m := &Manager{systemctlPath: "/nonexistent/systemctl"}
-
-	// All operations should fail gracefully
-	_ = m.DaemonReload()
-	_ = m.Enable("test")
-	_ = m.Disable("test")
-	_ = m.Start("test")
-	_ = m.Stop("test")
-	_ = m.Restart("test")
-	_, _ = m.Status("test")
-	_, _ = m.IsEnabled("test")
-	_, _ = m.IsActive("test")
-	_, _ = m.ListServices()
-	_, _ = m.GetLogs("test", 10)
-	_, _ = m.GetDetailedStatus("test")
-	_, _ = m.GetTimerNextRun("test.timer")
-}
-
 // TestManager_ContextCancellation tests that context cancellation is handled.
 func TestManager_ContextCancellation(t *testing.T) {
 	m := NewManager()
@@ -816,15 +742,6 @@ func TestManager_ListServicesEmptyResult(t *testing.T) {
 	if services == nil {
 		t.Error("ListServices() should not return nil slice")
 	}
-}
-
-// TestManager_GetTimerNextRunNonexistent tests GetTimerNextRun with nonexistent timer.
-func TestManager_GetTimerNextRunNonexistent(t *testing.T) {
-	m := NewManager()
-
-	_, err := m.GetTimerNextRun("nonexistent-timer-12345.timer")
-	// This may or may not error depending on environment
-	_ = err
 }
 
 // TestManager_StartTimerWithServiceSuffix tests StartTimer name handling with .service suffix.

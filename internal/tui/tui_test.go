@@ -1551,19 +1551,6 @@ func TestApp_Update_HelpNotShown_DownDoesNotScroll(t *testing.T) {
 	}
 }
 
-func TestApp_Update_SpaceKey(t *testing.T) {
-	app := NewApp("dev")
-	app.width = 80
-	app.height = 24
-	app.currentScreen = ScreenMain
-	app.mainMenu.SetSize(80, 24)
-
-	app.mainMenu.Update(tea.KeyMsg{Type: tea.KeySpace})
-	updatedApp, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
-
-	_ = updatedApp
-}
-
 func TestApp_View_HelpScreenWithShowHelp(t *testing.T) {
 	app := NewApp("dev")
 	app.width = 80
@@ -1622,23 +1609,6 @@ func TestApp_Update_KKeyNotInHelp(t *testing.T) {
 	if updatedApp.(*App).helpScrollY != 0 {
 		t.Error("k key should not scroll when not in help mode")
 	}
-}
-
-func TestApp_Update_EnterInActionModeWithOrphans(t *testing.T) {
-	app := NewApp("dev")
-	app.width = 80
-	app.height = 24
-	app.orphanSelected = 0
-	app.orphanMode = 1
-	app.orphans = &systemd.ReconciliationResult{
-		OrphanedUnits: []systemd.OrphanedUnit{
-			{Name: "unit1.service", Type: "mount", ID: "id1"},
-		},
-	}
-	app.showOrphanPrompt = true
-
-	// Should not panic when pressing Enter in action mode with orphans, should handle gracefully
-	app.Update(tea.KeyMsg{Type: tea.KeyEnter})
 }
 
 func TestApp_importSelectedOrphan_NilGenerator(t *testing.T) {

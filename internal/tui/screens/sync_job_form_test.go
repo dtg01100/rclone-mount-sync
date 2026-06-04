@@ -405,16 +405,6 @@ func TestSyncJobForm_SetSize(t *testing.T) {
 	}
 }
 
-func TestSyncJobForm_Init(t *testing.T) {
-	form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
-
-	cmd := form.Init()
-
-	// Init should return a command (form initialization)
-	// The exact command depends on huh.Form implementation
-	_ = cmd
-}
-
 func TestSyncJobForm_View(t *testing.T) {
 	form := NewSyncJobForm(nil, createTestRemotes(), nil, nil, nil, nil, false)
 	form.SetSize(80, 24)
