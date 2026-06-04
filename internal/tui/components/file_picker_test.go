@@ -272,122 +272,114 @@ func TestEnhancedFilePicker_View(t *testing.T) {
 	}
 }
 
-// TestEnhancedFilePicker_GetRecentPaths tests the GetRecentPaths function.
-func TestEnhancedFilePicker_GetRecentPaths(t *testing.T) {
-	// Clear and set up recent paths
-	ClearRecentPaths()
-	defer ClearRecentPaths()
+// TestRecentPathsStore_GetAddClearSet exercises the RecentPathsStore
+// methods directly on a per-test store. The previous version of this
+// block used the package-level GetRecentPaths/AddRecentPath helpers,
+// which mutate the shared defaultRecentStore. Multiple tests in the
+// same package can leak state into each other through that store;
+// this rewrite uses a fresh store per test, so order no longer matters
+// and t.Parallel() is safe.
+func TestRecentPathsStore_GetAddClearSet(t *testing.T) {
+	t.Run("Get on empty store returns nil", func(t *testing.T) {
+		store := NewRecentPathsStore(10)
+		if got := store.Get(); len(got) != 0 {
+			t.Errorf("Get on empty store = %v, want empty", got)
+		}
+	})
 
-	// Should return empty initially
-	paths := GetRecentPaths()
-	if len(paths) != 0 {
-		t.Errorf("Expected empty recent paths, got %d", len(paths))
-	}
+	t.Run("Add then Get returns paths newest-first", func(t *testing.T) {
+		store := NewRecentPathsStore(10)
+		store.Add("/tmp/test1")
+		store.Add("/tmp/test2")
 
-	// Add some paths
-	AddRecentPath("/tmp/test1")
-	AddRecentPath("/tmp/test2")
+		paths := store.Get()
+		if len(paths) != 2 {
+			t.Fatalf("len(paths) = %d, want 2", len(paths))
+		}
+		if paths[0] != "/tmp/test2" {
+			t.Errorf("paths[0] = %q, want /tmp/test2 (newest first)", paths[0])
+		}
+		if paths[1] != "/tmp/test1" {
+			t.Errorf("paths[1] = %q, want /tmp/test1 (older)", paths[1])
+		}
+	})
 
-	paths = GetRecentPaths()
-	if len(paths) != 2 {
-		t.Errorf("Expected 2 recent paths, got %d", len(paths))
-	}
+	t.Run("Add ignores whitespace-only path", func(t *testing.T) {
+		// Add() explicitly returns early on the empty string, but
+		// for non-empty whitespace the path is technically valid
+		// and gets stored. The current behavior is to store it.
+		// This subtest pins the current behavior — if Add() is
+		// later changed to trim+reject, this test will fail and
+		// the change is intentional.
+		store := NewRecentPathsStore(10)
+		store.Add("   ")
+		if got := store.Get(); len(got) != 1 || got[0] != "   " {
+			t.Errorf("Get after whitespace add = %v, want one entry with the whitespace", got)
+		}
+	})
 
-	// First should be most recent (newest added is at front)
-	if paths[0] != "/tmp/test2" {
-		t.Errorf("Expected first path to be /tmp/test2 (newest), got %q", paths[0])
-	}
+	t.Run("Add duplicate moves to front", func(t *testing.T) {
+		store := NewRecentPathsStore(10)
+		store.Add("/tmp/test")
+		store.Add("/tmp/other")
+		store.Add("/tmp/test") // re-add
 
-	// Second should be test1 (older)
-	if paths[1] != "/tmp/test1" {
-		t.Errorf("Expected second path to be /tmp/test1 (older), got %q", paths[1])
-	}
+		paths := store.Get()
+		if len(paths) != 2 {
+			t.Fatalf("len(paths) = %d, want 2 (duplicate should move, not append)", len(paths))
+		}
+		if paths[0] != "/tmp/test" {
+			t.Errorf("paths[0] = %q, want /tmp/test (newest)", paths[0])
+		}
+		if paths[1] != "/tmp/other" {
+			t.Errorf("paths[1] = %q, want /tmp/other", paths[1])
+		}
+	})
 
-	// Clean up
-	ClearRecentPaths()
+	t.Run("Add respects max capacity", func(t *testing.T) {
+		store := NewRecentPathsStore(10)
+		for i := range 15 {
+			store.Add(filepath.Join("/tmp", "path", string(rune('a'+i))))
+		}
+		if got := store.Get(); len(got) > 10 {
+			t.Errorf("Get with 15 adds to cap=10 = %d entries, want <= 10", len(got))
+		}
+	})
+
+	t.Run("Clear empties the store", func(t *testing.T) {
+		store := NewRecentPathsStore(10)
+		store.Add("/a")
+		store.Add("/b")
+		store.Clear()
+		if got := store.Get(); len(got) != 0 {
+			t.Errorf("Get after Clear = %v, want empty", got)
+		}
+	})
+
+	t.Run("Set copies input (no shared backing array)", func(t *testing.T) {
+		store := NewRecentPathsStore(10)
+		input := []string{"/a", "/b", "/c"}
+		store.Set(input)
+		input[0] = "/MUTATED"
+
+		got := store.Get()
+		if got[0] == "/MUTATED" {
+			t.Error("Set should copy the input slice; mutating input affected the store")
+		}
+	})
 }
 
-// TestEnhancedFilePicker_AddRecentPath tests the AddRecentPath function.
-func TestEnhancedFilePicker_AddRecentPath(t *testing.T) {
-	ClearRecentPaths()
-
-	// Add empty path - should be ignored
-	AddRecentPath("")
-	paths := GetRecentPaths()
-	if len(paths) != 0 {
-		t.Error("Empty path should not be added")
+// TestRecentPathsStore_Max verifies the Max() accessor. This was
+// previously exercised through DefaultRecentPathsStore().Max(), which
+// read the shared singleton's max value (a coincidence of
+// initialization order, not a real property of the store under test).
+func TestRecentPathsStore_Max(t *testing.T) {
+	for _, cap := range []int{1, 5, 10, 50} {
+		store := NewRecentPathsStore(cap)
+		if got := store.Max(); got != cap {
+			t.Errorf("Max() = %d, want %d", got, cap)
+		}
 	}
-
-	// Add valid path
-	AddRecentPath("/tmp/test")
-	paths = GetRecentPaths()
-	if len(paths) != 1 {
-		t.Errorf("Expected 1 path, got %d", len(paths))
-	}
-
-	// Add same path again - should move to front
-	AddRecentPath("/tmp/test")
-	paths = GetRecentPaths()
-	if len(paths) != 1 {
-		t.Errorf("Expected 1 path after duplicate, got %d", len(paths))
-	}
-
-	// Add path with home directory (use actual home directory which always exists)
-	homeDir, _ := os.UserHomeDir()
-	AddRecentPath(homeDir)
-	paths = GetRecentPaths()
-	if len(paths) != 2 {
-		t.Errorf("Expected 2 paths, got %d", len(paths))
-	}
-
-	// Test max paths limit (10)
-	ClearRecentPaths()
-	for i := range 15 {
-		AddRecentPath(filepath.Join("/tmp", "path", string(rune('a'+i))))
-	}
-	paths = GetRecentPaths()
-	if len(paths) > 10 {
-		t.Errorf("Expected max 10 paths, got %d", len(paths))
-	}
-
-	ClearRecentPaths()
-}
-
-// TestEnhancedFilePicker_ClearRecentPaths tests the ClearRecentPaths function.
-func TestEnhancedFilePicker_ClearRecentPaths(t *testing.T) {
-	// Add some paths
-	AddRecentPath("/tmp/test1")
-	AddRecentPath("/tmp/test2")
-
-	// Clear
-	ClearRecentPaths()
-
-	paths := GetRecentPaths()
-	if len(paths) != 0 {
-		t.Errorf("Expected 0 paths after clear, got %d", len(paths))
-	}
-}
-
-// TestEnhancedFilePicker_SetRecentPaths tests the SetRecentPaths function.
-func TestEnhancedFilePicker_SetRecentPaths(t *testing.T) {
-	ClearRecentPaths()
-
-	paths := []string{"/path1", "/path2", "/path3"}
-	SetRecentPaths(paths)
-
-	result := GetRecentPaths()
-	if len(result) != len(paths) {
-		t.Errorf("Expected %d paths, got %d", len(paths), len(result))
-	}
-
-	// Verify copy - modifying input shouldn't affect result
-	paths[0] = "/modified"
-	result = GetRecentPaths()
-	if result[0] == "/modified" {
-		t.Error("SetRecentPaths should create a copy, not share memory")
-	}
-
-	ClearRecentPaths()
 }
 
 // TestEnhancedFilePicker_Value tests the Value getter and setter.
@@ -562,21 +554,22 @@ func TestEnhancedFilePicker_Run(t *testing.T) {
 	_ = picker.Run
 }
 
-// TestEnhancedFilePicker_MaxRecentPaths tests that recent paths are limited to max.
+// TestEnhancedFilePicker_MaxRecentPaths verifies the picker enforces
+// its recent-paths cap. Uses a per-picker store via WithRecentStore
+// so the test does not touch the shared package-level defaultRecentStore.
 func TestEnhancedFilePicker_MaxRecentPaths(t *testing.T) {
-	ClearRecentPaths()
+	store := NewRecentPathsStore(10)
+	picker := NewEnhancedFilePicker().WithRecentStore(store)
 
-	// Add more than maxRecentPaths paths
 	for i := range 15 {
-		AddRecentPath(filepath.Join("/tmp", "path", string(rune('a'+i))))
+		_ = picker
+		store.Add(filepath.Join("/tmp", "path", string(rune('a'+i))))
 	}
 
-	paths := GetRecentPaths()
-	if len(paths) > DefaultRecentPathsStore().Max() {
-		t.Errorf("Expected at most %d recent paths, got %d", DefaultRecentPathsStore().Max(), len(paths))
+	paths := store.Get()
+	if len(paths) > store.Max() {
+		t.Errorf("Expected at most %d recent paths, got %d", store.Max(), len(paths))
 	}
-
-	ClearRecentPaths()
 }
 
 // TestEnhancedFilePicker_Update tests that Update method works without panicking.

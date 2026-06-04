@@ -23,8 +23,22 @@ type FileEntry struct {
 	Selected bool
 }
 
-// recentPathsStore stores recently visited paths for the quick jump feature.
-// It is managed per-instance through RecentPathsStore for thread safety.
+// recentPathsStore is the global default store used only when a caller
+// does not provide one via NewEnhancedFilePicker().WithRecentStore()
+// or via the package-level helpers.
+//
+// IMPORTANT: this is a shared, package-level singleton. It is NOT
+// safe for concurrent test access (the Go test runner will run
+// tests in a package serially today, but t.Parallel() would expose
+// the race). The store itself is goroutine-safe for production
+// reads/writes — the issue is that tests can leak state between
+// runs when they touch it.
+//
+// New code should use per-instance stores (via WithRecentStore on
+// the picker, or by calling RecentPathsStore methods directly on a
+// NewRecentPathsStore). The package-level helpers (GetRecentPaths,
+// AddRecentPath, etc.) are kept for backward compatibility with
+// existing call sites but should not be used in tests.
 var defaultRecentStore = &RecentPathsStore{
 	paths: make([]string, 0),
 	max:   10,
@@ -38,6 +52,13 @@ type RecentPathsStore struct {
 }
 
 // DefaultRecentPathsStore returns the global default store.
+//
+// Prefer per-instance stores (NewRecentPathsStore + WithRecentStore)
+// in production code where possible. This is provided for callers
+// that need a shared store across multiple components.
+//
+// WARNING: this store is shared package-level state. Tests should
+// not call this; they should use a per-test NewRecentPathsStore.
 func DefaultRecentPathsStore() *RecentPathsStore {
 	return defaultRecentStore
 }
@@ -141,13 +162,19 @@ type EnhancedFilePicker struct {
 }
 
 // NewEnhancedFilePicker creates a new enhanced file picker.
+//
+// The picker gets a fresh per-instance RecentPathsStore so multiple
+// pickers (and tests using multiple pickers) don't share state.
+// Callers that need a different store (e.g. to share state with
+// other code) can override with WithRecentStore. Callers that want
+// the package-level singleton can use DefaultRecentPathsStore().
 func NewEnhancedFilePicker() *EnhancedFilePicker {
 	return &EnhancedFilePicker{
 		dirAllowed:  true,
 		fileAllowed: true,
 		showHidden:  false,
 		focused:     true,
-		recentStore: defaultRecentStore,
+		recentStore: NewRecentPathsStore(10),
 	}
 }
 
@@ -610,23 +637,37 @@ func (p *EnhancedFilePicker) RunAccessible(w io.Writer, r io.Reader) error {
 var _ huh.Field = (*EnhancedFilePicker)(nil)
 
 // Recent path management functions (package-level convenience wrappers)
+//
+// These wrap the default store for backward compatibility with
+// existing call sites. They are NOT safe for use in tests because
+// the default store is shared package-level state. Tests should
+// construct a NewRecentPathsStore and call methods on it directly,
+// or use WithRecentStore on a picker.
 
 // GetRecentPaths returns the list of recently visited paths from the default store.
+//
+// Tests should not use this; see comment above.
 func GetRecentPaths() []string {
 	return defaultRecentStore.Get()
 }
 
 // AddRecentPath adds a path to the default recent paths list.
+//
+// Tests should not use this; see comment above.
 func AddRecentPath(path string) {
 	defaultRecentStore.Add(path)
 }
 
 // ClearRecentPaths clears all recent paths in the default store.
+//
+// Tests should not use this; see comment above.
 func ClearRecentPaths() {
 	defaultRecentStore.Clear()
 }
 
 // SetRecentPaths sets the default recent paths list (used for loading from config).
+//
+// Tests should not use this; see comment above.
 func SetRecentPaths(paths []string) {
 	defaultRecentStore.Set(paths)
 }
