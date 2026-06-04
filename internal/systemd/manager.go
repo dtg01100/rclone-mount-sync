@@ -541,9 +541,20 @@ func (m *Manager) SystemctlPath() string {
 // ParseUnitID extracts the ID from a unit name like "rclone-mount-a1b2c3d4.service".
 // Returns the ID and unit type ("mount" or "sync"). Returns empty strings if parsing fails.
 func ParseUnitID(unitName string) (id string, unitType string) {
-	// Remove .service or .timer suffix
-	name := strings.TrimSuffix(unitName, ".service")
-	name = strings.TrimSuffix(name, ".timer")
+	// Strip a single recognized suffix (.service or .timer). If the
+	// result still ends in a recognized suffix the input was a
+	// double-suffix (e.g. "x.service.timer") and we cannot extract a
+	// valid ID — reject it.
+	name := unitName
+	switch {
+	case strings.HasSuffix(name, ".service"):
+		name = strings.TrimSuffix(name, ".service")
+	case strings.HasSuffix(name, ".timer"):
+		name = strings.TrimSuffix(name, ".timer")
+	}
+	if strings.HasSuffix(name, ".service") || strings.HasSuffix(name, ".timer") {
+		return "", ""
+	}
 
 	// Parse rclone-{type}-{id}
 	if strings.HasPrefix(name, "rclone-mount-") {

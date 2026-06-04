@@ -1336,6 +1336,66 @@ func TestParseUnitID_AllFormats(t *testing.T) {
 	}
 }
 
+// TestParseUnitID_DoubleSuffix covers the defensive behavior added in
+// further_work.md P1#2: only one suffix is stripped, and a double-suffix
+// input (e.g. "x.service.timer") is rejected as malformed. This avoids
+// silently producing an ID that contains a leaked inner suffix.
+func TestParseUnitID_DoubleSuffix(t *testing.T) {
+	tests := []struct {
+		name     string
+		unitName string
+		wantID   string
+		wantType string
+	}{
+		// Sanity: single recognized suffix is still stripped normally.
+		{
+			name:     "single .service suffix",
+			unitName: "rclone-mount-abc12345.service",
+			wantID:   "abc12345",
+			wantType: "mount",
+		},
+		{
+			name:     "single .timer suffix",
+			unitName: "rclone-sync-abc12345.timer",
+			wantID:   "abc12345",
+			wantType: "sync",
+		},
+		// Defensive: double-suffix inputs (with or without the rclone
+		// prefix) are rejected. Otherwise the function would silently
+		// return an ID containing the inner suffix.
+		{
+			name:     "double .service.timer with rclone-mount prefix",
+			unitName: "rclone-mount-abc12345.service.timer",
+			wantID:   "",
+			wantType: "",
+		},
+		{
+			name:     "double .timer.service with rclone-sync prefix",
+			unitName: "rclone-sync-abc12345.timer.service",
+			wantID:   "",
+			wantType: "",
+		},
+		{
+			name:     "double .service.timer without rclone prefix",
+			unitName: "foo.service.timer",
+			wantID:   "",
+			wantType: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id, unitType := ParseUnitID(tt.unitName)
+			if id != tt.wantID {
+				t.Errorf("ParseUnitID(%q) id = %q, want %q", tt.unitName, id, tt.wantID)
+			}
+			if unitType != tt.wantType {
+				t.Errorf("ParseUnitID(%q) type = %q, want %q", tt.unitName, unitType, tt.wantType)
+			}
+		})
+	}
+}
+
 // TestManager_StatusWithOutput tests Status method parsing.
 func TestManager_StatusWithOutput(t *testing.T) {
 	m := &Manager{systemctlPath: "/nonexistent/path/systemctl"}
