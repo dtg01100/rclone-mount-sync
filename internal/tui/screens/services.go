@@ -235,12 +235,9 @@ func (s *ServicesScreen) loadServices() tea.Msg {
 			timerActive := timerStatus != nil && timerStatus.Active
 
 			// Get next run time
+			// Note: Error from GetTimerNextRun is intentionally ignored;
+			// nextRun is left as the zero time which signals "unknown next run".
 			nextRun, _ := s.manager.GetTimerNextRun(timerName)
-			// Note: Errors from Status and GetTimerNextRun are intentionally ignored.
-			// The service info will show "inactive" state when timer status is unavailable,
-			// and nextRun will be zero time (displayed as "unknown"). This is the desired
-			// fallback behavior - we don't want to fail the entire load if one timer
-			// query fails.
 
 			services = append(services, ServiceInfo{
 				Name:        serviceName,
