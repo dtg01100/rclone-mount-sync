@@ -8,15 +8,9 @@ import (
 )
 
 func TestGetUserSystemdPath_NoConfigDir(t *testing.T) {
-	originalHome := os.Getenv("HOME")
-	originalXdgConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	defer func() {
-		_ = os.Setenv("HOME", originalHome)
-		_ = os.Setenv("XDG_CONFIG_HOME", originalXdgConfigHome)
-	}()
-
-	_ = os.Unsetenv("HOME")
-	_ = os.Unsetenv("XDG_CONFIG_HOME")
+	// t.Setenv to "" clears the var for the duration of the test.
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	_, err := GetUserSystemdPath()
 	if err == nil {
@@ -25,11 +19,8 @@ func TestGetUserSystemdPath_NoConfigDir(t *testing.T) {
 }
 
 func TestGetUserSystemdPath_WithEnv(t *testing.T) {
-	originalXdgConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", originalXdgConfigHome) }()
-
 	tmpDir := t.TempDir()
-	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	path, err := GetUserSystemdPath()
 	if err != nil {
@@ -43,15 +34,8 @@ func TestGetUserSystemdPath_WithEnv(t *testing.T) {
 }
 
 func TestExpandPath_NoHomeDir(t *testing.T) {
-	originalHome := os.Getenv("HOME")
-	originalUserEnv := os.Getenv("USER")
-	defer func() {
-		_ = os.Setenv("HOME", originalHome)
-		_ = os.Setenv("USER", originalUserEnv)
-	}()
-
-	_ = os.Unsetenv("HOME")
-	_ = os.Unsetenv("USER")
+	t.Setenv("HOME", "")
+	t.Setenv("USER", "")
 
 	input := "~/Documents"
 	got := expandPath(input)
@@ -62,10 +46,7 @@ func TestExpandPath_NoHomeDir(t *testing.T) {
 }
 
 func TestExpandPath_NoHomeDirWithAbsolutePath(t *testing.T) {
-	originalHome := os.Getenv("HOME")
-	defer func() { _ = os.Setenv("HOME", originalHome) }()
-
-	_ = os.Unsetenv("HOME")
+	t.Setenv("HOME", "")
 
 	input := "/absolute/path"
 	got := expandPath(input)
@@ -76,10 +57,7 @@ func TestExpandPath_NoHomeDirWithAbsolutePath(t *testing.T) {
 }
 
 func TestExpandPath_NoHomeDirWithRelativePath(t *testing.T) {
-	originalHome := os.Getenv("HOME")
-	defer func() { _ = os.Setenv("HOME", originalHome) }()
-
-	_ = os.Unsetenv("HOME")
+	t.Setenv("HOME", "")
 
 	input := "relative/path"
 	got := expandPath(input)
@@ -90,15 +68,8 @@ func TestExpandPath_NoHomeDirWithRelativePath(t *testing.T) {
 }
 
 func TestGetLogDir_NoHomeDir(t *testing.T) {
-	originalHome := os.Getenv("HOME")
-	originalXdgStateHome := os.Getenv("XDG_STATE_HOME")
-	defer func() {
-		_ = os.Setenv("HOME", originalHome)
-		_ = os.Setenv("XDG_STATE_HOME", originalXdgStateHome)
-	}()
-
-	_ = os.Unsetenv("HOME")
-	_ = os.Unsetenv("XDG_STATE_HOME")
+	t.Setenv("HOME", "")
+	t.Setenv("XDG_STATE_HOME", "")
 
 	_, err := getLogDir()
 	if err == nil {
@@ -111,16 +82,13 @@ func TestGetLogDir_MkdirAllPermissionDenied(t *testing.T) {
 		t.Skip("Skipping permission test when running as root")
 	}
 
-	originalXdgStateHome := os.Getenv("XDG_STATE_HOME")
-	defer func() { _ = os.Setenv("XDG_STATE_HOME", originalXdgStateHome) }()
-
 	tmpDir := t.TempDir()
 	readonlyDir := filepath.Join(tmpDir, "readonly")
 	if err := os.MkdirAll(readonlyDir, 0555); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create readonly dir: %v", err)
 	}
 
-	_ = os.Setenv("XDG_STATE_HOME", readonlyDir)
+	t.Setenv("XDG_STATE_HOME", readonlyDir)
 
 	_, err := getLogDir()
 	if err == nil {
@@ -133,16 +101,13 @@ func TestGetLogDir_XdgStateHomeMkdirError(t *testing.T) {
 		t.Skip("Skipping permission test when running as root")
 	}
 
-	originalXdgStateHome := os.Getenv("XDG_STATE_HOME")
-	defer func() { _ = os.Setenv("XDG_STATE_HOME", originalXdgStateHome) }()
-
 	tmpDir := t.TempDir()
 	filePath := filepath.Join(tmpDir, "file")
 	if err := os.WriteFile(filePath, []byte("test"), 0644); err != nil { //nolint:gosec
 		t.Fatalf("Failed to create file: %v", err)
 	}
 
-	_ = os.Setenv("XDG_STATE_HOME", filePath)
+	t.Setenv("XDG_STATE_HOME", filePath)
 
 	_, err := getLogDir()
 	if err == nil {
@@ -151,18 +116,9 @@ func TestGetLogDir_XdgStateHomeMkdirError(t *testing.T) {
 }
 
 func TestGetRcloneConfigPath_NoHomeDir(t *testing.T) {
-	originalHome := os.Getenv("HOME")
-	originalUser := os.Getenv("USER")
-	originalRcloneConfig := os.Getenv("RCLONE_CONFIG")
-	defer func() {
-		_ = os.Setenv("HOME", originalHome)
-		_ = os.Setenv("USER", originalUser)
-		_ = os.Setenv("RCLONE_CONFIG", originalRcloneConfig)
-	}()
-
-	_ = os.Unsetenv("HOME")
-	_ = os.Unsetenv("RCLONE_CONFIG")
-	_ = os.Setenv("USER", "testuser")
+	t.Setenv("HOME", "")
+	t.Setenv("RCLONE_CONFIG", "")
+	t.Setenv("USER", "testuser")
 
 	path := getRcloneConfigPath()
 
@@ -172,18 +128,9 @@ func TestGetRcloneConfigPath_NoHomeDir(t *testing.T) {
 }
 
 func TestGetRcloneConfigPath_NoHomeDirNoUser(t *testing.T) {
-	originalHome := os.Getenv("HOME")
-	originalUser := os.Getenv("USER")
-	originalRcloneConfig := os.Getenv("RCLONE_CONFIG")
-	defer func() {
-		_ = os.Setenv("HOME", originalHome)
-		_ = os.Setenv("USER", originalUser)
-		_ = os.Setenv("RCLONE_CONFIG", originalRcloneConfig)
-	}()
-
-	_ = os.Unsetenv("HOME")
-	_ = os.Unsetenv("USER")
-	_ = os.Unsetenv("RCLONE_CONFIG")
+	t.Setenv("HOME", "")
+	t.Setenv("USER", "")
+	t.Setenv("RCLONE_CONFIG", "")
 
 	path := getRcloneConfigPath()
 
@@ -193,11 +140,8 @@ func TestGetRcloneConfigPath_NoHomeDirNoUser(t *testing.T) {
 }
 
 func TestGetRcloneConfigPath_EnvOverride(t *testing.T) {
-	originalRcloneConfig := os.Getenv("RCLONE_CONFIG")
-	defer func() { _ = os.Setenv("RCLONE_CONFIG", originalRcloneConfig) }()
-
 	customPath := "/custom/path/rclone.conf"
-	_ = os.Setenv("RCLONE_CONFIG", customPath)
+	t.Setenv("RCLONE_CONFIG", customPath)
 
 	path := getRcloneConfigPath()
 
@@ -265,11 +209,8 @@ func TestSanitizeName_AllSpecialChars(t *testing.T) {
 }
 
 func TestGetLogDir_Success(t *testing.T) {
-	originalXdgStateHome := os.Getenv("XDG_STATE_HOME")
-	defer func() { _ = os.Setenv("XDG_STATE_HOME", originalXdgStateHome) }()
-
 	tmpDir := t.TempDir()
-	_ = os.Setenv("XDG_STATE_HOME", tmpDir)
+	t.Setenv("XDG_STATE_HOME", tmpDir)
 
 	dir, err := getLogDir()
 	if err != nil {
@@ -286,16 +227,9 @@ func TestGetLogDir_Success(t *testing.T) {
 }
 
 func TestGetLogDir_UsesHomeWhenNoXdgStateHome(t *testing.T) {
-	originalHome := os.Getenv("HOME")
-	originalXdgStateHome := os.Getenv("XDG_STATE_HOME")
-	defer func() {
-		_ = os.Setenv("HOME", originalHome)
-		_ = os.Setenv("XDG_STATE_HOME", originalXdgStateHome)
-	}()
-
 	tmpDir := t.TempDir()
-	_ = os.Setenv("HOME", tmpDir)
-	_ = os.Unsetenv("XDG_STATE_HOME")
+	t.Setenv("HOME", tmpDir)
+	t.Setenv("XDG_STATE_HOME", "")
 
 	dir, err := getLogDir()
 	if err != nil {

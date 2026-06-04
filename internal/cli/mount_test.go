@@ -524,9 +524,10 @@ func TestMountCreateSaveConfigError_RealSaveFailure(t *testing.T) {
 		t.Fatalf("create read-only dir: %v", err)
 	}
 
-	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	t.Cleanup(func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) })
-	_ = os.Setenv("XDG_CONFIG_HOME", readOnlyDir)
+	// PersistentPreRun and runMountCreate call loadConfig()
+	// directly, so loadConfig overrides are inert. Set
+	// XDG_CONFIG_HOME directly: t.Setenv handles save+restore.
+	t.Setenv("XDG_CONFIG_HOME", readOnlyDir)
 
 	if err := runMountCreate(nil, nil); err == nil {
 		t.Fatal("expected runMountCreate to fail when cfg.Save() fails")

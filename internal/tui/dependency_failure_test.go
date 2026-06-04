@@ -27,12 +27,8 @@ func TestApp_InitError_ConfigLoadFailure(t *testing.T) {
 		t.Fatalf("cannot create restricted directory: %v", err)
 	}
 
-	// Save and restore XDG_CONFIG_HOME
-	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	t.Cleanup(func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) })
-
-	// Point to restricted directory
-	_ = os.Setenv("XDG_CONFIG_HOME", restrictedDir)
+	// Save and restore XDG_CONFIG_HOME; t.Setenv handles both at once.
+	t.Setenv("XDG_CONFIG_HOME", restrictedDir)
 
 	app := NewApp("dev")
 	msg := app.initializeServices()
@@ -92,12 +88,9 @@ func TestApp_InitError_SystemdGeneratorFailure(t *testing.T) {
 
 // TestApp_InitError_RcloneNotAvailable tests graceful handling when rclone is not in PATH.
 func TestApp_InitError_RcloneNotAvailable(t *testing.T) {
-	oldPath := os.Getenv("PATH")
-	t.Cleanup(func() { _ = os.Setenv("PATH", oldPath) })
-
 	// Set PATH to only include a non-existent directory.
 	tmpDir := t.TempDir()
-	_ = os.Setenv("PATH", tmpDir)
+	t.Setenv("PATH", tmpDir)
 
 	app := NewApp("dev")
 	msg := app.initializeServices()
@@ -130,9 +123,7 @@ func TestApp_InitError_ConfigEmpty(t *testing.T) {
 		t.Fatalf("Failed to write config: %v", err)
 	}
 
-	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
-	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	app := NewApp("dev")
 	msg := app.initializeServices()
@@ -172,9 +163,7 @@ sync_jobs: []
 		t.Fatalf("Failed to write config: %v", err)
 	}
 
-	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
-	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	app := NewApp("dev")
 	msg := app.initializeServices()
@@ -416,9 +405,7 @@ func TestApp_Services_SetServices(t *testing.T) {
 		t.Fatalf("Failed to write config: %v", err)
 	}
 
-	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) }()
-	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	app := NewApp("dev")
 	msg := app.initializeServices()

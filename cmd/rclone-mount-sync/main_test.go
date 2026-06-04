@@ -272,9 +272,8 @@ func TestHandleConfigDir(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			originalXDG := os.Getenv("XDG_CONFIG_HOME")
-			defer func() { _ = os.Setenv("XDG_CONFIG_HOME", originalXDG) }()
-			_ = os.Unsetenv("XDG_CONFIG_HOME")
+			// t.Setenv handles save+restore for the duration of the subtest.
+			t.Setenv("XDG_CONFIG_HOME", "")
 
 			var inputPath string
 			if tt.setupFile && tt.input != "" {
@@ -333,9 +332,9 @@ func TestHandleConfigDir_WithFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", originalXDG) }()
-	_ = os.Unsetenv("XDG_CONFIG_HOME")
+	// t.Setenv("XDG_CONFIG_HOME", "") handles the save+restore of the
+	// real value for the rest of this test function.
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	err = handleConfigDir(testFile)
 	if err != nil {
@@ -621,9 +620,9 @@ func TestRunMainWithDeps_Version(t *testing.T) {
 }
 
 func TestRunMainWithDeps_ConfigDir(t *testing.T) {
-	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer func() { _ = os.Setenv("XDG_CONFIG_HOME", originalXDG) }()
-	_ = os.Unsetenv("XDG_CONFIG_HOME")
+	// t.Setenv handles save+restore of XDG_CONFIG_HOME; "" clears it
+	// for the duration of the test.
+	t.Setenv("XDG_CONFIG_HOME", "")
 
 	originalVersion := version
 	version = "config-test"

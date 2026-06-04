@@ -299,9 +299,10 @@ func TestSyncCreateSaveConfigError_RealSaveFailure(t *testing.T) {
 		t.Fatalf("create read-only dir: %v", err)
 	}
 
-	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	t.Cleanup(func() { _ = os.Setenv("XDG_CONFIG_HOME", oldXDG) })
-	_ = os.Setenv("XDG_CONFIG_HOME", readOnlyDir)
+	// runSyncCreate calls loadConfig() directly, so overrides on
+	// loadConfig are inert. Set XDG_CONFIG_HOME directly:
+	// t.Setenv handles save+restore.
+	t.Setenv("XDG_CONFIG_HOME", readOnlyDir)
 
 	if err := runSyncCreate(nil, nil); err == nil {
 		t.Fatal("expected runSyncCreate to fail when cfg.Save() fails")
