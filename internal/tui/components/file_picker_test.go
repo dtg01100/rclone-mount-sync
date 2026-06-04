@@ -778,3 +778,66 @@ func TestEnhancedFilePicker_OpenRecentMenu(t *testing.T) {
 		t.Error("View should render the recent menu header when showRecentMenu is true")
 	}
 }
+
+// TestEnhancedFilePicker_QuickJumpKeys_MoreKeys covers the 'm', 'M',
+// and backspace branches in Update. They were not exercised by
+// TestEnhancedFilePicker_QuickJumpKeys, so coverage on
+// EnhancedFilePicker.Update stayed at 34.8%.
+func TestEnhancedFilePicker_QuickJumpKeys_MoreKeys(t *testing.T) {
+	t.Run("m jumps to /mnt if it exists", func(t *testing.T) {
+		if _, err := os.Stat("/mnt"); err != nil {
+			t.Skip("/mnt not present on this host")
+		}
+		picker := NewEnhancedFilePicker()
+		_ = picker.Init()
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("m")})
+		if picker.currentDir != "/mnt" {
+			t.Errorf("currentDir = %q, want \"/mnt\"", picker.currentDir)
+		}
+	})
+
+	t.Run("M jumps to /media if it exists", func(t *testing.T) {
+		if _, err := os.Stat("/media"); err != nil {
+			t.Skip("/media not present on this host")
+		}
+		picker := NewEnhancedFilePicker()
+		_ = picker.Init()
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("M")})
+		if picker.currentDir != "/media" {
+			t.Errorf("currentDir = %q, want \"/media\"", picker.currentDir)
+		}
+	})
+
+	t.Run("backspace goes to parent directory", func(t *testing.T) {
+		picker := NewEnhancedFilePicker()
+		picker.currentDir = "/tmp/a"
+		_ = picker.Init()
+		picker.currentDir = "/tmp/a" // Init may reset; force it back
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+		if picker.currentDir != "/tmp" {
+			t.Errorf("currentDir = %q, want \"/tmp\"", picker.currentDir)
+		}
+	})
+
+	t.Run("backspace at root is a no-op", func(t *testing.T) {
+		picker := NewEnhancedFilePicker()
+		picker.currentDir = "/"
+		_ = picker.Init()
+		picker.currentDir = "/" // Init may reset; force it back
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+		if picker.currentDir != "/" {
+			t.Errorf("currentDir = %q, want \"/\" (no-op at root)", picker.currentDir)
+		}
+	})
+
+	t.Run("r is a no-op when recents are empty", func(t *testing.T) {
+		picker := NewEnhancedFilePicker()
+		store := NewRecentPathsStore(3)
+		picker.WithRecentStore(store)
+		_ = picker.Init()
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+		if picker.showRecentMenu {
+			t.Error("r key with empty recents should not open the recent menu")
+		}
+	})
+}
