@@ -470,49 +470,55 @@ func TestRollbackMount_SystemdFailed_DeleteOperation(t *testing.T) {
 	}
 }
 
-// Tests for CleanupMountSystemd with generator and manager
-
-func TestCleanupMountSystemd_WithGenerator(t *testing.T) {
-	cfg := createTestConfig()
-	gen := &systemd.Generator{}
-	mgr := &systemd.Manager{}
-	rollbackMgr := NewRollbackManager(cfg, gen, mgr)
-
-	// Should not panic
-	rollbackMgr.CleanupMountSystemd("test1234")
-}
-
-func TestCleanupMountSystemd_NilManager(t *testing.T) {
-	cfg := createTestConfig()
-	gen := &systemd.Generator{}
-	rollbackMgr := NewRollbackManager(cfg, gen, nil)
-
-	// Should not panic
-	rollbackMgr.CleanupMountSystemd("test1234")
-}
-
-// Tests for CleanupSyncJobSystemd with generator and manager
-
-func TestCleanupSyncJobSystemd_WithGenerator(t *testing.T) {
-	cfg := createTestConfig()
-	gen := &systemd.Generator{}
-	mgr := &systemd.Manager{}
-	rollbackMgr := NewRollbackManager(cfg, gen, mgr)
-
-	// Should not panic
-	rollbackMgr.CleanupSyncJobSystemd("test1234")
-}
-
-func TestCleanupSyncJobSystemd_NilManager(t *testing.T) {
-	cfg := createTestConfig()
-	gen := &systemd.Generator{}
-	rollbackMgr := NewRollbackManager(cfg, gen, nil)
-
-	// Should not panic
-	rollbackMgr.CleanupSyncJobSystemd("test1234")
-}
-
 // Tests for RollbackManager with all nil services
+
+// TestRollbackManager_CleanupSystemd is a sub-tested no-panic guard
+// for the four Cleanup*Systemd code paths. It ensures the methods
+// accept both with-manager and nil-manager wiring without panicking.
+// It does not assert on error values because the underlying
+// systemd interactions are environment-dependent.
+func TestRollbackManager_CleanupSystemd(t *testing.T) {
+	tests := []struct {
+		name   string
+		mgr    systemd.ServiceManager
+		method func(*RollbackManager, string)
+		id     string
+	}{
+		{
+			name:   "mount cleanup with manager",
+			mgr:    &systemd.Manager{},
+			method: (*RollbackManager).CleanupMountSystemd,
+			id:     "test1234",
+		},
+		{
+			name:   "mount cleanup with nil manager",
+			mgr:    nil,
+			method: (*RollbackManager).CleanupMountSystemd,
+			id:     "test1234",
+		},
+		{
+			name:   "sync job cleanup with manager",
+			mgr:    &systemd.Manager{},
+			method: (*RollbackManager).CleanupSyncJobSystemd,
+			id:     "test1234",
+		},
+		{
+			name:   "sync job cleanup with nil manager",
+			mgr:    nil,
+			method: (*RollbackManager).CleanupSyncJobSystemd,
+			id:     "test1234",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := createTestConfig()
+			gen := &systemd.Generator{}
+			rollbackMgr := NewRollbackManager(cfg, gen, tt.mgr)
+			tt.method(rollbackMgr, tt.id)
+		})
+	}
+}
 
 func TestRollbackManager_NilConfig(t *testing.T) {
 	// NewRollbackManager should not panic with nil config
