@@ -355,11 +355,16 @@ func TestApp_OrphanAction_InvalidIndex(t *testing.T) {
 		},
 	}
 
-	// Should not panic with invalid index
+	// An out-of-range index must not panic AND must not modify the
+	// orphan list (the bounds check should skip the slice splice).
 	_, _ = app.Update(OrphanActionMsg{Index: 999, Action: "remove"})
 
-	// Should handle gracefully (may log error or ignore)
-	t.Log("Invalid index handled without panic")
+	if got := len(app.orphans.OrphanedUnits); got != 1 {
+		t.Errorf("orphans length = %d, want 1 (out-of-range index should not splice)", got)
+	}
+	if !app.showOrphanPrompt {
+		t.Error("showOrphanPrompt should remain true (orphan list still non-empty)")
+	}
 }
 
 // TestApp_OrphanPrompt_Display tests that orphan prompt appears in View.

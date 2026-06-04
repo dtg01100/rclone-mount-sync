@@ -835,17 +835,24 @@ func TestSettingsScreen_SaveConfigError(t *testing.T) {
 	screen := NewSettingsScreen()
 	screen.SetSize(80, 24)
 
-	// Create config with invalid path to trigger save error
 	cfg := &config.Config{}
 	screen.SetConfig(cfg)
 
-	// Set editIndex and settings value
-	screen.editIndex = 0
-	screen.settings[0].Value = "writes"
+	// settings[4] is "defaults.sync.transfers" (int field). Setting a
+	// non-numeric value triggers setConfigValue's Sscanf error path,
+	// which is the most reliable way to make submitForm fail without
+	// depending on filesystem permissions.
+	screen.editIndex = 4
+	screen.settings[4].Value = "not-a-number"
 
-	// Manually call submitForm - this should handle save errors gracefully
 	screen.submitForm()
-	// Just verify it doesn't panic
+
+	if screen.messageType != "error" {
+		t.Errorf("messageType = %q, want %q (invalid transfers value should error)", screen.messageType, "error")
+	}
+	if screen.message == "" {
+		t.Error("message should be set when save fails")
+	}
 }
 
 func TestSettingsScreen_StartEditingWithNilConfig(t *testing.T) {

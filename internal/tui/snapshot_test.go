@@ -237,30 +237,6 @@ func TestApp_View_LineCount(t *testing.T) {
 	}
 }
 
-// TestApp_View_NoTrailingWhitespace checks for trailing whitespace.
-// Note: The TUI uses trailing whitespace for layout purposes, so this
-// test documents the current behavior rather than enforcing strict rules.
-func TestApp_View_NoTrailingWhitespace(t *testing.T) {
-	app := NewApp("dev")
-	app.width = 80
-	app.height = 24
-	app.currentScreen = ScreenMain
-
-	view := app.View()
-	lines := strings.Split(view, "\n")
-
-	trailingWhitespaceLines := 0
-	for i, line := range lines {
-		if line != strings.TrimRight(line, " \t") {
-			trailingWhitespaceLines++
-			if trailingWhitespaceLines <= 3 {
-				t.Logf("Line %d has trailing whitespace (TUI uses this for layout)", i)
-			}
-		}
-	}
-	t.Logf("Total lines with trailing whitespace: %d/%d", trailingWhitespaceLines, len(lines))
-}
-
 // TestApp_View_EmptyLines tests that there aren't excessive empty lines.
 // Note: Some empty lines are expected for visual spacing in the TUI.
 func TestApp_View_EmptyLines(t *testing.T) {
