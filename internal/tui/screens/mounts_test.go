@@ -1846,6 +1846,121 @@ func TestDeleteConfirm_EnterOnDeleteServiceAndConfig(t *testing.T) {
 	}
 }
 
+// Happy-path coverage for the delete dialog methods.
+//
+// The earlier "TestDeleteConfirm_DeleteServiceOnly_NilManager"-style
+// tests only assert "no panic" — they cannot reach the success branch
+// because &systemd.Manager{} immediately shells out to systemctl, so
+// the method returns an error. With MockManager (all errors nil) and
+// NewTestGenerator (RemoveUnit is a no-op when the file is missing),
+// the methods reach the MountDeletedMsg return.
+func TestDeleteConfirm_DeleteServiceOnly_HappyPath(t *testing.T) {
+	mount := models.MountConfig{
+		ID:         "test1234",
+		Name:       "TestMount",
+		Remote:     "gdrive",
+		RemotePath: "/",
+		MountPoint: "/mnt/test",
+	}
+	dialog := NewDeleteConfirm(mount)
+	dialog.manager = &systemd.MockManager{} // all *Err fields default to nil
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
+
+	cmd := dialog.deleteServiceOnly()
+	if cmd == nil {
+		t.Fatal("deleteServiceOnly should return a command")
+	}
+	msg := cmd()
+
+	deletedMsg, ok := msg.(MountDeletedMsg)
+	if !ok {
+		t.Fatalf("msg = %T (%v), want MountDeletedMsg", msg, msg)
+	}
+	if deletedMsg.Name != "TestMount" {
+		t.Errorf("Name = %q, want %q", deletedMsg.Name, "TestMount")
+	}
+}
+
+func TestDeleteConfirm_DeleteServiceOnly_StopErrorReturnsErrorMsg(t *testing.T) {
+	mount := models.MountConfig{
+		ID:         "test1234",
+		Name:       "TestMount",
+		Remote:     "gdrive",
+		RemotePath: "/",
+		MountPoint: "/mnt/test",
+	}
+	dialog := NewDeleteConfirm(mount)
+	dialog.manager = &systemd.MockManager{
+		StopErr: errors.New("synthetic stop failure"),
+	}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
+
+	cmd := dialog.deleteServiceOnly()
+	msg := cmd()
+
+	errMsg, ok := msg.(MountsErrorMsg)
+	if !ok {
+		t.Fatalf("msg = %T, want MountsErrorMsg", msg)
+	}
+	if !strings.Contains(errMsg.Err.Error(), "failed to stop mount") {
+		t.Errorf("error = %q, want it to mention 'failed to stop mount'", errMsg.Err)
+	}
+}
+
+func TestDeleteConfirm_DeleteServiceAndConfig_HappyPath(t *testing.T) {
+	// Save() needs a writable XDG_CONFIG_HOME; point it at a temp
+	// dir so the side effect doesn't pollute the real config.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	// deleteServiceAndConfig calls cfg.RemoveMount(name), so the
+	// mount passed to the dialog must be present in the config.
+	existingMount := createTestMounts()[0]
+	cfg := createTestConfigWithMounts()
+	dialog := NewDeleteConfirm(existingMount)
+	dialog.manager = &systemd.MockManager{} // all errors nil
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
+	dialog.config = cfg
+
+	cmd := dialog.deleteServiceAndConfig()
+	if cmd == nil {
+		t.Fatal("deleteServiceAndConfig should return a command")
+	}
+	msg := cmd()
+
+	deletedMsg, ok := msg.(MountDeletedMsg)
+	if !ok {
+		t.Fatalf("msg = %T (%v), want MountDeletedMsg", msg, msg)
+	}
+	if deletedMsg.Name != existingMount.Name {
+		t.Errorf("Name = %q, want %q", deletedMsg.Name, existingMount.Name)
+	}
+}
+
+func TestDeleteConfirm_DeleteServiceAndConfig_DisableErrorReturnsErrorMsg(t *testing.T) {
+	existingMount := createTestMounts()[0]
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := createTestConfigWithMounts()
+	dialog := NewDeleteConfirm(existingMount)
+	dialog.manager = &systemd.MockManager{
+		// Stop logs to stderr and continues; Disable is the
+		// first hard-fail point in deleteServiceAndConfig.
+		DisableErr: errors.New("synthetic disable failure"),
+	}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
+	dialog.config = cfg
+
+	cmd := dialog.deleteServiceAndConfig()
+	msg := cmd()
+
+	errMsg, ok := msg.(MountsErrorMsg)
+	if !ok {
+		t.Fatalf("msg = %T, want MountsErrorMsg", msg)
+	}
+	if !strings.Contains(errMsg.Err.Error(), "failed to disable mount") {
+		t.Errorf("error = %q, want it to mention 'failed to disable mount'", errMsg.Err)
+	}
+}
+
 func TestDeleteConfirm_DeleteServiceOnly_ReturnsMountDeletedMsg(t *testing.T) {
 	mount := models.MountConfig{
 		ID:         "test1234",

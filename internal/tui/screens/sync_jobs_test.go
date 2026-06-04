@@ -2139,6 +2139,120 @@ func TestSyncJobDeleteConfirm_DeleteServiceOnly_WithTimer(t *testing.T) {
 	}
 }
 
+// Tests for deleteServiceOnly / deleteServiceAndConfig happy paths.
+//
+// Previous tests in this file constructed the dialog with a real
+// &systemd.Manager{} (which immediately shells out to systemctl) and a
+// &systemd.Generator{} with no configured systemdDir, so the methods
+// always returned a SyncJobsErrorMsg and the success branches were
+// dead code in tests. These tests use MockManager (all errors nil) and
+// a Generator pointed at t.TempDir() so RemoveUnit is a no-op
+// (file does not exist) — and the result is a SyncJobDeletedMsg.
+func TestSyncJobDeleteConfirm_DeleteServiceOnly_HappyPath(t *testing.T) {
+	job := models.SyncJobConfig{
+		ID:          "test1234",
+		Name:        "TestJob",
+		Source:      "gdrive:/Documents",
+		Destination: "/home/user/docs",
+	}
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.manager = &systemd.MockManager{} // all *Err fields default to nil
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
+
+	cmd := dialog.deleteServiceOnly()
+	if cmd == nil {
+		t.Fatal("deleteServiceOnly should return a command")
+	}
+	msg := cmd()
+
+	deletedMsg, ok := msg.(SyncJobDeletedMsg)
+	if !ok {
+		t.Fatalf("msg = %T (%v), want SyncJobDeletedMsg", msg, msg)
+	}
+	if deletedMsg.Name != "TestJob" {
+		t.Errorf("Name = %q, want %q", deletedMsg.Name, "TestJob")
+	}
+}
+
+func TestSyncJobDeleteConfirm_DeleteServiceOnly_StopErrorReturnsErrorMsg(t *testing.T) {
+	job := models.SyncJobConfig{
+		ID:          "test1234",
+		Name:        "TestJob",
+		Source:      "gdrive:/Documents",
+		Destination: "/home/user/docs",
+	}
+	dialog := NewSyncJobDeleteConfirm(job)
+	dialog.manager = &systemd.MockManager{
+		StopErr: errors.New("synthetic stop failure"),
+	}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
+
+	cmd := dialog.deleteServiceOnly()
+	msg := cmd()
+
+	errMsg, ok := msg.(SyncJobsErrorMsg)
+	if !ok {
+		t.Fatalf("msg = %T, want SyncJobsErrorMsg", msg)
+	}
+	if !strings.Contains(errMsg.Err.Error(), "failed to stop sync service") {
+		t.Errorf("error = %q, want it to mention 'failed to stop sync service'", errMsg.Err)
+	}
+}
+
+func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_HappyPath(t *testing.T) {
+	// Save() needs a writable XDG_CONFIG_HOME; point it at a temp
+	// dir so the side effect doesn't pollute the real config.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	// deleteServiceAndConfig calls cfg.RemoveSyncJob(name), so the
+	// job passed to the dialog must be present in the config.
+	existingJob := createTestSyncJobs()[0]
+	cfg := createTestConfigWithSyncJobs()
+	dialog := NewSyncJobDeleteConfirm(existingJob)
+	dialog.manager = &systemd.MockManager{} // all errors nil
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
+	dialog.config = cfg
+
+	cmd := dialog.deleteServiceAndConfig()
+	if cmd == nil {
+		t.Fatal("deleteServiceAndConfig should return a command")
+	}
+	msg := cmd()
+
+	deletedMsg, ok := msg.(SyncJobDeletedMsg)
+	if !ok {
+		t.Fatalf("msg = %T (%v), want SyncJobDeletedMsg", msg, msg)
+	}
+	if deletedMsg.Name != existingJob.Name {
+		t.Errorf("Name = %q, want %q", deletedMsg.Name, existingJob.Name)
+	}
+}
+
+func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_StopTimerErrorReturnsErrorMsg(t *testing.T) {
+	existingJob := createTestSyncJobs()[0]
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	cfg := createTestConfigWithSyncJobs()
+	dialog := NewSyncJobDeleteConfirm(existingJob)
+	dialog.manager = &systemd.MockManager{
+		// Stop logs to stderr and continues; StopTimer is the
+		// first hard-fail point in deleteServiceAndConfig.
+		StopTimerErr: errors.New("synthetic stop-timer failure"),
+	}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
+	dialog.config = cfg
+
+	cmd := dialog.deleteServiceAndConfig()
+	msg := cmd()
+
+	errMsg, ok := msg.(SyncJobsErrorMsg)
+	if !ok {
+		t.Fatalf("msg = %T, want SyncJobsErrorMsg", msg)
+	}
+	if !strings.Contains(errMsg.Err.Error(), "failed to stop timer") {
+		t.Errorf("error = %q, want it to mention 'failed to stop timer'", errMsg.Err)
+	}
+}
+
 // Tests for startCreateForm with mock rclone
 
 func TestSyncJobsScreen_StartCreateForm_RcloneNotInstalled(t *testing.T) {
