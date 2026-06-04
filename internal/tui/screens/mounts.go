@@ -792,9 +792,12 @@ func (d *DeleteConfirm) deleteServiceOnly() tea.Cmd {
 	return func() tea.Msg {
 		serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 
-		// Stop the service if running
+		// Stop the service if running. A failure here is not fatal:
+		// the service may not be loaded yet or already stopped, and
+		// the caller still wants to clean up. Disable and RemoveUnit
+		// are the real preconditions for a clean delete.
 		if err := d.manager.Stop(serviceName); err != nil {
-			return MountsErrorMsg{Err: fmt.Errorf("failed to stop mount: %w", err)}
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop mount service %s: %v\n", serviceName, err)
 		}
 
 		// Disable the service
@@ -821,8 +824,9 @@ func (d *DeleteConfirm) deleteServiceOnly() tea.Cmd {
 func (d *DeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 	return func() tea.Msg {
 		var rollbackData MountRollbackData
+		var rollbackMgr *RollbackManager
 		if d.config != nil {
-			rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			rollbackMgr = NewRollbackManager(d.config, d.generator, d.manager)
 			rollbackData = rollbackMgr.PrepareMountRollback(d.mount.ID, d.mount.Name, OperationDelete)
 		}
 
@@ -839,31 +843,27 @@ func (d *DeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 		}
 
 		if err := d.generator.RemoveUnit(serviceName); err != nil {
-			if d.config != nil {
-				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			if rollbackMgr != nil {
 				_ = rollbackMgr.RollbackMount(rollbackData, false)
 			}
 			return MountsErrorMsg{Err: fmt.Errorf("failed to remove unit file: %w", err)}
 		}
 
 		if err := d.manager.DaemonReload(); err != nil {
-			if d.config != nil {
-				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			if rollbackMgr != nil {
 				_ = rollbackMgr.RollbackMount(rollbackData, false)
 			}
 			return MountsErrorMsg{Err: fmt.Errorf("failed to reload daemon: %w", err)}
 		}
 
 		if err := d.config.RemoveMount(d.mount.Name); err != nil {
-			if d.config != nil {
-				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			if rollbackMgr != nil {
 				_ = rollbackMgr.RollbackMount(rollbackData, false)
 			}
 			return MountsErrorMsg{Err: fmt.Errorf("failed to remove mount from config: %w", err)}
 		}
 		if err := d.config.Save(); err != nil {
-			if d.config != nil {
-				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			if rollbackMgr != nil {
 				_ = rollbackMgr.RollbackMount(rollbackData, false)
 			}
 			return MountsErrorMsg{Err: fmt.Errorf("failed to save config: %w", err)}

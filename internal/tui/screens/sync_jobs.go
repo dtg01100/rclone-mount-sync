@@ -1101,14 +1101,14 @@ func (d *SyncJobDeleteConfirm) deleteServiceOnly() tea.Cmd {
 		serviceName := d.generator.ServiceName(d.job.ID, "sync") + ".service"
 		timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
 
-		// Stop the service if running
+		// Stop the service if running. A failure here is not fatal:
+		// the service may not be loaded yet (e.g. first install) or
+		// already stopped, and the caller still wants to clean up.
 		if err := d.manager.Stop(serviceName); err != nil {
-			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to stop sync service: %w", err)}
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop sync service %s: %v\n", serviceName, err)
 		}
-
-		// Stop and disable the timer if running
 		if err := d.manager.StopTimer(timerName); err != nil {
-			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to stop timer: %w", err)}
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop timer %s: %v\n", timerName, err)
 		}
 		if err := d.manager.DisableTimer(timerName); err != nil {
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to disable timer: %w", err)}
@@ -1141,8 +1141,9 @@ func (d *SyncJobDeleteConfirm) deleteServiceOnly() tea.Cmd {
 func (d *SyncJobDeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 	return func() tea.Msg {
 		var rollbackData SyncJobRollbackData
+		var rollbackMgr *RollbackManager
 		if d.config != nil {
-			rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			rollbackMgr = NewRollbackManager(d.config, d.generator, d.manager)
 			rollbackData = rollbackMgr.PrepareSyncJobRollback(d.job.ID, d.job.Name, OperationDelete)
 		}
 
@@ -1153,7 +1154,7 @@ func (d *SyncJobDeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 			fmt.Fprintf(os.Stderr, "Warning: failed to stop service %s: %v\n", serviceName, err)
 		}
 		if err := d.manager.StopTimer(timerName); err != nil {
-			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to stop timer: %w", err)}
+			fmt.Fprintf(os.Stderr, "Warning: failed to stop timer %s: %v\n", timerName, err)
 		}
 		if err := d.manager.DisableTimer(timerName); err != nil {
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to disable timer: %w", err)}
@@ -1166,39 +1167,34 @@ func (d *SyncJobDeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 		}
 
 		if err := d.generator.RemoveUnit(serviceName); err != nil {
-			if d.config != nil {
-				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			if rollbackMgr != nil {
 				_ = rollbackMgr.RollbackSyncJob(rollbackData, false)
 			}
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to remove service unit: %w", err)}
 		}
 
 		if err := d.generator.RemoveUnit(timerName); err != nil {
-			if d.config != nil {
-				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			if rollbackMgr != nil {
 				_ = rollbackMgr.RollbackSyncJob(rollbackData, false)
 			}
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to remove timer unit: %w", err)}
 		}
 
 		if err := d.manager.DaemonReload(); err != nil {
-			if d.config != nil {
-				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			if rollbackMgr != nil {
 				_ = rollbackMgr.RollbackSyncJob(rollbackData, false)
 			}
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to reload daemon: %w", err)}
 		}
 
 		if err := d.config.RemoveSyncJob(d.job.Name); err != nil {
-			if d.config != nil {
-				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			if rollbackMgr != nil {
 				_ = rollbackMgr.RollbackSyncJob(rollbackData, false)
 			}
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to remove sync job from config: %w", err)}
 		}
 		if err := d.config.Save(); err != nil {
-			if d.config != nil {
-				rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
+			if rollbackMgr != nil {
 				_ = rollbackMgr.RollbackSyncJob(rollbackData, false)
 			}
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to save config: %w", err)}
