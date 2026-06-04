@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -305,8 +306,15 @@ func parseVersion(versionStr string) (versionTuple, error) {
 	}
 
 	var v versionTuple
-	if _, err := fmt.Sscanf(matches[0], "%d.%d.%d", &v.major, &v.minor, &v.patch); err != nil {
-		return versionTuple{}, fmt.Errorf("failed to parse version numbers: %w", err)
+	var err error
+	if v.major, err = strconv.Atoi(matches[1]); err != nil {
+		return versionTuple{}, fmt.Errorf("failed to parse major version: %w", err)
+	}
+	if v.minor, err = strconv.Atoi(matches[2]); err != nil {
+		return versionTuple{}, fmt.Errorf("failed to parse minor version: %w", err)
+	}
+	if v.patch, err = strconv.Atoi(matches[3]); err != nil {
+		return versionTuple{}, fmt.Errorf("failed to parse patch version: %w", err)
 	}
 
 	return v, nil
