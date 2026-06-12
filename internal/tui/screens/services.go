@@ -177,82 +177,7 @@ func (s *ServicesScreen) loadServices() tea.Msg {
 		return ServicesLoadedMsg{Services: []ServiceInfo{}}
 	}
 
-	var services []ServiceInfo
-
-	// Load mount services from config
-	if s.cfg != nil {
-		for _, mount := range s.cfg.Mounts {
-			serviceName := s.generator.ServiceName(mount.ID, "mount")
-			status, err := s.manager.Status(serviceName + ".service")
-			if err != nil {
-				// Service might not exist yet
-				services = append(services, ServiceInfo{
-					Name:        serviceName,
-					DisplayName: mount.Name,
-					Type:        "mount",
-					Status:      "not-found",
-					Enabled:     mount.Enabled,
-					MountPoint:  mount.MountPoint,
-					Remote:      mount.Remote,
-				})
-				continue
-			}
-
-			services = append(services, ServiceInfo{
-				Name:        serviceName,
-				DisplayName: mount.Name,
-				Type:        "mount",
-				Status:      status.State,
-				SubState:    status.SubState,
-				Enabled:     status.Enabled,
-				MountPoint:  mount.MountPoint,
-				Remote:      mount.Remote,
-			})
-		}
-
-		// Load sync job services from config
-		for _, job := range s.cfg.SyncJobs {
-			serviceName := s.generator.ServiceName(job.ID, "sync")
-
-			// Get service status
-			status, err := s.manager.Status(serviceName + ".service")
-			if err != nil {
-				services = append(services, ServiceInfo{
-					Name:        serviceName,
-					DisplayName: job.Name,
-					Type:        "sync",
-					Status:      "not-found",
-					Enabled:     job.Enabled,
-					Source:      job.Source,
-					Destination: job.Destination,
-				})
-				continue
-			}
-
-			// Get timer status for sync jobs
-			timerName := serviceName + ".timer"
-			timerStatus, _ := s.manager.Status(timerName)
-			timerActive := timerStatus != nil && timerStatus.Active
-
-			// Get next run time
-			// Note: Error from GetTimerNextRun is intentionally ignored;
-			// nextRun is left as the zero time which signals "unknown next run".
-			nextRun, _ := s.manager.GetTimerNextRun(timerName)
-
-			services = append(services, ServiceInfo{
-				Name:        serviceName,
-				DisplayName: job.Name,
-				Type:        "sync",
-				Status:      status.State,
-				SubState:    status.SubState,
-				Enabled:     status.Enabled,
-				Source:      job.Source,
-				Destination: job.Destination,
-				NextRun:     nextRun,
-				TimerActive: timerActive,
-			})
-		}
-	}
+	services := buildServiceInfos(s.cfg, s.generator, s.manager)
 
 	// Sort services alphabetically by display name
 	sort.Slice(services, func(i, j int) bool {
@@ -265,6 +190,87 @@ func (s *ServicesScreen) loadServices() tea.Msg {
 	return ServicesLoadedMsg{
 		Services: services,
 	}
+}
+
+// buildServiceInfos constructs the ServiceInfo list shown on the
+// services screen from the given config + systemd state. It is
+// extracted from loadServices so the data transformation can be
+// unit-tested against a MockManager without exercising the
+// surrounding tea.Cmd / Update machinery.
+func buildServiceInfos(cfg *config.Config, gen *systemd.Generator, manager systemd.ServiceManager) []ServiceInfo {
+	if cfg == nil {
+		return nil
+	}
+
+	var services []ServiceInfo
+
+	for _, mount := range cfg.Mounts {
+		serviceName := gen.ServiceName(mount.ID, "mount")
+		services = append(services, serviceInfoForMount(mount, serviceName, manager))
+	}
+
+	for _, job := range cfg.SyncJobs {
+		serviceName := gen.ServiceName(job.ID, "sync")
+		services = append(services, serviceInfoForSyncJob(job, serviceName, manager))
+	}
+
+	return services
+}
+
+func serviceInfoForMount(mount models.MountConfig, serviceName string, manager systemd.ServiceManager) ServiceInfo {
+	info := ServiceInfo{
+		Name:        serviceName,
+		DisplayName: mount.Name,
+		Type:        "mount",
+		Enabled:     mount.Enabled,
+		MountPoint:  mount.MountPoint,
+		Remote:      mount.Remote,
+	}
+
+	status, err := manager.Status(serviceName + ".service")
+	if err != nil {
+		// Service might not exist yet (e.g., unit file was never written).
+		// Surface a synthetic "not-found" state so the row still renders.
+		info.Status = "not-found"
+		return info
+	}
+
+	info.Status = status.State
+	info.SubState = status.SubState
+	info.Enabled = status.Enabled
+	return info
+}
+
+func serviceInfoForSyncJob(job models.SyncJobConfig, serviceName string, manager systemd.ServiceManager) ServiceInfo {
+	info := ServiceInfo{
+		Name:        serviceName,
+		DisplayName: job.Name,
+		Type:        "sync",
+		Enabled:     job.Enabled,
+		Source:      job.Source,
+		Destination: job.Destination,
+	}
+
+	status, err := manager.Status(serviceName + ".service")
+	if err != nil {
+		info.Status = "not-found"
+		return info
+	}
+
+	info.Status = status.State
+	info.SubState = status.SubState
+	info.Enabled = status.Enabled
+
+	timerName := serviceName + ".timer"
+	if timerStatus, _ := manager.Status(timerName); timerStatus != nil {
+		info.TimerActive = timerStatus.Active
+	}
+	// Error from GetTimerNextRun is intentionally ignored: a failure
+	// there just means we don't know the next run time, which is
+	// represented as the zero time.
+	info.NextRun, _ = manager.GetTimerNextRun(timerName)
+
+	return info
 }
 
 // loadSystemdStatus loads the overall systemd user manager status.

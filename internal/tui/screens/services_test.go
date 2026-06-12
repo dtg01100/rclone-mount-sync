@@ -1819,3 +1819,89 @@ func TestServicesScreen_SelectedServiceAfterFilter(t *testing.T) {
 		t.Errorf("selectedService Type = %q, want 'mount'", screen.selectedService.Type)
 	}
 }
+
+func TestBuildServiceInfos_NilConfig(t *testing.T) {
+	got := buildServiceInfos(nil, systemd.NewTestGenerator(t.TempDir()), &systemd.MockManager{})
+	if got != nil {
+		t.Errorf("buildServiceInfos(nil) = %v, want nil", got)
+	}
+}
+
+func TestBuildServiceInfos_MountAndSyncHappyPath(t *testing.T) {
+	cfg := createTestConfigForServices()
+	gen := systemd.NewTestGenerator(t.TempDir())
+
+	next := time.Date(2026, 6, 12, 15, 0, 0, 0, time.UTC)
+	mgr := &systemd.MockManager{
+		StatusResult: &systemd.UnitStatus{
+			Name:     "rclone-mount-m1a2b3c4",
+			State:    "active",
+			SubState: "running",
+			Active:   true,
+			Enabled:  true,
+		},
+		GetTimerNextRunResult: next,
+	}
+
+	got := buildServiceInfos(cfg, gen, mgr)
+
+	if len(got) != len(cfg.Mounts)+len(cfg.SyncJobs) {
+		t.Fatalf("len(services) = %d, want %d", len(got), len(cfg.Mounts)+len(cfg.SyncJobs))
+	}
+
+	// First service is a mount: status copied from MockManager.
+	mount := got[0]
+	if mount.Type != "mount" || mount.Name != "rclone-mount-m1a2b3c4" {
+		t.Errorf("mount = %+v, want type=mount name=rclone-mount-m1a2b3c4", mount)
+	}
+	if mount.Status != "active" || mount.SubState != "running" || !mount.Enabled {
+		t.Errorf("mount state = (%q, %q, enabled=%v), want (active, running, true)",
+			mount.Status, mount.SubState, mount.Enabled)
+	}
+	if mount.MountPoint != "/mnt/gdrive" || mount.Remote != "gdrive:" {
+		t.Errorf("mount paths not preserved: %+v", mount)
+	}
+
+	// Sync-job services come after mounts. With a single mock
+	// returning one StatusResult for every call, both sync jobs will
+	// have the same status; verify the metadata round-trips and that
+	// NextRun is populated.
+	var firstSync *ServiceInfo
+	for i := range got {
+		if got[i].Type == "sync" {
+			firstSync = &got[i]
+			break
+		}
+	}
+	if firstSync == nil {
+		t.Fatal("no sync services in result")
+	}
+	if firstSync.NextRun != next {
+		t.Errorf("sync NextRun = %v, want %v", firstSync.NextRun, next)
+	}
+}
+
+func TestBuildServiceInfos_StatusErrorMarksNotFound(t *testing.T) {
+	cfg := &config.Config{
+		Mounts: []models.MountConfig{
+			{ID: "abc12345", Name: "no-such", Remote: "x:", MountPoint: "/mnt/x"},
+		},
+	}
+	gen := systemd.NewTestGenerator(t.TempDir())
+	mgr := &systemd.MockManager{
+		StatusErr: errTestServiceNotFound,
+	}
+
+	got := buildServiceInfos(cfg, gen, mgr)
+
+	if len(got) != 1 {
+		t.Fatalf("len(services) = %d, want 1", len(got))
+	}
+	if got[0].Status != "not-found" {
+		t.Errorf("status = %q, want 'not-found' (Status error should map to not-found)", got[0].Status)
+	}
+	// Metadata from config should still be present.
+	if got[0].DisplayName != "no-such" || got[0].MountPoint != "/mnt/x" {
+		t.Errorf("mount metadata lost on status error: %+v", got[0])
+	}
+}
