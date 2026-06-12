@@ -388,6 +388,16 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Apply navigation results inline so a single keypress changes
 	// the screen in the same Update.
+	//
+	// We invoke the cmd synchronously here (not via tea.Batch below)
+	// because the navigation messages are produced by the screen's
+	// own Update handler and are already fully resolved — they don't
+	// schedule any further async work. Calling them inline keeps a
+	// single keypress in a single Update cycle and avoids the user
+	// having to press Enter twice when navigating from the main menu.
+	// This is safe: screenCmd was just returned from the screen's
+	// Update on the same goroutine, and producing a non-nil tea.Msg
+	// is a pure value operation (no side effects, no I/O).
 	if screenCmd != nil {
 		if navMsg := screenCmd(); navMsg != nil {
 			switch m := navMsg.(type) {
