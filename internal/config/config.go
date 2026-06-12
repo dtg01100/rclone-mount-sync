@@ -674,6 +674,13 @@ func (c *Config) ExportConfig(filePath string) error {
 		return fmt.Errorf("failed to create export file: %w", err)
 	}
 	defer func() {
+		// fsync before close so the data is durable on disk if the
+		// process is killed or the host loses power between Encode and
+		// the OS flushing its own buffers. Without this, a crash here
+		// could leave a truncated export file at the final path.
+		if serr := file.Sync(); serr != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to sync export file: %v\n", serr)
+		}
 		if cerr := file.Close(); cerr != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to close export file: %v\n", cerr)
 		}
