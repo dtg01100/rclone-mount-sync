@@ -4,9 +4,8 @@ package errors
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
-
-	"github.com/dtg01100/rclone-mount-sync/internal/testutil"
 )
 
 func TestAppError_Error(t *testing.T) {
@@ -152,7 +151,7 @@ func TestAppError_FormatForTUI(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.err.FormatForTUI()
 			for _, s := range tt.contains {
-				if !testutil.ContainsString(got, s) {
+				if !strings.Contains(got, s) {
 					t.Errorf("FormatForTUI() missing expected substring %q in:\n%s", s, got)
 				}
 			}
@@ -210,7 +209,7 @@ func TestNewRcloneVersionError(t *testing.T) {
 	if err.Code != ErrRcloneVersion.Code {
 		t.Errorf("expected code %s, got %s", ErrRcloneVersion.Code, err.Code)
 	}
-	if !testutil.ContainsString(err.Message, "1.50.0") || !testutil.ContainsString(err.Message, "1.60.0") {
+	if !strings.Contains(err.Message, "1.50.0") || !strings.Contains(err.Message, "1.60.0") {
 		t.Errorf("expected message to contain version info, got %s", err.Message)
 	}
 	if !errors.Is(err.Cause, cause) {
@@ -237,7 +236,7 @@ func TestNewMountPointExistsError(t *testing.T) {
 	if err.Code != ErrMountPointExists.Code {
 		t.Errorf("expected code %s, got %s", ErrMountPointExists.Code, err.Code)
 	}
-	if !testutil.ContainsString(err.Message, "/mnt/test") {
+	if !strings.Contains(err.Message, "/mnt/test") {
 		t.Errorf("expected message to contain mount point, got %s", err.Message)
 	}
 	if !errors.Is(err.Cause, cause) {
@@ -252,7 +251,7 @@ func TestNewMountPointNotFoundError(t *testing.T) {
 	if err.Code != ErrMountPointNotFound.Code {
 		t.Errorf("expected code %s, got %s", ErrMountPointNotFound.Code, err.Code)
 	}
-	if !testutil.ContainsString(err.Message, "/mnt/missing") {
+	if !strings.Contains(err.Message, "/mnt/missing") {
 		t.Errorf("expected message to contain mount point, got %s", err.Message)
 	}
 	if !errors.Is(err.Cause, cause) {
@@ -267,10 +266,10 @@ func TestNewMountPointNotDirectoryError(t *testing.T) {
 	if err.Code != ErrMountPointNotDirectory.Code {
 		t.Errorf("expected code %s, got %s", ErrMountPointNotDirectory.Code, err.Code)
 	}
-	if !testutil.ContainsString(err.Message, "/mnt/file") {
+	if !strings.Contains(err.Message, "/mnt/file") {
 		t.Errorf("expected message to contain mount point, got %s", err.Message)
 	}
-	if !testutil.ContainsString(err.Message, "not a directory") {
+	if !strings.Contains(err.Message, "not a directory") {
 		t.Errorf("expected message to mention 'not a directory', got %s", err.Message)
 	}
 	if !errors.Is(err.Cause, cause) {
@@ -288,7 +287,7 @@ func TestNewServiceNotFoundError(t *testing.T) {
 	if err.Code != ErrServiceNotFound.Code {
 		t.Errorf("expected code %s, got %s", ErrServiceNotFound.Code, err.Code)
 	}
-	if !testutil.ContainsString(err.Message, "rclone-mount-test") {
+	if !strings.Contains(err.Message, "rclone-mount-test") {
 		t.Errorf("expected message to contain service name, got %s", err.Message)
 	}
 	if !errors.Is(err.Cause, cause) {
@@ -303,7 +302,7 @@ func TestNewServiceFailedError(t *testing.T) {
 	if err.Code != ErrServiceFailed.Code {
 		t.Errorf("expected code %s, got %s", ErrServiceFailed.Code, err.Code)
 	}
-	if !testutil.ContainsString(err.Message, "start") || !testutil.ContainsString(err.Message, "rclone-mount-test") {
+	if !strings.Contains(err.Message, "start") || !strings.Contains(err.Message, "rclone-mount-test") {
 		t.Errorf("expected message to contain operation and service name, got %s", err.Message)
 	}
 	if !errors.Is(err.Cause, cause) {
@@ -318,7 +317,7 @@ func TestNewConfigInvalidError(t *testing.T) {
 	if err.Code != ErrConfigInvalid.Code {
 		t.Errorf("expected code %s, got %s", ErrConfigInvalid.Code, err.Code)
 	}
-	if !testutil.ContainsString(err.Message, "missing required field") {
+	if !strings.Contains(err.Message, "missing required field") {
 		t.Errorf("expected message to contain details, got %s", err.Message)
 	}
 	if !errors.Is(err.Cause, cause) {
@@ -333,7 +332,7 @@ func TestNewPermissionDeniedError(t *testing.T) {
 	if err.Code != ErrPermissionDenied.Code {
 		t.Errorf("expected code %s, got %s", ErrPermissionDenied.Code, err.Code)
 	}
-	if !testutil.ContainsString(err.Message, "write") || !testutil.ContainsString(err.Message, "/etc/config") {
+	if !strings.Contains(err.Message, "write") || !strings.Contains(err.Message, "/etc/config") {
 		t.Errorf("expected message to contain operation and resource, got %s", err.Message)
 	}
 	if !errors.Is(err.Cause, cause) {
@@ -348,7 +347,7 @@ func TestNewRcloneError(t *testing.T) {
 	if err.Code != ErrRcloneError.Code {
 		t.Errorf("expected code %s, got %s", ErrRcloneError.Code, err.Code)
 	}
-	if !testutil.ContainsString(err.Message, "rclone mount") {
+	if !strings.Contains(err.Message, "rclone mount") {
 		t.Errorf("expected message to contain command, got %s", err.Message)
 	}
 	if !errors.Is(err.Cause, cause) {
@@ -401,7 +400,7 @@ func TestWrap(t *testing.T) {
 		if wrapped.Code != "INNER_001" {
 			t.Errorf("expected code INNER_001, got %s", wrapped.Code)
 		}
-		if !testutil.ContainsString(wrapped.Message, "outer context") || !testutil.ContainsString(wrapped.Message, "inner message") {
+		if !strings.Contains(wrapped.Message, "outer context") || !strings.Contains(wrapped.Message, "inner message") {
 			t.Errorf("expected wrapped message, got %s", wrapped.Message)
 		}
 		if !errors.Is(wrapped.Cause, inner) {
@@ -416,7 +415,7 @@ func TestWrap(t *testing.T) {
 		if wrapped.Code != "GEN_001" {
 			t.Errorf("expected code GEN_001, got %s", wrapped.Code)
 		}
-		if !testutil.ContainsString(wrapped.Message, "context") {
+		if !strings.Contains(wrapped.Message, "context") {
 			t.Errorf("expected message to contain context, got %s", wrapped.Message)
 		}
 		if !errors.Is(wrapped.Cause, stdErr) {
@@ -440,7 +439,7 @@ func TestFormatErrorForTUI(t *testing.T) {
 			Suggestion: "try this",
 		}
 		got := FormatErrorForTUI(appErr)
-		if !testutil.ContainsString(got, "⚠ test message") {
+		if !strings.Contains(got, "⚠ test message") {
 			t.Errorf("expected formatted output, got %s", got)
 		}
 	})
@@ -448,10 +447,10 @@ func TestFormatErrorForTUI(t *testing.T) {
 	t.Run("standard error", func(t *testing.T) {
 		stdErr := fmt.Errorf("standard error")
 		got := FormatErrorForTUI(stdErr)
-		if !testutil.ContainsString(got, "⚠ standard error") {
+		if !strings.Contains(got, "⚠ standard error") {
 			t.Errorf("expected formatted output, got %s", got)
 		}
-		if !testutil.ContainsString(got, "unexpected error") {
+		if !strings.Contains(got, "unexpected error") {
 			t.Errorf("expected generic suggestion, got %s", got)
 		}
 	})

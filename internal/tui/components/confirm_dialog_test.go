@@ -1,10 +1,10 @@
 package components
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/dtg01100/rclone-mount-sync/internal/testutil"
 )
 
 func TestConfirmDialog_NewConfirmDialog(t *testing.T) {
@@ -235,25 +235,25 @@ func TestConfirmDialog_View(t *testing.T) {
 	}
 
 	// Check that title is rendered
-	if !testutil.ContainsString(view, "Delete Item") {
+	if !strings.Contains(view, "Delete Item") {
 		t.Error("Expected view to contain title 'Delete Item'")
 	}
 
 	// Check that message is rendered
-	if !testutil.ContainsString(view, "Are you sure?") {
+	if !strings.Contains(view, "Are you sure?") {
 		t.Error("Expected view to contain message 'Are you sure?'")
 	}
 
 	// Check that options are rendered
-	if !testutil.ContainsString(view, "Cancel") {
+	if !strings.Contains(view, "Cancel") {
 		t.Error("Expected view to contain 'Cancel' option")
 	}
-	if !testutil.ContainsString(view, "Delete") {
+	if !strings.Contains(view, "Delete") {
 		t.Error("Expected view to contain 'Delete' option")
 	}
 
 	// Check that help is rendered
-	if !testutil.ContainsString(view, "Enter: confirm") {
+	if !strings.Contains(view, "Enter: confirm") {
 		t.Error("Expected view to contain help text")
 	}
 }
@@ -346,7 +346,7 @@ func TestConfirmDialog_Description(t *testing.T) {
 
 	view := dialog.View()
 
-	if !testutil.ContainsString(view, "Additional information") {
+	if !strings.Contains(view, "Additional information") {
 		t.Error("Expected view to contain description")
 	}
 }

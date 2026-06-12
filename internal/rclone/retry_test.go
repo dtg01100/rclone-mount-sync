@@ -10,10 +10,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
-
-	"github.com/dtg01100/rclone-mount-sync/internal/testutil"
 )
 
 func createMockRcloneForRetry(t *testing.T, script string) string {
@@ -953,7 +952,7 @@ func TestErrorMessageFormat(t *testing.T) {
 	}
 
 	expected := "operation failed after 3 attempts"
-	if !testutil.ContainsString(err.Error(), expected) {
+	if !strings.Contains(err.Error(), expected) {
 		t.Errorf("error message should contain %q, got %q", expected, err.Error())
 	}
 }
