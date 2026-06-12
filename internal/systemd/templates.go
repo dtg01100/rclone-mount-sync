@@ -1,5 +1,18 @@
 package systemd
 
+// UnmeteredNetworkExecCondition is a shell command used as the value of a
+// systemd ExecCondition directive. It queries NetworkManager over D-Bus
+// for the current Metered property and exits 0 (i.e., run the service)
+// only when the connection is not metered (or when NetworkManager is
+// unreachable, in which case the user's intent — "only run on unmetered"
+// — is treated as satisfied by the `|| exit 0` clause).
+//
+// SECURITY: this is a hard-coded constant. It is interpolated unquoted
+// into a systemd ExecStart/ExecCondition directive, which systemd
+// evaluates with `/bin/sh -c`. It must NEVER be derived from user
+// input; doing so would enable shell injection into the unit file.
+const UnmeteredNetworkExecCondition = `/bin/sh -c 'test "$(dbus-send --system --print-reply=literal --dest=org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.DBus.Properties.Get string:org.freedesktop.NetworkManager string:Metered 2>/dev/null | grep -o "\"[0-9]*\"" | tr -d "\"")" != "4" || exit 0; exit 1'`
+
 // MountServiceTemplate is the systemd service unit template for mounts.
 const MountServiceTemplate = `[Unit]
 Description=Rclone mount: {{.Name}}
@@ -40,7 +53,7 @@ StartLimitBurst=5
 {{end}}
 [Service]
 Type=oneshot
-{{if .RequireUnmetered}}ExecCondition=/bin/sh -c 'test "$(dbus-send --system --print-reply=literal --dest=org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.DBus.Properties.Get string:org.freedesktop.NetworkManager string:Metered 2>/dev/null | grep -o "\"[0-9]*\"" | tr -d "\"")" != "4" || exit 0; exit 1'
+{{if .RequireUnmetered}}ExecCondition={{.ExecCondition}}
 {{end}}ExecStart={{.RclonePath}} {{.Direction}} \
     {{.Source}} \
     {{.Destination}} \

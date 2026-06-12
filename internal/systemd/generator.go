@@ -150,9 +150,9 @@ func (g *Generator) GenerateSyncService(job *models.SyncJobConfig) (string, erro
 		direction = "sync"
 	}
 
-	execCondition := ""
-	if job.Schedule.RequireUnmetered {
-		execCondition = `/bin/sh -c 'test "$(dbus-send --system --print-reply=literal --dest=org.freedesktop.NetworkManager /org/freedesktop/NetworkManager org.freedesktop.DBus.Properties.Get string:org.freedesktop.NetworkManager string:Metered 2>/dev/null | grep -o "\"[0-9]*\"" | tr -d "\"")" != "4" || exit 0; exit 1'`
+	execCondition := UnmeteredNetworkExecCondition
+	if !job.Schedule.RequireUnmetered {
+		execCondition = ""
 	}
 
 	safeName, err := sanitizeIniValue(job.Name, "Name")
