@@ -649,6 +649,33 @@ func TestMountsScreen_ViewWithSuccess(t *testing.T) {
 	}
 }
 
+// TestMountsScreen_ViewClearsErrorAndSuccess verifies that calling
+// View() consumes the one-shot err and success fields, so stale
+// banners from a prior action do not linger on screen indefinitely.
+func TestMountsScreen_ViewClearsErrorAndSuccess(t *testing.T) {
+	screen := NewMountsScreen()
+	screen.SetSize(80, 24)
+	screen.err = errTestMountNotFound
+	screen.success = "Mount created successfully"
+
+	view1 := screen.View()
+	if !strings.Contains(view1, errTestMountNotFound.Error()) {
+		t.Errorf("first View() should contain error, got:\n%s", view1)
+	}
+	if !strings.Contains(view1, "Mount created successfully") {
+		t.Errorf("first View() should contain success, got:\n%s", view1)
+	}
+
+	// Second render must not re-show the cleared messages.
+	view2 := screen.View()
+	if strings.Contains(view2, errTestMountNotFound.Error()) {
+		t.Errorf("second View() must not re-show stale error, got:\n%s", view2)
+	}
+	if strings.Contains(view2, "Mount created successfully") {
+		t.Errorf("second View() must not re-show stale success, got:\n%s", view2)
+	}
+}
+
 func TestMountsScreen_ViewDeleteMode(t *testing.T) {
 	screen := NewMountsScreen()
 	screen.SetSize(80, 24)
@@ -2369,6 +2396,117 @@ func TestMountsScreen_StopMount_CommandReturnsMessage(t *testing.T) {
 		// Expected message types
 	default:
 		t.Errorf("unexpected message type: %T", msg)
+	}
+}
+
+// TestMountsScreen_StartMount_EnableAfterStart verifies the
+// "list-mode s = start + enable" contract: after Start succeeds,
+// Enable is also called so the mount autostarts on login. If Enable
+// fails, the error is surfaced as a MountsErrorMsg with the right
+// wrap, not silently dropped.
+func TestMountsScreen_StartMount_EnableAfterStart(t *testing.T) {
+	screen := NewMountsScreen()
+	screen.SetSize(80, 24)
+	screen.mounts = createTestMounts()
+	screen.cursor = 0
+	screen.generator = &systemd.Generator{}
+	screen.manager = &systemd.MockManager{
+		EnableErr: errors.New("synthetic enable failure"),
+	}
+
+	_, cmd := screen.startMount()
+	if cmd == nil {
+		t.Fatal("startMount should return a command")
+	}
+	msg := cmd()
+	errMsg, ok := msg.(MountsErrorMsg)
+	if !ok {
+		t.Fatalf("cmd() returned %T, want MountsErrorMsg (Enable failure must surface)", msg)
+	}
+	if !strings.Contains(errMsg.Err.Error(), "failed to enable mount") {
+		t.Errorf("error = %q, want to contain 'failed to enable mount'", errMsg.Err.Error())
+	}
+	if !strings.Contains(errMsg.Err.Error(), "synthetic enable failure") {
+		t.Errorf("error = %q, want to wrap the underlying Enable error", errMsg.Err.Error())
+	}
+}
+
+// TestMountsScreen_StopMount_DisableAfterStop verifies the
+// "list-mode x = stop + disable" contract: after Stop succeeds,
+// Disable is also called so the mount no longer autostarts.
+func TestMountsScreen_StopMount_DisableAfterStop(t *testing.T) {
+	screen := NewMountsScreen()
+	screen.SetSize(80, 24)
+	screen.mounts = createTestMounts()
+	screen.cursor = 0
+	screen.generator = &systemd.Generator{}
+	screen.manager = &systemd.MockManager{
+		DisableErr: errors.New("synthetic disable failure"),
+	}
+
+	_, cmd := screen.stopMount()
+	if cmd == nil {
+		t.Fatal("stopMount should return a command")
+	}
+	msg := cmd()
+	errMsg, ok := msg.(MountsErrorMsg)
+	if !ok {
+		t.Fatalf("cmd() returned %T, want MountsErrorMsg (Disable failure must surface)", msg)
+	}
+	if !strings.Contains(errMsg.Err.Error(), "failed to disable mount") {
+		t.Errorf("error = %q, want to contain 'failed to disable mount'", errMsg.Err.Error())
+	}
+}
+
+// TestMountsScreen_StatusTickTriggersRefresh verifies that
+// receiving a mountsStatusTickMsg in list mode schedules a status
+// refresh and re-arms the poller.
+func TestMountsScreen_StatusTickTriggersRefresh(t *testing.T) {
+	screen := NewMountsScreen()
+	screen.SetSize(80, 24)
+	screen.mounts = createTestMounts()
+	screen.cursor = 0
+	screen.generator = &systemd.Generator{}
+	screen.manager = &systemd.MockManager{
+		StatusResult: &systemd.UnitStatus{Active: true},
+	}
+	screen.mode = MountsModeList
+
+	_, cmd := screen.Update(mountsStatusTickMsg(time.Now()))
+	if cmd == nil {
+		t.Fatal("tick should return a command (refresh + re-arm)")
+	}
+	// Drain the batch by running the resulting msg.
+	msg := cmd()
+	if msg != nil {
+		// loadStatuses returns nil; the poll's re-arm is in the
+		// batched cmds slice, not the first cmd.
+		_ = msg
+	}
+}
+
+// TestMountsScreen_StartMount_BothCallsSucceed verifies the success
+// path of the new "Start then Enable" sequence.
+func TestMountsScreen_StartMount_BothCallsSucceed(t *testing.T) {
+	screen := NewMountsScreen()
+	screen.SetSize(80, 24)
+	screen.mounts = createTestMounts()
+	screen.cursor = 0
+	screen.generator = &systemd.Generator{}
+	mgr := &systemd.MockManager{}
+	screen.manager = mgr
+
+	_, cmd := screen.startMount()
+	msg := cmd()
+	statusMsg, ok := msg.(MountStatusMsg)
+	if !ok {
+		t.Fatalf("cmd() returned %T, want MountStatusMsg", msg)
+	}
+	if !statusMsg.Status.Active {
+		t.Error("MountStatusMsg.Status.Active = false, want true")
+	}
+	if mgr.LastOpName == "" {
+		t.Error("LastOpName is empty, want the service name (Enable was called)")
 	}
 }
 

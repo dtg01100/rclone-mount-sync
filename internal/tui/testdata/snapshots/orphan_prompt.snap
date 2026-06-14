@@ -3,7 +3,6 @@
                                                                                 
                                                                                 
                                                                                 
-                                                                                
     ╭──────────────────────────────────────────────────────────────────────╮    
     │                                                                      │    
     │  Orphaned Units Detected                                             │    
@@ -13,7 +12,8 @@
     │  > rclone-mount-old1.service []                                      │    
     │    rclone-sync-old2.timer []                                         │    
     │                                                                      │    
-    │  [↑/k↓/j] Navigate  [Enter] Select  [d] Dismiss all  [q/Esc] Close   │    
+    │  [↑/k↓/j] Navigate  [Enter] Select  [s] Skip  [d] Dismiss all        │    
+    │  [q/Esc] Close                                                       │    
     │                                                                      │    
     ╰──────────────────────────────────────────────────────────────────────╯    
                                                                                 

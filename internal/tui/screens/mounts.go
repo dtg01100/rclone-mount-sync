@@ -55,6 +55,14 @@ type MountsScreen struct {
 	loading bool
 }
 
+// mountsStatusTickInterval is how often the live-status poller fires
+// while the mounts list is visible.
+const mountsStatusTickInterval = 5 * time.Second
+
+// mountsStatusTickMsg is delivered by the live-status poller; on
+// receipt, the screen refreshes statuses and re-arms the tick.
+type mountsStatusTickMsg time.Time
+
 // NewMountsScreen creates a new mounts screen.
 func NewMountsScreen() *MountsScreen {
 	return &MountsScreen{
@@ -83,7 +91,20 @@ func (s *MountsScreen) SetSize(width, height int) {
 
 // Init initializes the screen.
 func (s *MountsScreen) Init() tea.Cmd {
-	return s.loadMounts
+	// Kick off the initial load and start the live-status poller.
+	// The poller re-arms itself on each tick so it runs continuously
+	// while the list view is visible.
+	return tea.Batch(s.loadMounts, mountsStatusTick())
+}
+
+// mountsStatusTick returns the tea.Tick command that fires the
+// next mountsStatusTickMsg after the poll interval. The returned
+// command re-arms itself; the screen's Update handler is
+// responsible for calling loadStatuses to fetch fresh status data.
+func mountsStatusTick() tea.Cmd {
+	return tea.Tick(mountsStatusTickInterval, func(t time.Time) tea.Msg {
+		return mountsStatusTickMsg(t)
+	})
 }
 
 // loadMounts loads mount configurations and their statuses.
@@ -191,12 +212,39 @@ func (s *MountsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case MountStatusMsg:
 		s.statuses[msg.Name] = msg.Status
 
+	case mountsStatusTickMsg:
+		// Only refresh in list mode; in form/delete/details the
+		// user is busy and any in-flight messages there should
+		// not be disrupted by a background status refresh. Always
+		// re-arm so the poller continues to run.
+		if s.mode == MountsModeList && s.generator != nil && s.manager != nil {
+			cmds = append(cmds, s.loadStatuses)
+		}
+		cmds = append(cmds, mountsStatusTick())
+
 	case MountsErrorMsg:
 		s.err = msg.Err
 		s.loading = false
 	}
 
 	return s, tea.Batch(cmds...)
+}
+
+// loadStatuses refreshes the cached status for each known mount
+// without reloading config from disk. Used by the live-status
+// poller.
+func (s *MountsScreen) loadStatuses() tea.Msg {
+	if s.generator == nil || s.manager == nil {
+		return nil
+	}
+	for _, mount := range s.mounts {
+		serviceName := s.generator.ServiceName(mount.ID, "mount") + ".service"
+		status, err := s.manager.Status(serviceName)
+		if err == nil {
+			s.statuses[mount.Name] = status
+		}
+	}
+	return nil
 }
 
 // updateList handles updates when in list mode.
@@ -394,7 +442,9 @@ func (s *MountsScreen) startEditForm() (tea.Model, tea.Cmd) {
 	return s, s.form.Init()
 }
 
-// toggleMount toggles the mount service on/off.
+// toggleMount toggles the mount service on/off, pairing Start with
+// Enable and Stop with Disable so the hotkey matches what the form's
+// "Enabled" toggle would do.
 func (s *MountsScreen) toggleMount() (tea.Model, tea.Cmd) {
 	// Check if generator and manager are available
 	if s.generator == nil || s.manager == nil {
@@ -423,6 +473,9 @@ func (s *MountsScreen) toggleMount() (tea.Model, tea.Cmd) {
 				if err := s.manager.Stop(serviceName); err != nil {
 					return MountsErrorMsg{Err: fmt.Errorf("failed to stop mount: %w", err)}
 				}
+				if err := s.manager.Disable(serviceName); err != nil {
+					return MountsErrorMsg{Err: fmt.Errorf("failed to disable mount: %w", err)}
+				}
 				return MountStatusMsg{Name: mount.Name, Status: &systemd.UnitStatus{Active: false}}
 			},
 		)
@@ -433,13 +486,17 @@ func (s *MountsScreen) toggleMount() (tea.Model, tea.Cmd) {
 				if err := s.manager.Start(serviceName); err != nil {
 					return MountsErrorMsg{Err: fmt.Errorf("failed to start mount: %w", err)}
 				}
+				if err := s.manager.Enable(serviceName); err != nil {
+					return MountsErrorMsg{Err: fmt.Errorf("failed to enable mount: %w", err)}
+				}
 				return MountStatusMsg{Name: mount.Name, Status: &systemd.UnitStatus{Active: true}}
 			},
 		)
 	}
 }
 
-// startMount starts the mount service.
+// startMount starts the mount service and enables it so it
+// autostarts on login. Pairs with the form's "Enabled" toggle.
 func (s *MountsScreen) startMount() (tea.Model, tea.Cmd) {
 	// Check if generator and manager are available
 	if s.generator == nil || s.manager == nil {
@@ -458,11 +515,15 @@ func (s *MountsScreen) startMount() (tea.Model, tea.Cmd) {
 		if err := s.manager.Start(serviceName); err != nil {
 			return MountsErrorMsg{Err: fmt.Errorf("failed to start mount: %w", err)}
 		}
+		if err := s.manager.Enable(serviceName); err != nil {
+			return MountsErrorMsg{Err: fmt.Errorf("failed to enable mount: %w", err)}
+		}
 		return MountStatusMsg{Name: mount.Name, Status: &systemd.UnitStatus{Active: true}}
 	}
 }
 
-// stopMount stops the mount service.
+// stopMount stops the mount service and disables it so it does not
+// autostart on login.
 func (s *MountsScreen) stopMount() (tea.Model, tea.Cmd) {
 	// Check if generator and manager are available
 	if s.generator == nil || s.manager == nil {
@@ -480,6 +541,9 @@ func (s *MountsScreen) stopMount() (tea.Model, tea.Cmd) {
 	return s, func() tea.Msg {
 		if err := s.manager.Stop(serviceName); err != nil {
 			return MountsErrorMsg{Err: fmt.Errorf("failed to stop mount: %w", err)}
+		}
+		if err := s.manager.Disable(serviceName); err != nil {
+			return MountsErrorMsg{Err: fmt.Errorf("failed to disable mount: %w", err)}
 		}
 		return MountStatusMsg{Name: mount.Name, Status: &systemd.UnitStatus{Active: false}}
 	}
@@ -517,13 +581,18 @@ func (s *MountsScreen) renderList() string {
 		Render(title))
 	b.WriteString("\n\n")
 
-	// Show error if any
+	// Show error if any. We clear it here, after rendering, so a
+	// stale error from a prior action does not linger on screen after
+	// the user has moved on. This mirrors the one-shot success
+	// pattern below.
 	if s.err != nil {
 		b.WriteString(components.RenderError(s.err.Error()))
 		b.WriteString("\n\n")
+		s.err = nil
 	}
 
-	// Show success message if any
+	// Show success message if any. Cleared after one render cycle
+	// so a stale success banner does not stick around.
 	if s.success != "" {
 		b.WriteString(components.RenderSuccess(s.success))
 		b.WriteString("\n\n")
@@ -568,8 +637,8 @@ func (s *MountsScreen) renderList() string {
 		{Key: "a", Desc: "add"},
 		{Key: "e", Desc: "edit"},
 		{Key: "d", Desc: "delete"},
-		{Key: "s", Desc: "start"},
-		{Key: "x", Desc: "stop"},
+		{Key: "s", Desc: "start+enable"},
+		{Key: "x", Desc: "stop+disable"},
 		{Key: "Enter", Desc: "details"},
 		{Key: "Esc", Desc: "back"},
 	})
@@ -890,13 +959,53 @@ func (d *DeleteConfirm) View() string {
 		Render(title))
 	b.WriteString("\n\n")
 
+	// Mount summary so the user can verify which mount they are
+	// about to delete. The Name alone is not enough — two mounts
+	// can have similar names but different remotes/mountpoints.
+	summary := fmt.Sprintf("Name:       %s\nRemote:     %s%s\nMountPoint: %s",
+		d.mount.Name, d.mount.Remote, d.mount.RemotePath, d.mount.MountPoint)
+	b.WriteString(lipgloss.NewStyle().
+		Width(d.width).
+		Align(lipgloss.Center).
+		Render(summary))
+	b.WriteString("\n\n")
+
 	// Warning message
-	warning := fmt.Sprintf("Are you sure you want to delete '%s'?", d.mount.Name)
+	warning := "Are you sure you want to delete this mount?"
 	b.WriteString(lipgloss.NewStyle().
 		Width(d.width).
 		Align(lipgloss.Center).
 		Render(components.RenderWarning(warning)))
 	b.WriteString("\n\n")
+
+	// Per-option consequences, so the user can see what each
+	// choice actually does before confirming.
+	serviceName := ""
+	if d.generator != nil {
+		serviceName = d.generator.ServiceName(d.mount.ID, "mount") + ".service"
+	}
+	type consequence struct {
+		label string
+		what  string
+	}
+	consequences := []consequence{
+		{
+			label: "Cancel",
+			what:  "Do nothing. Return to the mount list.",
+		},
+		{
+			label: "Delete Service Only",
+			what: fmt.Sprintf(
+				"Stop %q, remove the unit file, leave the config entry intact.\n"+
+					"You can re-create the service later by re-saving the mount.", serviceName),
+		},
+		{
+			label: "Delete Service and Config",
+			what: fmt.Sprintf(
+				"Stop %q, remove the unit file, AND remove the entry from config.yaml.\n"+
+					"This cannot be undone (unless a backup exists).", serviceName),
+		},
+	}
 
 	// Options
 	options := []string{"Cancel", "Delete Service Only", "Delete Service and Config"}
@@ -914,6 +1023,17 @@ func (d *DeleteConfirm) View() string {
 		Width(d.width).
 		Align(lipgloss.Center).
 		Render(optionsLine))
+	b.WriteString("\n\n")
+
+	// Show the consequences of the currently-highlighted option.
+	selected := consequences[d.cursor]
+	consequenceBlock := fmt.Sprintf("%s\n  %s",
+		components.Styles.Subtitle.Render(selected.label+":"),
+		selected.what)
+	b.WriteString(lipgloss.NewStyle().
+		Width(d.width - 4).
+		Align(lipgloss.Left).
+		Render(consequenceBlock))
 	b.WriteString("\n\n")
 
 	// Help

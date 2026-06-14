@@ -507,9 +507,11 @@ func (p *EnhancedFilePicker) renderHelpBar() string {
 		{Key: "Backspace", Desc: "parent"},
 	}
 
-	if len(p.recentStore.Get()) > 0 {
-		items = append(items, HelpItem{Key: "r", Desc: "recent"})
-	}
+	// Show "r" in the help bar unconditionally so first-time users
+	// learn the recents shortcut exists, even when the store is
+	// empty. ToggleRecentLocations gracefully no-ops on an empty
+	// store, so the hint costs nothing.
+	items = append(items, HelpItem{Key: "r", Desc: "recent"})
 
 	items = append(items, HelpItem{Key: "Enter", Desc: "select"})
 	items = append(items, HelpItem{Key: "Esc", Desc: "cancel"})

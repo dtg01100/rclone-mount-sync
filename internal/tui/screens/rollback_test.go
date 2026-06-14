@@ -1,8 +1,10 @@
 package screens
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
@@ -785,5 +787,123 @@ func TestRollbackSyncJob_UpdateOperation(t *testing.T) {
 
 	if cfg.SyncJobs[0].Destination != "/mnt/original" {
 		t.Errorf("Destination = %q, want '/mnt/original'", cfg.SyncJobs[0].Destination)
+	}
+}
+
+// TestRollbackMount_SystemdCleanupErrorsSurfaces verifies that errors
+// from the systemd cleanup branch (Stop/Disable/RemoveUnit/DaemonReload)
+// are returned to the caller, even when config.RestoreFromBackup()
+// succeeds. Previously these were silently dropped on the success
+// path, leaving callers unaware of partial-cleanup failures.
+func TestRollbackMount_SystemdCleanupErrorsSurfaces(t *testing.T) {
+	tmpDir := t.TempDir()
+	configDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+
+	appDir := filepath.Join(configDir, "rclone-mount-sync")
+	if err := os.MkdirAll(appDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	backupContent := `version: "1.0"
+mounts:
+  - id: original01
+    name: OriginalMount
+`
+	if err := os.WriteFile(filepath.Join(appDir, "config.yaml.bak"), []byte(backupContent), 0o600); err != nil {
+		t.Fatalf("WriteFile backup: %v", err)
+	}
+
+	origMounts := []models.MountConfig{
+		{ID: "original01", Name: "OriginalMount"},
+	}
+	cfg := &config.Config{
+		Version: "1.0",
+		Mounts: []models.MountConfig{
+			{ID: "modified01", Name: "ModifiedMount"},
+		},
+	}
+
+	gen := systemd.NewTestGenerator(tmpDir)
+	mgr := &systemd.MockManager{
+		StopErr:    errors.New("synthetic stop failure"),
+		DisableErr: errors.New("synthetic disable failure"),
+	}
+
+	rm := NewRollbackManager(cfg, gen, mgr)
+	data := MountRollbackData{
+		OriginalMounts: origMounts,
+		Operation:      OperationCreate,
+		MountID:        "failed01",
+		MountName:      "FailedMount",
+	}
+
+	err := rm.RollbackMount(data, true)
+	if err == nil {
+		t.Fatal("RollbackMount returned nil error; want error from Stop/Disable cleanup")
+	}
+	if !strings.Contains(err.Error(), "synthetic stop failure") {
+		t.Errorf("error = %q, want to contain 'synthetic stop failure'", err.Error())
+	}
+	if !strings.Contains(err.Error(), "synthetic disable failure") {
+		t.Errorf("error = %q, want to contain 'synthetic disable failure'", err.Error())
+	}
+	// Config must still have been restored from the backup.
+	if len(cfg.Mounts) != 1 || cfg.Mounts[0].Name != "OriginalMount" {
+		t.Errorf("Mounts not restored: got %+v", cfg.Mounts)
+	}
+}
+
+// TestRollbackSyncJob_SystemdCleanupErrorsSurfaces mirrors the mount
+// version for sync job rollback.
+func TestRollbackSyncJob_SystemdCleanupErrorsSurfaces(t *testing.T) {
+	tmpDir := t.TempDir()
+	configDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", configDir)
+
+	appDir := filepath.Join(configDir, "rclone-mount-sync")
+	if err := os.MkdirAll(appDir, 0o700); err != nil {
+		t.Fatalf("MkdirAll: %v", err)
+	}
+	backupContent := `version: "1.0"
+sync_jobs:
+  - id: original01
+    name: OriginalJob
+`
+	if err := os.WriteFile(filepath.Join(appDir, "config.yaml.bak"), []byte(backupContent), 0o600); err != nil {
+		t.Fatalf("WriteFile backup: %v", err)
+	}
+
+	origJobs := []models.SyncJobConfig{
+		{ID: "original01", Name: "OriginalJob"},
+	}
+	cfg := &config.Config{
+		Version: "1.0",
+		SyncJobs: []models.SyncJobConfig{
+			{ID: "modified01", Name: "ModifiedJob"},
+		},
+	}
+
+	gen := systemd.NewTestGenerator(tmpDir)
+	mgr := &systemd.MockManager{
+		StopErr: errors.New("synthetic stop failure"),
+	}
+
+	rm := NewRollbackManager(cfg, gen, mgr)
+	data := SyncJobRollbackData{
+		OriginalJobs: origJobs,
+		Operation:    OperationUpdate,
+		JobID:        "failed01",
+		JobName:      "FailedJob",
+	}
+
+	err := rm.RollbackSyncJob(data, true)
+	if err == nil {
+		t.Fatal("RollbackSyncJob returned nil error; want error from Stop cleanup")
+	}
+	if !strings.Contains(err.Error(), "synthetic stop failure") {
+		t.Errorf("error = %q, want to contain 'synthetic stop failure'", err.Error())
+	}
+	if len(cfg.SyncJobs) != 1 || cfg.SyncJobs[0].Name != "OriginalJob" {
+		t.Errorf("SyncJobs not restored: got %+v", cfg.SyncJobs)
 	}
 }

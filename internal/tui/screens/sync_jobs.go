@@ -55,6 +55,13 @@ type SyncJobsScreen struct {
 	loading bool
 }
 
+// syncJobsStatusTickInterval is how often the live-status poller
+// fires while the sync jobs list is visible.
+const syncJobsStatusTickInterval = 5 * time.Second
+
+// syncJobsStatusTickMsg is delivered by the live-status poller.
+type syncJobsStatusTickMsg time.Time
+
 // NewSyncJobsScreen creates a new sync jobs screen.
 func NewSyncJobsScreen() *SyncJobsScreen {
 	return &SyncJobsScreen{
@@ -83,7 +90,13 @@ func (s *SyncJobsScreen) SetSize(width, height int) {
 
 // Init initializes the screen.
 func (s *SyncJobsScreen) Init() tea.Cmd {
-	return s.loadSyncJobs
+	return tea.Batch(s.loadSyncJobs, syncJobsStatusTick())
+}
+
+func syncJobsStatusTick() tea.Cmd {
+	return tea.Tick(syncJobsStatusTickInterval, func(t time.Time) tea.Msg {
+		return syncJobsStatusTickMsg(t)
+	})
 }
 
 // loadSyncJobs loads sync job configurations and their statuses.
@@ -191,12 +204,36 @@ func (s *SyncJobsScreen) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case SyncJobStatusMsg:
 		s.statuses[msg.Name] = msg.Status
 
+	case syncJobsStatusTickMsg:
+		// Only refresh in list mode. Always re-arm.
+		if s.mode == SyncJobsModeList && s.generator != nil && s.manager != nil {
+			cmds = append(cmds, s.loadSyncJobStatuses)
+		}
+		cmds = append(cmds, syncJobsStatusTick())
+
 	case SyncJobsErrorMsg:
 		s.err = msg.Err
 		s.loading = false
 	}
 
 	return s, tea.Batch(cmds...)
+}
+
+// loadSyncJobStatuses refreshes the cached status for each known
+// sync job without reloading config from disk. Used by the
+// live-status poller.
+func (s *SyncJobsScreen) loadSyncJobStatuses() tea.Msg {
+	if s.generator == nil || s.manager == nil {
+		return nil
+	}
+	for _, job := range s.jobs {
+		serviceName := s.generator.ServiceName(job.ID, "sync") + ".service"
+		status, err := s.manager.GetDetailedStatus(serviceName)
+		if err == nil {
+			s.statuses[job.Name] = status
+		}
+	}
+	return nil
 }
 
 // updateList handles updates when in list mode.
@@ -448,18 +485,26 @@ func (s *SyncJobsScreen) toggleTimer() (tea.Model, tea.Cmd) {
 	if isActive {
 		// Stop and disable timer
 		if err := s.manager.StopTimer(timerName); err != nil {
-			return s, s.loadSyncJobs
+			return s, func() tea.Msg {
+				return SyncJobsErrorMsg{Err: fmt.Errorf("failed to stop timer: %w", err)}
+			}
 		}
 		if err := s.manager.DisableTimer(timerName); err != nil {
-			return s, s.loadSyncJobs
+			return s, func() tea.Msg {
+				return SyncJobsErrorMsg{Err: fmt.Errorf("failed to disable timer: %w", err)}
+			}
 		}
 	} else {
 		// Enable and start timer
 		if err := s.manager.EnableTimer(timerName); err != nil {
-			return s, s.loadSyncJobs
+			return s, func() tea.Msg {
+				return SyncJobsErrorMsg{Err: fmt.Errorf("failed to enable timer: %w", err)}
+			}
 		}
 		if err := s.manager.StartTimer(timerName); err != nil {
-			return s, s.loadSyncJobs
+			return s, func() tea.Msg {
+				return SyncJobsErrorMsg{Err: fmt.Errorf("failed to start timer: %w", err)}
+			}
 		}
 	}
 
@@ -499,13 +544,16 @@ func (s *SyncJobsScreen) renderList() string {
 		Render(title))
 	b.WriteString("\n\n")
 
-	// Show error if any
+	// Show error if any. Cleared after one render cycle so a stale
+	// error from a prior action does not linger on screen.
 	if s.err != nil {
 		b.WriteString(components.RenderError(s.err.Error()))
 		b.WriteString("\n\n")
+		s.err = nil
 	}
 
-	// Show success message if any
+	// Show success message if any. Cleared after one render cycle
+	// so a stale success banner does not stick around.
 	if s.success != "" {
 		b.WriteString(components.RenderSuccess(s.success))
 		b.WriteString("\n\n")
@@ -1221,13 +1269,54 @@ func (d *SyncJobDeleteConfirm) View() string {
 		Render(title))
 	b.WriteString("\n\n")
 
+	// Job summary so the user can verify which sync job is being
+	// deleted (Name alone is not enough — two jobs can have
+	// similar names but different source/destination pairs).
+	summary := fmt.Sprintf("Name:        %s\nSource:      %s\nDestination: %s",
+		d.job.Name, d.job.Source, d.job.Destination)
+	b.WriteString(lipgloss.NewStyle().
+		Width(d.width).
+		Align(lipgloss.Center).
+		Render(summary))
+	b.WriteString("\n\n")
+
 	// Warning message
-	warning := fmt.Sprintf("Are you sure you want to delete '%s'?", d.job.Name)
+	warning := "Are you sure you want to delete this sync job?"
 	b.WriteString(lipgloss.NewStyle().
 		Width(d.width).
 		Align(lipgloss.Center).
 		Render(components.RenderWarning(warning)))
 	b.WriteString("\n\n")
+
+	// Per-option consequences.
+	serviceName := ""
+	timerName := ""
+	if d.generator != nil {
+		serviceName = d.generator.ServiceName(d.job.ID, "sync") + ".service"
+		timerName = d.generator.ServiceName(d.job.ID, "sync") + ".timer"
+	}
+	type consequence struct {
+		label string
+		what  string
+	}
+	consequences := []consequence{
+		{
+			label: "Cancel",
+			what:  "Do nothing. Return to the sync jobs list.",
+		},
+		{
+			label: "Delete Service Only",
+			what: fmt.Sprintf(
+				"Stop %q, stop and disable %q, remove both unit files, leave the config entry intact.\n"+
+					"You can re-create the units later by re-saving the job.", serviceName, timerName),
+		},
+		{
+			label: "Delete Service and Config",
+			what: fmt.Sprintf(
+				"Stop %q, stop and disable %q, remove both unit files, AND remove the entry from config.yaml.\n"+
+					"This cannot be undone (unless a backup exists).", serviceName, timerName),
+		},
+	}
 
 	// Options
 	options := []string{"Cancel", "Delete Service Only", "Delete Service and Config"}
@@ -1245,6 +1334,17 @@ func (d *SyncJobDeleteConfirm) View() string {
 		Width(d.width).
 		Align(lipgloss.Center).
 		Render(optionsLine))
+	b.WriteString("\n\n")
+
+	// Show the consequences of the currently-highlighted option.
+	selected := consequences[d.cursor]
+	consequenceBlock := fmt.Sprintf("%s\n  %s",
+		components.Styles.Subtitle.Render(selected.label+":"),
+		selected.what)
+	b.WriteString(lipgloss.NewStyle().
+		Width(d.width - 4).
+		Align(lipgloss.Left).
+		Render(consequenceBlock))
 	b.WriteString("\n\n")
 
 	// Help

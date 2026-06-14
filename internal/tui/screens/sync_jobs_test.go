@@ -2372,6 +2372,65 @@ func TestSyncJobsScreen_ToggleTimer_InactiveTimer(t *testing.T) {
 	}
 }
 
+// TestSyncJobsScreen_ToggleTimer_StopTimerError verifies that a
+// StopTimer failure during toggle surfaces as a SyncJobsErrorMsg
+// rather than being silently swallowed behind a silent loadSyncJobs
+// refresh.
+func TestSyncJobsScreen_ToggleTimer_StopTimerError(t *testing.T) {
+	screen := NewSyncJobsScreen()
+	screen.SetSize(80, 24)
+	screen.jobs = createTestSyncJobs()
+	screen.cursor = 0
+	screen.generator = &systemd.Generator{}
+	screen.manager = &systemd.MockManager{
+		IsActiveResult: true,
+		StopTimerErr:   errors.New("synthetic stop-timer failure"),
+	}
+
+	_, cmd := screen.toggleTimer()
+	if cmd == nil {
+		t.Fatal("toggleTimer should return a command on error")
+	}
+	msg := cmd()
+	errMsg, ok := msg.(SyncJobsErrorMsg)
+	if !ok {
+		t.Fatalf("cmd() returned %T, want SyncJobsErrorMsg", msg)
+	}
+	if !strings.Contains(errMsg.Err.Error(), "failed to stop timer") {
+		t.Errorf("error = %q, want to contain 'failed to stop timer'", errMsg.Err.Error())
+	}
+	if !strings.Contains(errMsg.Err.Error(), "synthetic stop-timer failure") {
+		t.Errorf("error = %q, want to wrap the underlying StopTimer error", errMsg.Err.Error())
+	}
+}
+
+// TestSyncJobsScreen_ToggleTimer_StartTimerError verifies that a
+// StartTimer failure during toggle surfaces as a SyncJobsErrorMsg.
+func TestSyncJobsScreen_ToggleTimer_StartTimerError(t *testing.T) {
+	screen := NewSyncJobsScreen()
+	screen.SetSize(80, 24)
+	screen.jobs = createTestSyncJobs()
+	screen.cursor = 0
+	screen.generator = &systemd.Generator{}
+	screen.manager = &systemd.MockManager{
+		IsActiveResult: false,
+		EnableTimerErr: errors.New("synthetic enable-timer failure"),
+	}
+
+	_, cmd := screen.toggleTimer()
+	if cmd == nil {
+		t.Fatal("toggleTimer should return a command on error")
+	}
+	msg := cmd()
+	errMsg, ok := msg.(SyncJobsErrorMsg)
+	if !ok {
+		t.Fatalf("cmd() returned %T, want SyncJobsErrorMsg", msg)
+	}
+	if !strings.Contains(errMsg.Err.Error(), "failed to enable timer") {
+		t.Errorf("error = %q, want to contain 'failed to enable timer'", errMsg.Err.Error())
+	}
+}
+
 // Tests for runSyncJobNow command execution
 
 func TestSyncJobsScreen_RunSyncJobNow_CommandReturnsMessage(t *testing.T) {

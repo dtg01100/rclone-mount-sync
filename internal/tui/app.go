@@ -436,6 +436,13 @@ func (a *App) View() string {
 	headerHeight := 1
 	statusHeight := 1
 	contentHeight := a.height - headerHeight - statusHeight
+	// Clamp to a sane minimum. A very small window (e.g. terminal
+	// resized to 2 lines tall) would produce a negative contentHeight
+	// that lipgloss then renders as zero/garbage. This mirrors the
+	// defensive clamp in renderHelp.
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
 
 	// Render header
 	header := a.renderHeader()
@@ -681,6 +688,21 @@ func (a *App) updateOrphanPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if a.orphans == nil {
 		return a, nil
 	}
+
+	// While an error is displayed, ignore all keys except those that
+	// dismiss the prompt. Without this gate, pressing enter or 'c'
+	// re-runs the failing import/cleanup in a tight loop with no way
+	// to acknowledge the error short of quitting.
+	if a.orphanError != nil {
+		switch msg.String() {
+		case "esc", "q", "d":
+			a.orphanError = nil
+			a.orphanMode = 0
+			a.showOrphanPrompt = false
+		}
+		return a, nil
+	}
+
 	orphans := a.orphans.OrphanedUnits
 
 	switch msg.String() {
@@ -701,6 +723,23 @@ func (a *App) updateOrphanPrompt(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "c":
 		if a.orphanMode == 1 {
 			return a.cleanupSelectedOrphan()
+		}
+	case "s":
+		// Skip: remove from local list without touching the unit
+		// file. Useful when the user wants to handle it manually
+		// later. The unit file remains on disk and will be detected
+		// again on next reconcile.
+		if a.orphanMode == 0 && len(orphans) > 0 && a.orphanSelected < len(orphans) {
+			a.orphans.OrphanedUnits = append(
+				a.orphans.OrphanedUnits[:a.orphanSelected],
+				a.orphans.OrphanedUnits[a.orphanSelected+1:]...,
+			)
+			if len(a.orphans.OrphanedUnits) == 0 {
+				a.orphanSelected = -1
+				a.showOrphanPrompt = false
+			} else if a.orphanSelected >= len(a.orphans.OrphanedUnits) {
+				a.orphanSelected = len(a.orphans.OrphanedUnits) - 1
+			}
 		}
 	case "esc", "q":
 		if a.orphanMode == 1 {
@@ -820,6 +859,31 @@ type OrphanActionMsg struct {
 	Err    error
 }
 
+// orphanErrorSuggestions returns a short list of suggested next
+// steps for a given orphan-action error, matched by substring. The
+// goal is to translate raw "failed to X: <system error>" text into
+// something a user can act on.
+func orphanErrorSuggestions(err error) string {
+	if err == nil {
+		return ""
+	}
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, "permission denied"):
+		return "Suggestions:\n  • Check that you own the unit file (chown $USER:$USER <path>)\n  • Try running without sudo; this app uses your user systemd session"
+	case strings.Contains(msg, "name already exists") || strings.Contains(msg, "duplicate"):
+		return "Suggestions:\n  • A mount or sync job with this name is already in your config\n  • Edit the existing entry instead of importing this orphan"
+	case strings.Contains(msg, "failed to write service file"):
+		return "Suggestions:\n  • Ensure ~/.config/systemd/user/ is writable\n  • If the unit file already exists, remove it manually first"
+	case strings.Contains(msg, "failed to import") || strings.Contains(msg, "no remote"):
+		return "Suggestions:\n  • The unit references a remote that is no longer configured\n  • Run 'rclone config' to recreate the remote, or cleanup (delete) this orphan"
+	case strings.Contains(msg, "failed to cleanup") || strings.Contains(msg, "failed to remove orphan"):
+		return "Suggestions:\n  • The unit file is in use or owned by another process\n  • Stop the service first, or remove the unit file manually"
+	default:
+		return "Suggestions:\n  • See the message above for the underlying cause\n  • Re-run 'rclone-mount-sync doctor' to verify your environment"
+	}
+}
+
 func (a *App) renderOrphanPrompt(baseView string) string {
 	var b strings.Builder
 
@@ -832,7 +896,9 @@ func (a *App) renderOrphanPrompt(baseView string) string {
 	case a.orphanError != nil:
 		b.WriteString(components.RenderError(a.orphanError.Error()))
 		b.WriteString("\n")
-		b.WriteString(components.Styles.HelpText.Render("Press Esc to go back"))
+		b.WriteString(components.Styles.HelpText.Render(orphanErrorSuggestions(a.orphanError)))
+		b.WriteString("\n")
+		b.WriteString(components.Styles.HelpText.Render("Press Esc to dismiss"))
 	case a.orphanMode == 0:
 		b.WriteString("Select a unit to manage:\n\n")
 		for i, orphan := range a.orphans.OrphanedUnits {
@@ -849,7 +915,7 @@ func (a *App) renderOrphanPrompt(baseView string) string {
 			}
 		}
 		b.WriteString("\n")
-		b.WriteString(components.Styles.HelpText.Render("[↑/k↓/j] Navigate  [Enter] Select  [d] Dismiss all  [q/Esc] Close"))
+		b.WriteString(components.Styles.HelpText.Render("[↑/k↓/j] Navigate  [Enter] Select  [s] Skip  [d] Dismiss all  [q/Esc] Close"))
 	default:
 		orphan := a.orphans.OrphanedUnits[a.orphanSelected]
 		legacyTag := ""

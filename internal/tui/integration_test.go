@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -648,7 +649,188 @@ func TestIntegration_OrphanModeEscapeReturnsToList(t *testing.T) {
 	}
 }
 
+// TestIntegration_OrphanPromptErrorStateIgnoresEnterAndC verifies that
+// when the orphan prompt is showing an error message, pressing Enter
+// (which would otherwise re-trigger import) or 'c' (which would
+// otherwise re-trigger cleanup) is a no-op. Without this guard, the
+// user is trapped retrying the same failing action.
+func TestIntegration_OrphanPromptErrorStateIgnoresEnterAndC(t *testing.T) {
+	app := minimalApp(t)
+	app.showOrphanPrompt = true
+	app.orphanMode = 1
+	app.orphanSelected = 0
+	app.orphanError = fmt.Errorf("simulated prior failure")
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "rclone-mount-orphan.service", Type: "mount", Path: "/p", ID: "orphan1", IsLegacy: false},
+		},
+	}
+	app.currentScreen = ScreenMain
+	app.width = 80
+	app.height = 24
+
+	// Enter must not start a new import (loading must remain false,
+	// mode must remain 1 so the user is not bounced to the list).
+	m := sendKey(t, app, tea.KeyMsg{Type: tea.KeyEnter})
+	if m.loading {
+		t.Error("loading = true after Enter in error state, want false (no retry)")
+	}
+	if m.orphanError == nil {
+		t.Error("orphanError cleared by Enter in error state, want retained until dismissal")
+	}
+	if m.showOrphanPrompt == false {
+		t.Error("showOrphanPrompt dismissed by Enter in error state, want true (errors must be acknowledged)")
+	}
+
+	// 'c' must not start a new cleanup either.
+	m = sendKey(t, app, keyRune("c"))
+	if m.loading {
+		t.Error("loading = true after 'c' in error state, want false (no retry)")
+	}
+	if m.orphanError == nil {
+		t.Error("orphanError cleared by 'c' in error state, want retained until dismissal")
+	}
+
+	// Esc must dismiss the prompt and clear the error.
+	m = sendKey(t, app, tea.KeyMsg{Type: tea.KeyEsc})
+	if m.orphanError != nil {
+		t.Errorf("orphanError = %v after Esc, want nil", m.orphanError)
+	}
+	if m.showOrphanPrompt {
+		t.Error("showOrphanPrompt = true after Esc, want false")
+	}
+}
+
+// TestIntegration_OrphanPromptErrorStateIgnoresNavigation verifies that
+// up/down/d/j/q navigation is a no-op while an error is displayed.
+func TestIntegration_OrphanPromptErrorStateIgnoresNavigation(t *testing.T) {
+	app := minimalApp(t)
+	app.showOrphanPrompt = true
+	app.orphanMode = 0
+	app.orphanSelected = 1
+	app.orphanError = fmt.Errorf("simulated prior failure")
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "a.service", Type: "mount", Path: "/p", ID: "1", IsLegacy: false},
+			{Name: "b.service", Type: "mount", Path: "/p", ID: "2", IsLegacy: false},
+		},
+	}
+	app.currentScreen = ScreenMain
+	app.width = 80
+	app.height = 24
+
+	m := sendKey(t, app, keyRune("j"))
+	if m.orphanSelected != 1 {
+		t.Errorf("orphanSelected changed by 'j' in error state: got %d, want 1", m.orphanSelected)
+	}
+	m = sendKey(t, app, keyRune("d"))
+	if m.showOrphanPrompt {
+		t.Error("showOrphanPrompt = true after 'd' in error state, want false (d dismisses all)")
+	}
+}
+
 // --- test helpers ---
+
+// TestIntegration_OrphanPromptSkip verifies the new 's' (skip) key
+// removes the selected orphan from the local list without touching
+// the unit file on disk.
+func TestIntegration_OrphanPromptSkip(t *testing.T) {
+	app := minimalApp(t)
+	app.showOrphanPrompt = true
+	app.orphanMode = 0
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "a.service", Type: "mount", Path: "/p", ID: "1", IsLegacy: false},
+			{Name: "b.service", Type: "mount", Path: "/p", ID: "2", IsLegacy: false},
+			{Name: "c.service", Type: "mount", Path: "/p", ID: "3", IsLegacy: false},
+		},
+	}
+	app.currentScreen = ScreenMain
+	app.width = 80
+	app.height = 24
+
+	// Skip the first one — list shrinks to 2, selection stays at 0
+	// (now pointing at the previously-second entry).
+	m := sendKey(t, app, keyRune("s"))
+	if got := len(m.orphans.OrphanedUnits); got != 2 {
+		t.Fatalf("after skip, len(OrphanedUnits) = %d, want 2", got)
+	}
+	if m.orphans.OrphanedUnits[0].ID != "2" {
+		t.Errorf("after skip, OrphanedUnits[0].ID = %q, want \"2\"", m.orphans.OrphanedUnits[0].ID)
+	}
+	if !m.showOrphanPrompt {
+		t.Error("showOrphanPrompt = false after skip, want true (orphans remain)")
+	}
+}
+
+// TestIntegration_OrphanPromptSkipLastClosesPrompt verifies that
+// skipping the last orphan closes the prompt (no orphans left to
+// act on).
+func TestIntegration_OrphanPromptSkipLastClosesPrompt(t *testing.T) {
+	app := minimalApp(t)
+	app.showOrphanPrompt = true
+	app.orphanMode = 0
+	app.orphanSelected = 0
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "only.service", Type: "mount", Path: "/p", ID: "1", IsLegacy: false},
+		},
+	}
+	app.currentScreen = ScreenMain
+	app.width = 80
+	app.height = 24
+
+	m := sendKey(t, app, keyRune("s"))
+	if m.showOrphanPrompt {
+		t.Error("showOrphanPrompt = true after skipping the last orphan, want false")
+	}
+}
+
+// TestIntegration_OrphanErrorSuggestionsInView verifies that
+// orphan errors rendered in the View include actionable suggestions
+// (not just the raw error string).
+func TestIntegration_OrphanErrorSuggestionsInView(t *testing.T) {
+	app := minimalApp(t)
+	app.showOrphanPrompt = true
+	app.orphanError = fmt.Errorf("failed to import orphan: permission denied")
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "x.service", Type: "mount", Path: "/p", ID: "1", IsLegacy: false},
+		},
+	}
+	app.currentScreen = ScreenMain
+	app.width = 100
+	app.height = 30
+
+	view := app.View()
+	if !strings.Contains(view, "permission denied") {
+		t.Error("view should contain the raw error text")
+	}
+	if !strings.Contains(view, "Suggestions") {
+		t.Errorf("view should contain 'Suggestions' header for permission denied, got:\n%s", view)
+	}
+	if !strings.Contains(view, "chown") {
+		t.Errorf("permission-denied suggestion should mention 'chown', got:\n%s", view)
+	}
+}
+
+// TestIntegration_ViewClampsTinyHeight verifies that calling View
+// on a near-zero-height window does not panic and renders something
+// (rather than a negative-size lipgloss box).
+func TestIntegration_ViewClampsTinyHeight(t *testing.T) {
+	app := minimalApp(t)
+	app.width = 80
+	app.height = 1
+	app.currentScreen = ScreenMain
+
+	view := app.View()
+	if view == "" {
+		t.Error("View() should not return empty string for tiny height")
+	}
+	// Just ensure it doesn't panic; a 1-line terminal is degenerate
+	// but should not crash the TUI.
+}
 
 type testConfigError struct {
 	msg string

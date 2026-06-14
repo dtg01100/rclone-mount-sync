@@ -101,6 +101,9 @@ func (r *RollbackManager) RollbackMount(data MountRollbackData, systemdFailed bo
 	}
 
 	r.config.SetMounts(data.OriginalMounts)
+	if len(errs) > 0 {
+		return fmt.Errorf("rollback encountered errors: %v", errs)
+	}
 	return nil
 }
 
@@ -148,6 +151,9 @@ func (r *RollbackManager) RollbackSyncJob(data SyncJobRollbackData, systemdFaile
 	}
 
 	r.config.SetSyncJobs(data.OriginalJobs)
+	if len(errs) > 0 {
+		return fmt.Errorf("rollback encountered errors: %v", errs)
+	}
 	return nil
 }
 

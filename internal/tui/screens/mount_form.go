@@ -303,17 +303,17 @@ func (f *MountForm) buildForm() {
 				}),
 		).Title("Step 4: Advanced Options"),
 
-		// Step 5: Service Options
+		// Step 5: Service Options. We collapse "Auto Start" and
+		// "Enable Service" into a single "Start on login" toggle. For
+		// user-session systemd, enabling the service IS what makes
+		// it autostart on login; presenting them as two separate
+		// booleans is confusing. Internally we still set both fields
+		// to keep the on-disk model stable.
 		huh.NewGroup(
 			huh.NewConfirm().
-				Title("Auto Start").
-				Description("Start the mount automatically on login").
+				Title("Start on login").
+				Description("Enable the systemd service and start it now").
 				Value(&f.autoStart),
-
-			huh.NewConfirm().
-				Title("Enable Service").
-				Description("Enable the systemd service").
-				Value(&f.enabled),
 		).Title("Step 5: Service Options"),
 	}
 
@@ -464,8 +464,11 @@ func (f *MountForm) submitForm() tea.Msg {
 			LogLevel:        f.logLevel,
 			ExtraArgs:       f.extraArgs,
 		},
+		// "Start on login" drives both fields. For user-session
+		// systemd, enabling == autostart; keeping them in sync here
+		// avoids drift between the two persisted booleans.
 		AutoStart: f.autoStart,
-		Enabled:   f.enabled,
+		Enabled:   f.autoStart,
 	}
 
 	now := time.Now()
