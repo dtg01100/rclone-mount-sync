@@ -39,7 +39,7 @@ View and control the status of your mounts and sync jobs through an intuitive in
 
 ## Requirements
 
-- Go 1.23.0 or later
+- Go 1.24.0 or later
 - [rclone](https://rclone.org/) v1.60.0 or later, installed and configured
 - Linux with systemd (user session support)
 - FUSE (for mount operations)
@@ -234,7 +234,7 @@ Timer units support:
 
 ### Prerequisites
 
-- Go 1.23.0+
+- Go 1.24.0+
 - Make (optional, for using the Makefile)
 
 ### Development Commands

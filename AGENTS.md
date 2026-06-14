@@ -12,7 +12,7 @@
 rclone mounts and sync jobs on Linux, with automatic systemd user unit file
 generation.
 
-- **Language:** Go 1.23.0+
+- **Language:** Go 1.24.0+
 - **Module:** `github.com/dtg01100/rclone-mount-sync`
 - **Architecture:** Bubble Tea (charmbracelet) MVC TUI + Cobra CLI dispatch
 - **Runtime:** Linux with systemd (user session), FUSE, rclone v1.60.0+
@@ -130,7 +130,7 @@ make install PREFIX=/opt/rclone-mount-sync   # custom prefix
 | `pkg/utils/` | Public utility functions (importable by external projects) |
 | `plans/` | Architecture and design documents |
 | `docs/` | TUI-specific deep-dive documents (e.g. validation strategy) |
-| `.github/workflows/ci.yaml` | CI: `go vet` + `go test -v -count=1 ./...` on Go 1.23 |
+| `.github/workflows/ci.yaml` | CI: `go vet` + `go test -v -count=1 ./...` on Go 1.24 |
 
 **Key entry points:**
 

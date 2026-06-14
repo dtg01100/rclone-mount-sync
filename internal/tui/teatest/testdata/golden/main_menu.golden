@@ -1,0 +1,30 @@
+[?25l[?2004h Rclone Mount Sync                                                          vX.Y.Z  [?] Help  [q] Quit
+                                                                                                    
+                                             Main Menu                                              
+                                                                                                    
+                                       ▸ [M] Mount Management                                       
+                                Configure and manage rclone mount points                            
+                                        [S] Sync Job Management                                     
+                             Configure and schedule rclone sync operations                          
+                                          [V] Service Status                                        
+                                   View and control systemd services                                
+                                             [T] Settings                                           
+                                       Application configuration                                    
+                                               [Q] Quit                                             
+                                          Exit the application                                      
+                                                                                                    
+                                                                                                    
+ ↑/↓ navigate • Enter select • M/S/V/T quick jump • ? help • q quit                                 
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+                                                                                                    
+ Screen: Main Menu | ?: Help | q: Quit                                                              [100D[2K[?2004l[?25h[?1002l[?1003l[?1006l

@@ -112,6 +112,16 @@ type App struct {
 	generator *systemd.Generator
 	manager   *systemd.Manager
 
+	// skipInitializeServices is set by NewAppWithDeps. When
+	// true, App.Init returns only the main-menu init (no
+	// initializeServices Cmd), so the teatest seam can run a
+	// pre-wired App without the production side-effects of
+	// loading real config, spawning a real rclone client, or
+	// constructing a real systemd Generator/Manager. It is the
+	// test-only escape hatch that makes the dependency-injection
+	// seam actually inert.
+	skipInitializeServices bool
+
 	// Orphan detection
 	orphans          *systemd.ReconciliationResult
 	showOrphanPrompt bool
@@ -134,8 +144,93 @@ func NewApp(version string) *App {
 	}
 }
 
+// AppDeps is the bundle of injected dependencies NewAppWithDeps
+// expects. Any field may be nil; screens fall back to error-only
+// modes for nil services, mirroring the existing direct-model tests
+// that use &rclone.Client{} / a no-op MockManager.
+//
+// This is the test seam: production code paths (NewApp +
+// initializeServices, and main.go) are unchanged. Tests construct an
+// App pre-wired with mocks so tea.Program's Init() can run without
+// touching the real filesystem, a real rclone binary, or a real
+// systemd user session.
+type AppDeps struct {
+	// Config is the loaded configuration. Required by most screens;
+	// nil is allowed but screen commands that read config will fail
+	// gracefully.
+	Config *config.Config
+
+	// Rclone is the rclone client. May be nil; screens that need
+	// remote listing will surface a friendly error rather than
+	// panicking.
+	Rclone *rclone.Client
+
+	// Generator creates systemd unit files. May be nil.
+	Generator *systemd.Generator
+
+	// Manager controls systemd user services. May be nil; production
+	// code typically passes a *systemd.Manager, tests can pass
+	// *systemd.MockManager.
+	Manager systemd.ServiceManager
+}
+
+// NewAppWithDeps creates an App whose services are pre-wired from
+// the provided dependencies. It is the test seam used by the
+// teatest suite in internal/tui/teatest/.
+//
+// Unlike NewApp (which returns a bare App and lets initializeServices
+// load config / build a real client asynchronously), NewAppWithDeps
+// wires dependencies synchronously: the returned App can be handed
+// to tea.NewProgram and Init() will succeed without a real config
+// directory, a real rclone binary, or a real systemd user session.
+//
+// The screen's Init cmds (e.g. mounts.Init, services.Init) still run
+// in the background, but they no-op cleanly when their underlying
+// dependencies are nil.
+func NewAppWithDeps(version string, deps AppDeps) *App {
+	app := NewApp(version)
+	app.config = deps.Config
+	app.rclone = deps.Rclone
+	app.generator = deps.Generator
+	// app.manager stays as the concrete *systemd.Manager field; for
+	// the teatest seam, tests typically pass a *systemd.MockManager
+	// (or nil) and screens that take a systemd.ServiceManager
+	// interface get the mock via SetServices below. The orphan
+	// import/cleanup paths require the concrete *Manager and are
+	// not exercised through the PT (the orphan prompt is tested
+	// against a pre-populated ReconciliationResult with no
+	// real-systemd side effects).
+	app.skipInitializeServices = true
+
+	// Mirror initializeServices' SetServices calls so screens see
+	// the same pre-wired state they would after a real init.
+	if deps.Config != nil {
+		app.mounts.SetServices(deps.Config, deps.Rclone, deps.Generator, deps.Manager)
+		app.syncJobs.SetServices(deps.Config, deps.Rclone, deps.Generator, deps.Manager)
+		app.services.SetServices(deps.Config, deps.Manager, deps.Generator)
+		app.settings.SetConfig(deps.Config)
+	}
+
+	return app
+}
+
 // Init initializes the application.
 func (a *App) Init() tea.Cmd {
+	// In production, the screens' Init() cmds are kicked off
+	// after the async initializeServices Cmd posts
+	// AppInitDone / ReconciliationMsg (see the case statements
+	// below). For the teatest seam (NewAppWithDeps), the
+	// services are already wired, so we don't kick off any
+	// screen loads here — they would run in a goroutine and
+	// race with the render loop reading s.mounts/s.jobs (the
+	// screens don't lock their state). The screens' inits
+	// are fired when the user actually navigates to them
+	// (see the NavigateToMsg and ScreenChangeMsg handlers
+	// in Update), and tests that need a pre-loaded list can
+	// use AppDeps.Config.
+	if a.skipInitializeServices {
+		return a.mainMenu.Init()
+	}
 	return tea.Batch(
 		a.mainMenu.Init(),
 		a.initializeServices,
@@ -288,7 +383,20 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ScreenChangeMsg:
 		a.currentScreen = msg.Screen
 		a.showHelp = false
-		return a, nil
+		// When the seam is active, the screen inits (other
+		// than a.mounts) haven't been kicked off yet — see
+		// App.Init. Trigger them here so each screen has
+		// populated its list by the time the user navigates
+		// to it.
+		if a.skipInitializeServices {
+			switch msg.Screen {
+			case ScreenSyncJobs:
+				cmds = append(cmds, a.syncJobs.Init())
+			case ScreenServices:
+				cmds = append(cmds, a.services.Init())
+			}
+		}
+		return a, tea.Batch(cmds...)
 
 	case AppInitError:
 		a.initError = msg.Err
@@ -405,10 +513,19 @@ func (a *App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				switch m.Target {
 				case "mounts":
 					a.currentScreen = ScreenMounts
+					if a.skipInitializeServices {
+						cmds = append(cmds, a.mounts.Init())
+					}
 				case "sync_jobs":
 					a.currentScreen = ScreenSyncJobs
+					if a.skipInitializeServices {
+						cmds = append(cmds, a.syncJobs.Init())
+					}
 				case "services":
 					a.currentScreen = ScreenServices
+					if a.skipInitializeServices {
+						cmds = append(cmds, a.services.Init())
+					}
 				case "settings":
 					a.currentScreen = ScreenSettings
 				}

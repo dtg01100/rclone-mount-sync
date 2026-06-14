@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
 )
 
 const snapshotDir = "testdata/snapshots"
@@ -189,35 +187,6 @@ func TestApp_Snapshot_DifferentSizes(t *testing.T) {
 			assertSnapshot(t, "main_menu_"+sz.name, view)
 		})
 	}
-}
-
-// TestApp_Snapshot_OrphanPrompt renders the orphan detection prompt.
-func TestApp_Snapshot_OrphanPrompt(t *testing.T) {
-	app := NewApp("dev")
-	app.width = 80
-	app.height = 24
-	app.currentScreen = ScreenMain
-	app.loading = false
-	app.showOrphanPrompt = true
-	app.orphanSelected = 0
-	app.orphanMode = 0
-	app.orphans = &systemd.ReconciliationResult{
-		OrphanedUnits: []systemd.OrphanedUnit{
-			{Name: "rclone-mount-old1.service", ID: "old-1"},
-			{Name: "rclone-sync-old2.timer", ID: "old-2"},
-		},
-	}
-
-	view := app.View()
-
-	if view == "" {
-		t.Fatal("View should not be empty")
-	}
-	if !strings.Contains(view, "orphan") && !strings.Contains(view, "Orphan") {
-		t.Error("Orphan prompt view should mention 'orphan'")
-	}
-
-	assertSnapshot(t, "orphan_prompt", view)
 }
 
 // TestApp_View_LineCount tests that views have reasonable line counts.
