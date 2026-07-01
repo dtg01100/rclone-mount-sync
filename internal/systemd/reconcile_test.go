@@ -844,10 +844,10 @@ func TestParseRemotePath(t *testing.T) {
 			wantPath:   "/",
 		},
 		{
-			name:       "remote without path",
+			name:       "remote without path (trailing colon defaults to root)",
 			remotePath: "gdrive:",
 			wantRemote: "gdrive",
-			wantPath:   "",
+			wantPath:   "/",
 		},
 		{
 			name:       "no colon",

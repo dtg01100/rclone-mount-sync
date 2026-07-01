@@ -168,7 +168,11 @@ func NewSyncJobForm(job *models.SyncJobConfig, remotes []rclone.Remote, cfg *con
 // parseRemotePath parses a remote:path string into remote and path components.
 func parseRemotePath(s string) (remote, path string) {
 	if idx := strings.Index(s, ":"); idx != -1 {
-		return s[:idx], s[idx+1:]
+		path = s[idx+1:]
+		if path == "" {
+			path = "/"
+		}
+		return s[:idx], path
 	}
 	return "", s
 }

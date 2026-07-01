@@ -313,10 +313,10 @@ func TestParseRemotePath(t *testing.T) {
 			expectedPath:   "/Photos",
 		},
 		{
-			name:           "Remote without path",
+			name:           "Remote without path (trailing colon defaults to root)",
 			input:          "dropbox:",
 			expectedRemote: "dropbox",
-			expectedPath:   "",
+			expectedPath:   "/",
 		},
 		{
 			name:           "Remote with root path",
