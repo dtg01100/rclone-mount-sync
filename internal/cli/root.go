@@ -144,6 +144,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 
 	lines := strings.Split(string(output), "\n")
 	cleaned := 0
+	attempted := 0
 
 	for _, line := range lines {
 		fields := strings.Fields(line)
@@ -159,6 +160,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 
 		unitPath := filepath.Join(generator.GetSystemdDir(), unitName)
 		if _, err := os.Stat(unitPath); os.IsNotExist(err) {
+			attempted++
 			if err := manager.ResetFailed(unitName); err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: failed to reset %s: %v\n", unitName, err)
 			} else {
@@ -168,10 +170,18 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	if cleaned == 0 {
+	if attempted == 0 {
 		fmt.Println("No orphaned units found.")
 	} else {
-		fmt.Printf("\nCleaned up %d orphaned unit(s).\n", cleaned)
+		fmt.Printf("\nCleaned up %d of %d orphaned unit(s).\n", cleaned, attempted)
+	}
+
+	// Return a non-nil error when the command did real work but every
+	// ResetFailed call failed. Scripts that wrap `cleanup` can then
+	// distinguish "nothing to do" (exit 0) from "all cleanups failed"
+	// (non-zero). Partial success is still exit 0.
+	if attempted > 0 && cleaned == 0 {
+		return fmt.Errorf("cleanup failed for all %d orphaned unit(s)", attempted)
 	}
 
 	return nil

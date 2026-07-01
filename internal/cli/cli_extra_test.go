@@ -1145,8 +1145,11 @@ func TestRunCleanup_OrphanWithUnitFile(t *testing.T) {
 // TestRunCleanup_ResetFailedError covers the "manager
 // returns an error from ResetFailed" branch: a rclone
 // unit is orphaned and the mock manager's ResetFailed
-// fails. The function should print a warning to stderr
-// but not return an error.
+// fails. The function must print a warning to stderr and
+// return a non-nil error (the all-failed exit code path
+// introduced in further_work.md P2#6). Scripts wrapping
+// `cleanup` rely on a non-zero exit to distinguish
+// "nothing to do" from "everything failed".
 func TestRunCleanup_ResetFailedError(t *testing.T) {
 	tmp := t.TempDir()
 	systemctlPath := writeFakeSystemctlScript(t, 0, "rclone-mount-badcafe.service load failed\n")
@@ -1163,8 +1166,99 @@ func TestRunCleanup_ResetFailedError(t *testing.T) {
 	wrapper := &mockWithSystemctlPath{MockManager: *mock, path: systemctlPath}
 	loadManager = func() systemd.ServiceManager { return wrapper }
 
-	if err := runCleanup(nil, nil); err != nil {
-		t.Fatalf("runCleanup: %v", err)
+	err := runCleanup(nil, nil)
+	if err == nil {
+		t.Fatalf("runCleanup: expected non-nil error when all cleanups fail, got nil")
+	}
+	if !strings.Contains(err.Error(), "cleanup failed for all") {
+		t.Errorf("error = %q, want to contain 'cleanup failed for all'", err.Error())
+	}
+}
+
+// TestRunCleanup_PartialFailuresReturnNil covers the
+// "some orphans cleaned, some failed" branch: a mix of
+// successes and failures should still return nil so that
+// callers see exit 0 when any cleanup actually worked.
+// The summary line must report both the success and the
+// total attempted count.
+func TestRunCleanup_PartialFailuresReturnNil(t *testing.T) {
+	tmp := t.TempDir()
+	systemctlPath := writeFakeSystemctlScript(t, 0,
+		"rclone-mount-ok1234.service load failed\n"+
+			"rclone-mount-bad1234.service load failed\n")
+
+	oldLoadManager := loadManager
+	oldLoadGenerator := loadGenerator
+	defer func() {
+		loadManager = oldLoadManager
+		loadGenerator = oldLoadGenerator
+	}()
+
+	loadGenerator = func() (*systemd.Generator, error) { return systemd.NewTestGenerator(tmp), nil }
+
+	// The MockManager's ResetFailed always returns nil; we need
+	// selective failures. Build a small wrapper that fails only
+	// for one specific unit.
+	base := &systemd.MockManager{}
+	wrapper := &selectiveResetManager{
+		MockManager: *base,
+		path:        systemctlPath,
+		failUnits:   map[string]bool{"rclone-mount-bad1234.service": true},
+	}
+	loadManager = func() systemd.ServiceManager { return wrapper }
+
+	err := runCleanup(nil, nil)
+	if err != nil {
+		t.Fatalf("runCleanup: expected nil when at least one cleanup succeeds, got %v", err)
+	}
+}
+
+// selectiveResetManager wraps MockManager to fail ResetFailed
+// only for units listed in failUnits. Used by partial-failure
+// tests.
+type selectiveResetManager struct {
+	systemd.MockManager
+	path      string
+	failUnits map[string]bool
+}
+
+func (s *selectiveResetManager) SystemctlPath() string { return s.path }
+func (s *selectiveResetManager) ResetFailed(name string) error {
+	if s.failUnits[name] {
+		return errors.New("simulated reset failure")
+	}
+	return s.MockManager.ResetFailed(name)
+}
+
+// TestRunCleanup_AllFailedReturnsError covers the
+// "all orphans attempted, all failed" branch with multiple
+// orphans: runCleanup must return a non-nil error and the
+// error message must mention the attempted count.
+func TestRunCleanup_AllFailedReturnsError(t *testing.T) {
+	tmp := t.TempDir()
+	systemctlPath := writeFakeSystemctlScript(t, 0,
+		"rclone-mount-aaa.service load failed\n"+
+			"rclone-mount-bbb.service load failed\n"+
+			"rclone-sync-ccc.service load failed\n")
+
+	oldLoadManager := loadManager
+	oldLoadGenerator := loadGenerator
+	defer func() {
+		loadManager = oldLoadManager
+		loadGenerator = oldLoadGenerator
+	}()
+
+	loadGenerator = func() (*systemd.Generator, error) { return systemd.NewTestGenerator(tmp), nil }
+	mock := &systemd.MockManager{ResetFailedErr: errors.New("reset failed")}
+	wrapper := &mockWithSystemctlPath{MockManager: *mock, path: systemctlPath}
+	loadManager = func() systemd.ServiceManager { return wrapper }
+
+	err := runCleanup(nil, nil)
+	if err == nil {
+		t.Fatalf("runCleanup: expected non-nil error when all cleanups fail, got nil")
+	}
+	if !strings.Contains(err.Error(), "cleanup failed for all 3 orphaned unit(s)") {
+		t.Errorf("error = %q, want to contain 'cleanup failed for all 3 orphaned unit(s)'", err.Error())
 	}
 }
 
