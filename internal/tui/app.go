@@ -1059,7 +1059,7 @@ func (a *App) renderOrphanPrompt(baseView string) string {
 		Width(boxWidth).
 		Padding(1, 2).
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(lipgloss.Color("3")).
+		BorderForeground(lipgloss.Color("yellow")).
 		Render(promptContent)
 
 	overlay := lipgloss.Place(a.width, a.height,
