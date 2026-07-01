@@ -3,6 +3,9 @@ package screens
 import (
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +19,40 @@ import (
 
 // Test errors for mounts
 var errTestMountNotFound = errors.New("mount not found")
+
+// unwrapSequenceCmd drills into a tea.Sequence-wrapped cmd. The
+// outer cmd() returns a sequenceMsg (an unexported []Cmd);
+// running it does not actually run the inner commands, so the
+// test must pull the first inner cmd out and call it. Returns
+// nil if the cmd is not a sequence.
+func unwrapSequenceCmd(cmd tea.Cmd) tea.Msg {
+	if cmd == nil {
+		return nil
+	}
+	// tea.Sequence returns a sequenceMsg ([]Cmd). The type
+	// is unexported, so we use reflection to recognize the
+	// slice.
+	outer := cmd()
+	v := reflect.ValueOf(outer)
+	if !v.IsValid() || v.Kind() != reflect.Slice {
+		return outer
+	}
+	if v.Len() == 0 {
+		return nil
+	}
+	first := v.Index(0)
+	if !first.CanInterface() {
+		return outer
+	}
+	inner, ok := first.Interface().(tea.Cmd)
+	if !ok {
+		return outer
+	}
+	if inner == nil {
+		return nil
+	}
+	return inner()
+}
 
 // Helper function to create test mount configurations
 func createTestMounts() []models.MountConfig {
@@ -1418,6 +1455,100 @@ func TestMountsScreen_ToggleMount_NilManager(t *testing.T) {
 	}
 }
 
+// TestMountsScreen_ToggleMount_ActiveStopsAndDisables exercises the
+// happy path: the selected mount is currently active, so
+// toggleMount schedules Stop+Disable. The status check must use
+// the service name derived from the mount ID (not the mount
+// name), and the resulting cmd must yield a MountStatusMsg
+// reflecting the now-inactive state.
+func TestMountsScreen_ToggleMount_ActiveStopsAndDisables(t *testing.T) {
+	screen := NewMountsScreen()
+	screen.SetSize(80, 24)
+	screen.mounts = createTestMounts()
+	screen.cursor = 0
+	screen.generator = &systemd.Generator{}
+	mgr := &systemd.MockManager{
+		StatusResult: &systemd.UnitStatus{Active: true},
+	}
+	screen.manager = mgr
+
+	_, cmd := screen.toggleMount()
+	if cmd == nil {
+		t.Fatal("toggleMount on active mount should return a command (stop+disable)")
+	}
+	// tea.Sequence wraps the inner cmd in a sequenceMsg; we
+	// drill in to find the actual Stop+Disable closure that
+	// produces the MountStatusMsg on success.
+	msg := unwrapSequenceCmd(cmd)
+	statusMsg, ok := msg.(MountStatusMsg)
+	if !ok {
+		t.Fatalf("inner cmd() returned %T, want MountStatusMsg (inactive)", msg)
+	}
+	if statusMsg.Status.Active {
+		t.Error("statusMsg.Status.Active = true, want false (toggle should turn it off)")
+	}
+	if statusMsg.Name != screen.mounts[0].Name {
+		t.Errorf("statusMsg.Name = %q, want %q", statusMsg.Name, screen.mounts[0].Name)
+	}
+}
+
+// TestMountsScreen_ToggleMount_InactiveStartsAndEnables covers the
+// inverse: a mount that reports inactive gets the Start+Enable
+// sequence. The resulting MountStatusMsg must reflect the now-
+// active state.
+func TestMountsScreen_ToggleMount_InactiveStartsAndEnables(t *testing.T) {
+	screen := NewMountsScreen()
+	screen.SetSize(80, 24)
+	screen.mounts = createTestMounts()
+	screen.cursor = 1 // Dropbox — has AutoStart=false
+	screen.generator = &systemd.Generator{}
+	mgr := &systemd.MockManager{
+		StatusResult: &systemd.UnitStatus{Active: false},
+	}
+	screen.manager = mgr
+
+	_, cmd := screen.toggleMount()
+	if cmd == nil {
+		t.Fatal("toggleMount on inactive mount should return a command (start+enable)")
+	}
+	msg := unwrapSequenceCmd(cmd)
+	statusMsg, ok := msg.(MountStatusMsg)
+	if !ok {
+		t.Fatalf("inner cmd() returned %T, want MountStatusMsg (active)", msg)
+	}
+	if !statusMsg.Status.Active {
+		t.Error("statusMsg.Status.Active = false, want true (toggle should turn it on)")
+	}
+}
+
+// TestMountsScreen_ToggleMount_StatusCheckFails covers the
+// "manager.Status() returns an error" branch: the screen must
+// surface a friendly error and not return a command.
+func TestMountsScreen_ToggleMount_StatusCheckFails(t *testing.T) {
+	screen := NewMountsScreen()
+	screen.SetSize(80, 24)
+	screen.mounts = createTestMounts()
+	screen.cursor = 0
+	screen.generator = &systemd.Generator{}
+	screen.manager = &systemd.MockManager{
+		StatusErr: errTestMountNotFound,
+	}
+
+	_, cmd := screen.toggleMount()
+	if cmd != nil {
+		t.Error("toggleMount on Status() error should return nil command")
+	}
+	if screen.err == nil {
+		t.Fatal("err should be set on Status() failure")
+	}
+	if !strings.Contains(screen.err.Error(), "failed to get status") {
+		t.Errorf("err = %q, want to contain 'failed to get status'", screen.err.Error())
+	}
+	if !strings.Contains(screen.err.Error(), errTestMountNotFound.Error()) {
+		t.Errorf("err = %q, want to wrap the underlying Status() error", screen.err.Error())
+	}
+}
+
 func TestMountsScreen_StartMount_NilServices(t *testing.T) {
 	screen := NewMountsScreen()
 	screen.SetSize(80, 24)
@@ -2629,5 +2760,161 @@ func TestMountDetails_RenderLogs_Truncation(t *testing.T) {
 	}
 	if !strings.Contains(logs, "Log line 0") {
 		t.Error("renderLogs should contain first log line")
+	}
+}
+
+// TestMountsScreen_LoadStatuses_HappyPath exercises the live-status
+// poller's per-tick refresh: for every known mount, the screen
+// queries manager.Status and stores the result in the statuses map
+// keyed by mount.Name.
+func TestMountsScreen_LoadStatuses_HappyPath(t *testing.T) {
+	screen := NewMountsScreen()
+	screen.mounts = createTestMounts()
+
+	active := &systemd.UnitStatus{Active: true, State: "running"}
+	inactive := &systemd.UnitStatus{Active: false, State: "inactive"}
+	screen.manager = &systemd.MockManager{
+		StatusResult: active,
+	}
+	screen.generator = &systemd.Generator{}
+
+	msg := screen.loadStatuses()
+	if msg != nil {
+		t.Errorf("loadStatuses should return nil, got %T", msg)
+	}
+
+	if got := screen.statuses["Google Drive"]; got != active {
+		t.Errorf("statuses[Google Drive] = %v, want %v", got, active)
+	}
+	if got := screen.statuses["Dropbox"]; got != active {
+		t.Errorf("statuses[Dropbox] = %v, want %v", got, active)
+	}
+	if got := screen.statuses["S3 Bucket"]; got != active {
+		t.Errorf("statuses[S3 Bucket] = %v, want %v", got, active)
+	}
+
+	// Per-mount differentiation: a follow-up call returning a
+	// different status should overwrite the prior entry rather than
+	// leaking it across calls.
+	screen.manager.(*systemd.MockManager).StatusResult = inactive
+	_ = screen.loadStatuses()
+	if got := screen.statuses["Google Drive"]; got != inactive {
+		t.Errorf("statuses[Google Drive] after second tick = %v, want %v", got, inactive)
+	}
+}
+
+// TestMountsScreen_LoadStatuses_StatusErrorIsSwallowed asserts that a
+// manager.Status failure for one mount does not abort the loop. The
+// remaining mounts' statuses should still be refreshed.
+func TestMountsScreen_LoadStatuses_StatusErrorIsSwallowed(t *testing.T) {
+	screen := NewMountsScreen()
+	mounts := createTestMounts()
+	screen.mounts = mounts
+
+	// StatusErr is returned for every call, so loadStatuses must
+	// not store anything but also must not panic.
+	screen.manager = &systemd.MockManager{
+		StatusErr: errTestMountNotFound,
+	}
+	screen.generator = &systemd.Generator{}
+
+	msg := screen.loadStatuses()
+	if msg != nil {
+		t.Errorf("loadStatuses should return nil even on status errors, got %T", msg)
+	}
+	for _, m := range mounts {
+		if _, ok := screen.statuses[m.Name]; ok {
+			t.Errorf("statuses[%q] should be unset on Status() error, got %v", m.Name, screen.statuses[m.Name])
+		}
+	}
+}
+
+// TestMountsScreen_LoadStatuses_NilGeneratorOrManager covers the
+// defensive short-circuit. With either dep nil the function must
+// return nil immediately and not touch the statuses map.
+func TestMountsScreen_LoadStatuses_NilGeneratorOrManager(t *testing.T) {
+	t.Run("nil generator", func(t *testing.T) {
+		screen := NewMountsScreen()
+		screen.mounts = createTestMounts()
+		screen.manager = &systemd.MockManager{StatusResult: &systemd.UnitStatus{Active: true}}
+		if msg := screen.loadStatuses(); msg != nil {
+			t.Errorf("loadStatuses = %v, want nil", msg)
+		}
+		if len(screen.statuses) != 0 {
+			t.Errorf("statuses should be empty when generator is nil, got %d entries", len(screen.statuses))
+		}
+	})
+	t.Run("nil manager", func(t *testing.T) {
+		screen := NewMountsScreen()
+		screen.mounts = createTestMounts()
+		screen.generator = &systemd.Generator{}
+		if msg := screen.loadStatuses(); msg != nil {
+			t.Errorf("loadStatuses = %v, want nil", msg)
+		}
+		if len(screen.statuses) != 0 {
+			t.Errorf("statuses should be empty when manager is nil, got %d entries", len(screen.statuses))
+		}
+	})
+}
+
+// TestDeleteConfirm_Init_ReturnsNil covers the trivial Init method
+// of the delete-confirm dialog. The dialog has no async
+// initialization work — it just needs to not crash and to satisfy
+// the tea.Model contract.
+func TestDeleteConfirm_Init_ReturnsNil(t *testing.T) {
+	mount := createTestMounts()[0]
+	d := NewDeleteConfirm(mount)
+	if d == nil {
+		t.Fatal("NewDeleteConfirm returned nil")
+	}
+	if cmd := d.Init(); cmd != nil {
+		t.Errorf("Init() = %v, want nil (dialog has no async init)", cmd)
+	}
+}
+
+// TestDeleteConfirm_Init_AfterSetServices confirms Init remains a
+// no-op even when the dialog has been wired with services via
+// SetServices. This guards against a regression where someone
+// turns Init into a service-touching call.
+func TestDeleteConfirm_Init_AfterSetServices(t *testing.T) {
+	mount := createTestMounts()[0]
+	d := NewDeleteConfirm(mount)
+	d.SetServices(&systemd.MockManager{}, &systemd.Generator{}, createTestConfigWithMounts())
+	if cmd := d.Init(); cmd != nil {
+		t.Errorf("Init() after SetServices = %v, want nil", cmd)
+	}
+}
+
+// TestMountsScreen_LoadMounts_ReloadError covers the error path
+// when config.Reload() fails. The function must surface the
+// failure as a MountsErrorMsg rather than silently wiping the
+// in-memory list of mounts.
+func TestMountsScreen_LoadMounts_ReloadError(t *testing.T) {
+	screen := NewMountsScreen()
+	screen.mounts = createTestMounts()
+	screen.statuses = make(map[string]*systemd.UnitStatus)
+
+	// Point XDG_CONFIG_HOME at a temp dir that holds a corrupt
+	// config.yaml. Config.Reload will fail to parse it.
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	appDir := filepath.Join(tmpDir, "rclone-mount-sync")
+	if err := os.MkdirAll(appDir, 0o700); err != nil {
+		t.Fatalf("failed to create app config dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(appDir, "config.yaml"), []byte("::: not valid yaml :::\n\t- broken: ["), 0o600); err != nil {
+		t.Fatalf("failed to write corrupt config: %v", err)
+	}
+
+	cfg := &config.Config{}
+	screen.config = cfg
+
+	msg := screen.loadMounts()
+	errMsg, ok := msg.(MountsErrorMsg)
+	if !ok {
+		t.Fatalf("loadMounts on Reload error returned %T, want MountsErrorMsg", msg)
+	}
+	if !strings.Contains(errMsg.Err.Error(), "failed to reload config") {
+		t.Errorf("error = %q, want to contain 'failed to reload config'", errMsg.Err.Error())
 	}
 }
