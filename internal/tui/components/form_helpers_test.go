@@ -710,6 +710,16 @@ func TestGetBreadcrumbSegments(t *testing.T) {
 			path: "~/Documents/Work/Project",
 			want: []string{"~", "Documents", "Work", "Project"},
 		},
+		{
+			name: "relative single segment",
+			path: "foo",
+			want: []string{"foo"},
+		},
+		{
+			name: "relative multi segment",
+			path: "foo/bar/baz",
+			want: []string{"foo", "bar", "baz"},
+		},
 	}
 
 	for _, tt := range tests {
