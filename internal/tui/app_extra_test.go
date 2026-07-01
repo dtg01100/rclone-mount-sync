@@ -2,6 +2,8 @@ package tui
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -693,5 +695,168 @@ func testConfigSmall() *config.Config {
 		},
 		Mounts:   nil,
 		SyncJobs: nil,
+	}
+}
+
+// writeMountUnit writes a minimal-but-valid rclone mount service
+// unit file to disk and returns the path. The file is formatted so
+// that Reconciler.Import's ExecStart / Description extractors
+// recover the expected Name, Remote, and MountPoint.
+func writeMountUnit(t *testing.T, id, name, remote, mountPoint string) string {
+	t.Helper()
+	dir := t.TempDir()
+	path := filepath.Join(dir, "rclone-mount-"+id+".service")
+	content := "[Unit]\n" +
+		"Description=Rclone mount: " + name + "\n" +
+		"After=network-online.target\n\n" +
+		"[Service]\n" +
+		"Type=notify\n" +
+		"ExecStart=/usr/bin/rclone mount " + remote + ": " + mountPoint + " \\\n" +
+		"    --vfs-cache-mode full\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatalf("failed to write unit file: %v", err)
+	}
+	return path
+}
+
+// TestApp_importSelectedOrphan_MountSuccess exercises the full
+// import happy path: a real mount unit file is written to a
+// temp dir, the App is wired with a real Generator + Manager,
+// and the cmd produced by importSelectedOrphan is expected to
+// return an OrphanActionMsg{Action: "import"} with no error and
+// the config updated with the new mount.
+//
+// The reconciler's RemoveOrphan step calls systemctl, which
+// fails in a test environment; the App swallows that error
+// (logs a warning) so it must NOT be reported on the
+// OrphanActionMsg.
+func TestApp_importSelectedOrphan_MountSuccess(t *testing.T) {
+	// Use a TestGenerator pointing at an isolated temp dir so
+	// the test never writes to the real user systemd directory
+	// (~/.config/systemd/user/). The earlier NewGenerator() call
+	// was the source of leftover rclone-mount-*.service and
+	// rclone-sync-*.timer units in the user's real systemd
+	// after running `go test`. NewTestGenerator scopes the
+	// generator's systemdDir to a t.TempDir() that the
+	// runtime cleans up automatically.
+	tmp := t.TempDir()
+	gen := systemd.NewTestGenerator(tmp)
+
+	id := "imp00001"
+	name := "ImportedMount"
+	unitPath := writeMountUnit(t, id, name, "gdrive", "/mnt/gdrive")
+
+	app := NewApp("dev")
+	app.width = 80
+	app.height = 24
+	app.generator = gen
+	app.manager = systemd.NewManager()
+	app.config = testConfigSmall()
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "rclone-mount-" + id + ".service", ID: id, Type: "mount", Path: unitPath},
+		},
+	}
+	app.orphanSelected = 0
+
+	_, cmd := app.importSelectedOrphan()
+	if cmd == nil {
+		t.Fatal("importSelectedOrphan should return a cmd")
+	}
+	msg := cmd()
+	action, ok := msg.(OrphanActionMsg)
+	if !ok {
+		t.Fatalf("cmd produced %T, want OrphanActionMsg", msg)
+	}
+	if action.Err != nil {
+		t.Errorf("OrphanActionMsg.Err = %v, want nil (import should succeed)", action.Err)
+	}
+	if action.Action != "import" {
+		t.Errorf("Action = %q, want 'import'", action.Action)
+	}
+	if action.Index != 0 {
+		t.Errorf("Index = %d, want 0", action.Index)
+	}
+
+	// The new mount must now be in the in-memory config and
+	// carry the values recovered from the unit file.
+	var found *models.MountConfig
+	for i := range app.config.Mounts {
+		if app.config.Mounts[i].ID == id {
+			found = &app.config.Mounts[i]
+			break
+		}
+	}
+	if found == nil {
+		t.Fatalf("config.Mounts did not include the imported mount (id=%s); got %d entries", id, len(app.config.Mounts))
+	}
+	if found.Name != name {
+		t.Errorf("imported mount Name = %q, want %q", found.Name, name)
+	}
+	if found.Remote != "gdrive" {
+		t.Errorf("imported mount Remote = %q, want 'gdrive'", found.Remote)
+	}
+	if found.MountPoint != "/mnt/gdrive" {
+		t.Errorf("imported mount MountPoint = %q, want '/mnt/gdrive'", found.MountPoint)
+	}
+}
+
+// TestApp_cleanupSelectedOrphan_SuccessNoSuchUnit covers the
+// "no active service" path. The cleanup runs against a unit
+// that has no live state; the reconciler may log a warning
+// (because systemctl returns non-zero in the test env) but the
+// action is reported as successful because RemoveOrphan errors
+// are non-fatal at the App level.
+func TestApp_cleanupSelectedOrphan_SuccessNoSuchUnit(t *testing.T) {
+	// Use a TestGenerator pointing at an isolated temp dir so
+	// the test never writes to the real user systemd directory.
+	// See TestApp_importSelectedOrphan_MountSuccess for the
+	// rationale on switching away from systemd.NewGenerator().
+	tmp := t.TempDir()
+	gen := systemd.NewTestGenerator(tmp)
+
+	// Drop a service file in the generator's systemdDir so
+	// RemoveUnit has something concrete to remove. Without
+	// this, RemoveUnit errors out, but App still reports
+	// success because the error is logged-only.
+	systemdDir := gen.GetSystemdDir()
+	if err := os.MkdirAll(systemdDir, 0o700); err != nil {
+		t.Fatalf("failed to create systemd dir: %v", err)
+	}
+	unitPath := filepath.Join(systemdDir, "rclone-mount-cln00001.service")
+	if err := os.WriteFile(unitPath, []byte("[Unit]\nDescription=test\n"), 0o600); err != nil {
+		t.Fatalf("failed to seed unit file: %v", err)
+	}
+
+	app := NewApp("dev")
+	app.width = 80
+	app.height = 24
+	app.generator = gen
+	app.manager = systemd.NewManager()
+	app.config = testConfigSmall()
+	app.orphans = &systemd.ReconciliationResult{
+		OrphanedUnits: []systemd.OrphanedUnit{
+			{Name: "rclone-mount-cln00001.service", ID: "cln00001", Type: "mount", Path: unitPath},
+		},
+	}
+	app.orphanSelected = 0
+
+	_, cmd := app.cleanupSelectedOrphan()
+	if cmd == nil {
+		t.Fatal("cleanupSelectedOrphan should return a cmd")
+	}
+	msg := cmd()
+	action, ok := msg.(OrphanActionMsg)
+	if !ok {
+		t.Fatalf("cmd produced %T, want OrphanActionMsg", msg)
+	}
+	if action.Err != nil {
+		t.Errorf("OrphanActionMsg.Err = %v, want nil (cleanup errors are non-fatal)", action.Err)
+	}
+	if action.Action != "cleanup" {
+		t.Errorf("Action = %q, want 'cleanup'", action.Action)
+	}
+	if action.Index != 0 {
+		t.Errorf("Index = %d, want 0", action.Index)
 	}
 }
