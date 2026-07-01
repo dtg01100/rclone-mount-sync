@@ -2,10 +2,12 @@ package screens
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
 )
@@ -1657,5 +1659,182 @@ func TestSettingsScreen_EscapeFromActions(t *testing.T) {
 	// Should go back from actions, not main menu
 	if screen.showingActions {
 		t.Error("showingActions should be false after escape")
+	}
+}
+
+// TestSettingsScreen_UpdateFilePicker_CompletedExport covers the
+// "form completed with exportPath set" branch. The screen must
+// invoke completeExport, clear showingFilePicker, and clear the
+// form pointer.
+func TestSettingsScreen_UpdateFilePicker_CompletedExport(t *testing.T) {
+	tmpDir := t.TempDir()
+	exportPath := filepath.Join(tmpDir, "out.yaml")
+
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+	screen.SetConfig(&config.Config{Version: "1.0"})
+
+	// Drive the file picker into the "export" branch.
+	_, _ = screen.startExport()
+	if screen.form == nil {
+		t.Fatal("startExport did not initialize the form")
+	}
+	screen.exportPath = exportPath
+
+	// Simulate the form having completed by forcing its state.
+	// We can't drive huh to completion without a real TTY, so
+	// pin State directly. The branch under test only checks
+	// s.form.State == huh.StateCompleted, so this is a clean
+	// unit-level exercise of the gating logic.
+	screen.form.State = huh.StateCompleted
+
+	model, cmd := screen.updateFilePicker(nil)
+	if model == nil {
+		t.Error("model should be returned")
+	}
+	if cmd != nil {
+		_ = cmd
+	}
+	if screen.showingFilePicker {
+		t.Error("showingFilePicker should be false after completion")
+	}
+	if screen.form != nil {
+		t.Error("form should be nil after completion")
+	}
+	if screen.exportPath != "" {
+		t.Errorf("exportPath should be cleared, got %q", screen.exportPath)
+	}
+}
+
+// TestSettingsScreen_UpdateFilePicker_CompletedImport covers the
+// "form completed with pendingImportPath set" branch. After
+// completion, the screen must invoke completeImportFileSelection.
+func TestSettingsScreen_UpdateFilePicker_CompletedImport(t *testing.T) {
+	// Use a path that does not exist so completeImportFileSelection
+	// returns the "file does not exist" message — that exercises
+	// both the import branch and the error-handling code path
+	// without requiring a real config file on disk.
+	missingPath := filepath.Join(t.TempDir(), "missing.yaml")
+
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+	screen.SetConfig(&config.Config{Version: "1.0"})
+
+	_, _ = screen.startImport()
+	if screen.form == nil {
+		t.Fatal("startImport did not initialize the form")
+	}
+	screen.pendingImportPath = missingPath
+	screen.form.State = huh.StateCompleted
+
+	_, _ = screen.updateFilePicker(nil)
+
+	if screen.showingFilePicker {
+		t.Error("showingFilePicker should be false after completion")
+	}
+	if !strings.Contains(screen.message, "File does not exist") {
+		t.Errorf("expected 'File does not exist' message, got %q", screen.message)
+	}
+	if screen.messageType != "error" {
+		t.Errorf("messageType = %q, want 'error'", screen.messageType)
+	}
+	if screen.pendingImportPath != "" {
+		t.Error("pendingImportPath should be cleared")
+	}
+}
+
+// TestSettingsScreen_UpdateImportModeForm_CompletedMerge covers
+// the "form completed with importMode=merge" branch: the screen
+// must go straight to executeImport. executeImport will
+// subsequently fail because the import path is bogus, but the
+// important behavior is the mode-merge dispatch: showingImportMode
+// is flipped off and the import message (success or failure) is
+// surfaced.
+func TestSettingsScreen_UpdateImportModeForm_CompletedMerge(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+	screen.SetConfig(&config.Config{Version: "1.0"})
+
+	_, _ = screen.showImportModeSelection()
+	if screen.form == nil {
+		t.Fatal("showImportModeSelection did not initialize the form")
+	}
+	screen.importMode = "merge"
+	screen.pendingImportPath = "/some/import.yaml"
+	screen.form.State = huh.StateCompleted
+
+	_, _ = screen.updateImportModeForm(nil)
+
+	if screen.showingImportMode {
+		t.Error("showingImportMode should be false after completion")
+	}
+	// executeImport ran and surfaced an error message
+	// (the path is bogus). The exact failure mode is
+	// exercised; what matters is the branch was entered.
+	if screen.message == "" {
+		t.Error("executeImport should have set a message (success or error)")
+	}
+}
+
+// TestSettingsScreen_UpdateImportModeForm_CompletedReplace covers
+// the "form completed with importMode=replace" branch: the screen
+// must transition to showReplaceConfirm rather than executeImport
+// directly.
+func TestSettingsScreen_UpdateImportModeForm_CompletedReplace(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+	screen.SetConfig(&config.Config{Version: "1.0"})
+
+	_, _ = screen.showImportModeSelection()
+	screen.importMode = "replace"
+	screen.pendingImportPath = "/some/import.yaml"
+	screen.form.State = huh.StateCompleted
+
+	_, _ = screen.updateImportModeForm(nil)
+
+	if !screen.showingConfirm {
+		t.Error("replace mode should transition to confirm dialog")
+	}
+	if screen.showingImportMode {
+		t.Error("showingImportMode should be false after completion")
+	}
+	if screen.confirmDialog == nil {
+		t.Error("confirmDialog should be initialized after replace")
+	}
+}
+
+// TestSettingsScreen_UpdateConfirmDialog_CompletedFalse covers
+// the "user declined the replace" branch. The screen must NOT
+// import and must set the "Import cancelled" message. (The
+// huh.Form has no public way to inject a true value into a
+// Confirm field from outside the form, so we can only
+// deterministically exercise the false branch here — that is
+// also the more safety-relevant branch since it verifies the
+// cancellation message reaches the user.)
+func TestSettingsScreen_UpdateConfirmDialog_CompletedFalse(t *testing.T) {
+	screen := NewSettingsScreen()
+	screen.SetSize(80, 24)
+	screen.SetConfig(&config.Config{Version: "1.0"})
+
+	_, _ = screen.showReplaceConfirm()
+	screen.pendingImportPath = "/missing/file.yaml"
+	screen.confirmDialog.State = huh.StateCompleted
+	// The default value of the Confirm field is false, which
+	// is exactly the branch we want to exercise. No need to
+	// override it.
+
+	_, _ = screen.updateConfirmDialog(nil)
+
+	if screen.showingConfirm {
+		t.Error("showingConfirm should be false after completion")
+	}
+	if !strings.Contains(screen.message, "Import cancelled") {
+		t.Errorf("message = %q, want to contain 'Import cancelled'", screen.message)
+	}
+	if screen.messageType != "info" {
+		t.Errorf("messageType = %q, want 'info'", screen.messageType)
+	}
+	if screen.pendingImportPath != "" {
+		t.Error("pendingImportPath should be cleared after cancellation")
 	}
 }
