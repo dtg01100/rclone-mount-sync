@@ -125,17 +125,84 @@ func TestParseSystemdTimestamp_RFC3339(t *testing.T) {
 }
 
 func TestParseTimerNextRunOutput(t *testing.T) {
-	input := "NextElapseUSec=1708540800000000\n"
+	t.Run("happy path parses microseconds", func(t *testing.T) {
+		input := "NextElapseUSec=1708529045000000\n"
 
-	got, err := parseTimerNextRunOutput(input)
-	if err != nil {
-		t.Fatalf("parseTimerNextRunOutput() error = %v", err)
-	}
+		got, err := parseTimerNextRunOutput(input)
+		if err != nil {
+			t.Fatalf("parseTimerNextRunOutput() error = %v", err)
+		}
 
-	expected := time.Unix(1708540800, 0)
-	if !got.Equal(expected) {
-		t.Errorf("parseTimerNextRunOutput() = %v, want %v", got, expected)
-	}
+		expected := time.Unix(1708529045, 0)
+		if !got.Equal(expected) {
+			t.Errorf("parseTimerNextRunOutput() = %v, want %v", got, expected)
+		}
+	})
+
+	t.Run("empty value is treated as no schedule", func(t *testing.T) {
+		got, err := parseTimerNextRunOutput("NextElapseUSec=\n")
+		if err != nil {
+			t.Errorf("empty value should not return error, got %v", err)
+		}
+		if !got.IsZero() {
+			t.Errorf("empty value should yield zero time, got %v", got)
+		}
+	})
+
+	t.Run("zero value is treated as no schedule", func(t *testing.T) {
+		got, err := parseTimerNextRunOutput("NextElapseUSec=0\n")
+		if err != nil {
+			t.Errorf("zero value should not return error, got %v", err)
+		}
+		if !got.IsZero() {
+			t.Errorf("zero value should yield zero time, got %v", got)
+		}
+	})
+
+	t.Run("missing key returns zero with no error", func(t *testing.T) {
+		got, err := parseTimerNextRunOutput("OtherProperty=12345\n")
+		if err != nil {
+			t.Errorf("missing key should not return error, got %v", err)
+		}
+		if !got.IsZero() {
+			t.Errorf("missing key should yield zero time, got %v", got)
+		}
+	})
+
+	t.Run("non-numeric value returns error", func(t *testing.T) {
+		_, err := parseTimerNextRunOutput("NextElapseUSec=not-a-number\n")
+		if err == nil {
+			t.Fatal("non-numeric value should return error, got nil")
+		}
+		if !strings.Contains(err.Error(), "NextElapseUSec") {
+			t.Errorf("error %q should mention NextElapseUSec", err.Error())
+		}
+		if !strings.Contains(err.Error(), "not-a-number") {
+			t.Errorf("error %q should include the bad value", err.Error())
+		}
+	})
+
+	t.Run("empty input returns zero with no error", func(t *testing.T) {
+		got, err := parseTimerNextRunOutput("")
+		if err != nil {
+			t.Errorf("empty input should not return error, got %v", err)
+		}
+		if !got.IsZero() {
+			t.Errorf("empty input should yield zero time, got %v", got)
+		}
+	})
+
+	t.Run("multiple properties with one matching", func(t *testing.T) {
+		input := "RandomProperty=foo\nNextElapseUSec=1708529045000000\nOtherProperty=bar\n"
+		got, err := parseTimerNextRunOutput(input)
+		if err != nil {
+			t.Fatalf("parseTimerNextRunOutput() error = %v", err)
+		}
+		expected := time.Unix(1708529045, 0)
+		if !got.Equal(expected) {
+			t.Errorf("parseTimerNextRunOutput() = %v, want %v", got, expected)
+		}
+	})
 }
 
 func TestIsEnabledState(t *testing.T) {

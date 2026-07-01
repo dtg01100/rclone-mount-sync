@@ -451,11 +451,13 @@ func parseTimerNextRunOutput(output string) (time.Time, error) {
 			if value == "" || value == "0" {
 				continue
 			}
-			if micros, err := strconv.ParseInt(value, 10, 64); err == nil {
-				seconds := micros / 1000000
-				nanos := (micros % 1000000) * 1000
-				return time.Unix(seconds, nanos), nil
+			micros, err := strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				return time.Time{}, fmt.Errorf("failed to parse NextElapseUSec value %q: %w", value, err)
 			}
+			seconds := micros / 1000000
+			nanos := (micros % 1000000) * 1000
+			return time.Unix(seconds, nanos), nil
 		}
 	}
 
