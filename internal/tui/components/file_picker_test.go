@@ -841,3 +841,171 @@ func TestEnhancedFilePicker_QuickJumpKeys_MoreKeys(t *testing.T) {
 		}
 	})
 }
+
+// TestEnhancedFilePicker_RecentMenuNavigation exercises the four
+// keys handled while showRecentMenu is true: up/k, down/j, enter,
+// and esc. Together they close the remaining 50% gap on
+// EnhancedFilePicker.Update.
+func TestEnhancedFilePicker_RecentMenuNavigation(t *testing.T) {
+	seedPicker := func() *EnhancedFilePicker {
+		picker := NewEnhancedFilePicker()
+		picker.width = 80
+		picker.height = 24
+		picker.currentDir = "/tmp"
+		store := NewRecentPathsStore(5)
+		store.Add("/tmp/a")
+		store.Add("/tmp/b")
+		store.Add("/tmp/c")
+		picker.WithRecentStore(store)
+		_ = picker.Init()
+
+		// Open the recent menu via the public "r" path.
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
+		if !picker.showRecentMenu {
+			t.Fatal("setup: r key with non-empty recents should open the recent menu")
+		}
+		return picker
+	}
+
+	t.Run("down advances cursor", func(t *testing.T) {
+		picker := seedPicker()
+		if picker.recentCursor != 0 {
+			t.Fatalf("setup: recentCursor = %d, want 0", picker.recentCursor)
+		}
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+		if picker.recentCursor != 1 {
+			t.Errorf("recentCursor after j = %d, want 1", picker.recentCursor)
+		}
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
+		if picker.recentCursor != 2 {
+			t.Errorf("recentCursor after down = %d, want 2", picker.recentCursor)
+		}
+		// Past the end stays clamped.
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("down")})
+		if picker.recentCursor != 2 {
+			t.Errorf("recentCursor after past-end down = %d, want 2 (clamped)", picker.recentCursor)
+		}
+	})
+
+	t.Run("up backs the cursor up", func(t *testing.T) {
+		picker := seedPicker()
+		picker.recentCursor = 2
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+		if picker.recentCursor != 1 {
+			t.Errorf("recentCursor after k = %d, want 1", picker.recentCursor)
+		}
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("up")})
+		if picker.recentCursor != 0 {
+			t.Errorf("recentCursor after up = %d, want 0", picker.recentCursor)
+		}
+		// Below zero stays clamped.
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+		if picker.recentCursor != 0 {
+			t.Errorf("recentCursor after past-start up = %d, want 0 (clamped)", picker.recentCursor)
+		}
+	})
+
+	t.Run("enter closes the menu and jumps", func(t *testing.T) {
+		picker := seedPicker()
+		picker.recentCursor = 1 // selects "/tmp/b"
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		if picker.showRecentMenu {
+			t.Error("enter on a recent entry should close the menu")
+		}
+		// jumpToDirectory updates currentDir and seeds it
+		// into the recent store. The order is newest-first,
+		// so "/tmp/b" should now be at index 0.
+		if picker.currentDir != "/tmp/b" {
+			t.Errorf("currentDir = %q, want \"/tmp/b\"", picker.currentDir)
+		}
+	})
+
+	t.Run("esc closes the menu without changing directory", func(t *testing.T) {
+		picker := seedPicker()
+		before := picker.currentDir
+		_, _ = picker.Update(tea.KeyMsg{Type: tea.KeyEsc})
+		if picker.showRecentMenu {
+			t.Error("esc on the recent menu should close it")
+		}
+		if picker.currentDir != before {
+			t.Errorf("currentDir = %q, want unchanged %q", picker.currentDir, before)
+		}
+	})
+}
+
+// TestRecentPathsStore_DefaultStoreWrappers covers the
+// package-level GetRecentPaths / AddRecentPath /
+// ClearRecentPaths / SetRecentPaths / DefaultRecentPathsStore
+// helpers. These delegate to the shared defaultRecentStore
+// singleton; the test saves and restores the singleton around
+// each subtest so it does not leak state to other tests.
+func TestRecentPathsStore_DefaultStoreWrappers(t *testing.T) {
+	// Snapshot the singleton's contents and max so each
+	// subtest starts from a known state and leaves nothing
+	// behind.
+	snapshot := func() (paths []string, max int) {
+		defaultRecentStore.mu.Lock()
+		defer defaultRecentStore.mu.Unlock()
+		out := make([]string, len(defaultRecentStore.paths))
+		copy(out, defaultRecentStore.paths)
+		return out, defaultRecentStore.max
+	}
+	restore := func(paths []string, max int) {
+		defaultRecentStore.mu.Lock()
+		defer defaultRecentStore.mu.Unlock()
+		defaultRecentStore.paths = paths
+		defaultRecentStore.max = max
+	}
+
+	t.Run("DefaultRecentPathsStore returns the same pointer", func(t *testing.T) {
+		before, max := snapshot()
+		defer restore(before, max)
+		if got := DefaultRecentPathsStore(); got != defaultRecentStore {
+			t.Errorf("DefaultRecentPathsStore() = %p, want %p (the package singleton)", got, defaultRecentStore)
+		}
+	})
+
+	t.Run("GetRecentPaths returns current contents", func(t *testing.T) {
+		before, max := snapshot()
+		defer restore(before, max)
+		defaultRecentStore.paths = []string{"/a", "/b"}
+		defaultRecentStore.max = 10
+		got := GetRecentPaths()
+		if len(got) != 2 || got[0] != "/a" || got[1] != "/b" {
+			t.Errorf("GetRecentPaths() = %v, want [/a /b]", got)
+		}
+	})
+
+	t.Run("AddRecentPath delegates to default store", func(t *testing.T) {
+		before, max := snapshot()
+		defer restore(before, max)
+		defaultRecentStore.paths = nil
+		defaultRecentStore.max = 10
+		AddRecentPath("/from-wrapper")
+		got := GetRecentPaths()
+		if len(got) != 1 || got[0] != "/from-wrapper" {
+			t.Errorf("after AddRecentPath, GetRecentPaths() = %v, want [/from-wrapper]", got)
+		}
+	})
+
+	t.Run("ClearRecentPaths empties the default store", func(t *testing.T) {
+		before, max := snapshot()
+		defer restore(before, max)
+		defaultRecentStore.paths = []string{"/x", "/y"}
+		defaultRecentStore.max = 10
+		ClearRecentPaths()
+		if got := GetRecentPaths(); len(got) != 0 {
+			t.Errorf("after ClearRecentPaths, GetRecentPaths() = %v, want empty", got)
+		}
+	})
+
+	t.Run("SetRecentPaths replaces the default store", func(t *testing.T) {
+		before, max := snapshot()
+		defer restore(before, max)
+		SetRecentPaths([]string{"/p", "/q", "/r"})
+		got := GetRecentPaths()
+		if len(got) != 3 || got[0] != "/p" || got[2] != "/r" {
+			t.Errorf("after SetRecentPaths, GetRecentPaths() = %v, want [/p /q /r]", got)
+		}
+	})
+}
