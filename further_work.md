@@ -5,6 +5,13 @@ source code (path:line references are exact).
 
 ---
 
+> **Status (2026-07-01):** Items **6, 7, 9, 10, 12, 18** completed this session
+> (cleanup exit code, parseTimerNextRunOutput error, buildTimerDirectives
+> unknown-type error, parseRemotePath empty-path, sync rollback lookup,
+> lipgloss.Color name). See git log for the six commits. P1 and the easy
+> P2 items are now done; remaining work is P2#8, #11, #14, #16, #17 and
+> all of P3.
+
 ## P0 — Must Fix Before Any Release
 
 None.  There are no confirmed bugs that would crash or silently corrupt data under normal
@@ -163,50 +170,30 @@ The same pattern exists in `SyncJobDeleteConfirm.deleteServiceAndConfig`
 
 ## P2 — Worth Doing (Lower Priority)
 
-### 6. `cleanup` CLI command always exits 0 even on partial failure
+### 6. ~~`cleanup` CLI command always exits 0 even on partial failure~~ — DONE 2026-07-01
 
-**File:** `internal/cli/root.go:170–176`
+Fixed in commit `fix(cli): cleanup returns non-zero exit when all ResetFailed calls fail`.
+Now tracks attempted and cleaned counts and returns a non-nil error when
+attempted > 0 but cleaned == 0. Partial failures still return nil so
+at least one successful cleanup yields exit 0.
 
-```go
-if cleaned == 0 {
-    fmt.Println("No orphaned units found.")
-} else {
-    fmt.Printf("\nCleaned up %d orphaned unit(s).\n", cleaned)
-}
-return nil  // always success
-```
+Tests:
+- TestRunCleanup_ResetFailedError updated to assert the non-nil error
+- TestRunCleanup_PartialFailuresReturnNil (new) — mixed outcome
+- TestRunCleanup_AllFailedReturnsError (new) — every ResetFailed fails
 
-Even if every `.ResetFailed` call in the loop failed, `cleaned == 0` and the command
-still exits 0. Scripts cannot distinguish "nothing to do" from "all operations failed".
 
-**Fix:** Track whether any reset succeeded and return non-zero if none did.
+### 7. ~~`parseTimerNextRunOutput` returns `(time.Time{}, nil)` on parse failure~~ — DONE 2026-07-01
 
----
+Fixed in commit `fix(systemd): parseTimerNextRunOutput returns error on parse failure`.
+Now strconv.ParseInt failures bubble up as:
+  `failed to parse NextElapseUSec value %q: <wrapped err>`
 
-### 7. `parseTimerNextRunOutput` returns `(time.Time{}, nil)` on parse failure
+Caller in GetDetailedStatus already gates on `err==nil` so the change is
+backward-compatible. Test expanded from 1 happy-path case to 7 subtests
+covering empty value, zero value, missing key, non-numeric value, empty
+input, multi-property, and the original happy path.
 
-**File:** `internal/systemd/manager.go:435–453`
-
-```go
-func parseTimerNextRunOutput(output string) (time.Time, error) {
-    // ...
-    if micros, err := strconv.ParseInt(value, 10, 64); err == nil {
-        seconds := micros / 1000000
-        // ...
-        return time.Unix(seconds, nanos), nil
-    }
-    return time.Time{}, nil   // error silently swallowed
-}
-```
-
-It claims to return `(time.Time, error)` but never returns a non-nil error. The caller
-(`GetTimerNextRun`, line 452) correctly treats a zero time as "not scheduled," but the
-function signature is misleading and callers cannot distinguish "no next run" from
-"parse failed".
-
-**Fix:** `return time.Time{}, fmt.Errorf("failed to parse NextElapseUSec: %q", value)`.
-
----
 
 ### 8. `sanitizeExtraArgs` strips alpha-key fields with no user feedback
 
@@ -228,62 +215,40 @@ minimum log a `fmt.Fprintf(os.Stderr, "Warning: ...")` to stderr.
 
 ---
 
-### 9. `buildTimerDirectives` silently defaults to `OnCalendar=daily` for unknown types
+### 9. ~~`buildTimerDirectives` silently defaults to `OnCalendar=daily` for unknown types~~ — DONE 2026-07-01
 
-**File:** `internal/systemd/generator.go:457–459`
+Fixed in commit `fix(systemd): buildTimerDirectives errors on unknown schedule types`.
+Signature changed: `(string, error)`. An explicit unknown Type (e.g. "weekly")
+now returns `unknown schedule type "weekly"; use 'timer', 'onboot', or leave
+empty for daily default`. Empty Type (zero value) still defaults to daily
+to preserve the prior zero-value behaviour.
 
-```go
-if len(directives) == 0 {
-    directives = append(directives, "OnCalendar=daily")
-}
-```
+Caller GenerateSyncTimer propagates the error wrapped with
+`failed to build timer directives`.
 
-If a user stores a schedule type like `"weekly"` in the config but `buildTimerDirectives`
-never adds any directive for it (because only `"timer"` and `"onboot"` have matching
-branches), the job silently becomes a daily job. No warning is emitted.
+Tests:
+- Existing TestGenerator_BuildTimerDirectives updated for new signature
+- TestBuildTimerDirectives_UnknownTypeError (new) — "weekly", "monthly", garbage
+- TestBuildTimerDirectives_EmptyTypeDefaultsToDaily (new) — preserves zero-value default
 
-**Fix:** Return an error for unrecognised schedule types rather than substituting a
-default:
 
-```go
-default:
-    return "", fmt.Errorf("unknown schedule type %q; use 'timer', 'onboot', or 'manual'",
-        schedule.Type)
-```
+### 10. ~~`parseRemotePath` in `reconcile.go` — unit-test uncovered bug risk~~ — DONE 2026-07-01
 
----
+Fixed in commit `fix(systemd,tui): parseRemotePath defaults empty path to '/'`.
+TWO functions affected (both had the same bug):
 
-### 10. `parseRemotePath` in `reconcile.go` — unit-test uncovered bug risk
+- internal/systemd/reconcile.go: parseRemotePath used by the reconciler
+  when importing orphan unit files. Setting RemotePath='/' instead of ''
+  keeps the generated unit file clean.
 
-**File:** `internal/systemd/reconcile.go:390–396`
+- internal/tui/screens/sync_job_form.go: parseRemotePath used when
+  populating the sync job form for editing. Showing '/' in the path
+  field is a clearer default than blank.
 
-```go
-func parseRemotePath(remotePath string) (remote, path string) {
-    idx := strings.Index(remotePath, ":")
-    if idx == -1 {
-        return remotePath, "/"
-    }
-    return remotePath[:idx], remotePath[idx+1:]
-}
-```
+Tests updated:
+- reconcile_test.go: 'remote without path' case now expects '/'
+- sync_job_form_test.go: 'Remote without path' case now expects '/'
 
-If `remotePath` is `"gdrive:"` (trailing colon with empty path), the function returns
-`("gdrive", "")`. Callers in `parseMountUnit` assign this to `mount.RemotePath`, which
-then propagates into the generated unit file as `gdrive:` (empty path). The mount
-command itself tolerates this (mount point is required separately), but downstream
-consumers of `mount.RemotePath` may return incorrect display strings.
-
-**Fix:** Return `"/"` when the path part after the colon is empty:
-
-```go
-path := remotePath[idx+1:]
-if path == "" {
-    path = "/"
-}
-return remotePath[:idx], path
-```
-
----
 
 ### 11. Mount delete "service only" path fails on reconciliation
 
@@ -301,24 +266,15 @@ the tolerance shown in `deleteServiceAndConfig`.
 
 ---
 
-### 12. `runSyncCreate` never rolls back config create if `generator.WriteSyncUnits` fails
+### 12. ~~`runSyncCreate` never rolls back config create if `generator.WriteSyncUnits` fails~~ — DONE 2026-07-01
 
-**File:** `internal/cli/sync.go:152–156`
+Fixed in commit `refactor(cli): use savedJob.Name for sync rollback lookups`.
+Three rollback paths in runSyncCreate now look up by the canonical saved name:
+- Before savedJob is fetched: use syncCreateName (the flag value)
+- After savedJob is fetched: use savedJob.Name
 
-```go
-if _, _, err := generator.WriteSyncUnits(savedJob); err != nil {
-    _ = cfg.RemoveSyncJob(job.Name) // removes by Name, not ID
-    _ = cfg.Save()
-    return fmt.Errorf("failed to write systemd units: %w", err)
-}
-```
+Behaviour unchanged today; defensive against future AddSyncJob sanitization.
 
-The rollback uses `job.Name` (string), not `savedJob.ID`. `RemoveSyncJob` looks up by
-`Name`, so this works — but it calls `cfg.Save()` again while still holding the write
-lock acquired inside `RemoveSyncJob`. This is correct Go (no recursive mutex), just
-a style concern that's worth fixing to avoid confusion.
-
----
 
 ### 13. No coverage for `compareVersions` edge cases (e.g. version `"0.0.0"`)
 
@@ -417,22 +373,12 @@ showing both, or prefer the config value if it's more accurate for oneshot servi
 
 ## P3 — Polish / Code Hygiene
 
-### 18. `lipgloss.Color("3")` is a name lookup, not an ANSI escape
+### 18. ~~`lipgloss.Color("3")` is a name lookup, not an ANSI escape~~ — DONE 2026-07-01
 
-**File:** `internal/tui/app.go:893`
+Fixed in commit `fix(tui): use lipgloss.Color("yellow") name instead of numeric lookup`.
+The literal `"3"` was coincidentally resolving to yellow via the lipgloss
+registry. Now uses the explicit name `"yellow"`.
 
-```go
-BorderForeground(lipgloss.Color("3"))
-```
-
-`lipgloss.Color` treats the argument as a colour *name* and looks it up in its registry.
-`"3"` resolves to yellow in the default palette, but it means "the colour whose name
-happens to be `3`", not "ANSI colour 3". If the palette is ever customised this renders
-orange or undefined. Intent is clearly "yellow".
-
-**Fix:** Replace with `lipgloss.Color("yellow")`.
-
----
 
 ### 19. `retry.go:255` wraps `lastErr` after exhausting retries, losing the original
 
@@ -467,17 +413,19 @@ integration tests.
 
 ## Entry Point — Start Here
 
-If time for only one change, address **#1** (`parseVersion` / `Sscanf` at
-`internal/rclone/validation.go:308`).  It is the only truth-invalidating behaviour in
-the entire codebase: it runs on every launch, structurally parses the wrong region of
-the version string, and exists in a function that gates whether the application can
-start at all.
+P0 and P1 are empty. The easy P2 items (6, 7, 9, 10, 12) are done. Remaining work
+in priority order:
 
-Second priority is **#2** (`TrimSuffix` dead step at
-`internal/systemd/manager.go:535–536`): it is dead code that is trivially refactored
-and guards against a future double-suffix input that would silently corrupt the ID.
+1. **#14** (`GetRemoteType` O(n²) loading) — biggest user-visible perf win. Requires
+   an architecture decision: replace per-remote `rclone config show` with a single
+   `rclone listremotes --format t` call (push), or adopt lazy-load (pull).
+2. **#8** (`sanitizeExtraArgs` silently drops alpha-key fields) — UX decision needed:
+   return an error, or log a warning to stderr? Both are reasonable.
+3. **#11** (mount delete "service only" Stop hard-fail) — small bug, similar shape
+   to P1#4 which is already done.
+4. **#16** + **#17** (AutoStart/Enabled duplication, LastRun source confusion) — UI
+   clarity, low impact.
+5. **P3** (#19 retry classification, #20 warning helper) — polish, 1–2 hr refactor.
 
-Third priority is **#4** (sync-delete `StopTimer` hard-fail at
-`internal/tui/screens/sync_jobs.go:1086–1102`): it creates a path that makes a basic
-cleanup action impossible for services that have never been started, which is a common
-real-world scenario after first install.
+If time for only ONE change: address **#14**. It is the only remaining
+user-visible performance regression in the codebase.
