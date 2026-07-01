@@ -140,7 +140,12 @@ func runSyncCreate(cmd *cobra.Command, args []string) error {
 
 	generator, err := loadGenerator()
 	if err != nil {
-		_ = cfg.RemoveSyncJob(job.Name)
+		// Use syncCreateName (the package-level flag value) rather than
+		// job.Name so the lookup is robust against any future sanitization
+		// that AddSyncJob might apply to the job's Name field. The flag
+		// value is the canonical input that GetSyncJob uses to retrieve
+		// the saved job.
+		_ = cfg.RemoveSyncJob(syncCreateName)
 		_ = cfg.Save()
 		return err
 	}
@@ -162,7 +167,7 @@ func runSyncCreate(cmd *cobra.Command, args []string) error {
 				fmt.Fprintf(os.Stderr, "Warning: failed to remove partial service unit %s: %v\n", serviceName, remErr)
 			}
 		}
-		_ = cfg.RemoveSyncJob(job.Name)
+		_ = cfg.RemoveSyncJob(savedJob.Name)
 		_ = cfg.Save()
 		return fmt.Errorf("failed to write systemd units: %w", err)
 	}
@@ -177,7 +182,7 @@ func runSyncCreate(cmd *cobra.Command, args []string) error {
 		if remErr := generator.RemoveUnit(timerName); remErr != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to remove timer %s: %v\n", timerName, remErr)
 		}
-		if remErr := cfg.RemoveSyncJob(job.Name); remErr != nil {
+		if remErr := cfg.RemoveSyncJob(savedJob.Name); remErr != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to remove sync job from config: %v\n", remErr)
 		}
 		if saveErr := cfg.Save(); saveErr != nil {
