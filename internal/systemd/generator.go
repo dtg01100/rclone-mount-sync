@@ -197,7 +197,10 @@ func (g *Generator) GenerateSyncService(job *models.SyncJobConfig) (string, erro
 
 // GenerateSyncTimer generates a systemd timer unit for an rclone sync job.
 func (g *Generator) GenerateSyncTimer(job *models.SyncJobConfig) (string, error) {
-	timerDirectives := g.buildTimerDirectives(&job.Schedule)
+	timerDirectives, err := g.buildTimerDirectives(&job.Schedule)
+	if err != nil {
+		return "", fmt.Errorf("failed to build timer directives: %w", err)
+	}
 
 	safeName, err := sanitizeIniValue(job.Name, "Name")
 	if err != nil {
@@ -494,10 +497,17 @@ func (g *Generator) buildSyncOptions(opts *models.SyncOptions) string {
 }
 
 // buildTimerDirectives builds timer directives from schedule configuration.
-func (g *Generator) buildTimerDirectives(schedule *models.ScheduleConfig) string {
+// An empty schedule.Type is the zero value and falls through to the daily
+// default. An explicit but unrecognised schedule.Type returns an error
+// so the caller surfaces the misconfiguration instead of silently
+// emitting a daily timer for what the user meant as 'weekly' or similar.
+func (g *Generator) buildTimerDirectives(schedule *models.ScheduleConfig) (string, error) {
 	var directives []string
 
 	switch schedule.Type {
+	case "":
+		// Empty type is the zero value; fall through and apply the
+		// default-daily behavior below.
 	case "timer":
 		if schedule.OnCalendar != "" {
 			directives = append(directives, fmt.Sprintf("OnCalendar=%s", schedule.OnCalendar))
@@ -506,6 +516,8 @@ func (g *Generator) buildTimerDirectives(schedule *models.ScheduleConfig) string
 		if schedule.OnBootSec != "" {
 			directives = append(directives, fmt.Sprintf("OnBootSec=%s", schedule.OnBootSec))
 		}
+	default:
+		return "", fmt.Errorf("unknown schedule type %q; use 'timer', 'onboot', or leave empty for daily default", schedule.Type)
 	}
 
 	// Interval-based scheduling
@@ -528,7 +540,7 @@ func (g *Generator) buildTimerDirectives(schedule *models.ScheduleConfig) string
 		directives = append(directives, "OnCalendar=daily")
 	}
 
-	return strings.Join(directives, "\n")
+	return strings.Join(directives, "\n"), nil
 }
 
 // sanitizeExtraArgs removes newlines and escapes percent signs to prevent

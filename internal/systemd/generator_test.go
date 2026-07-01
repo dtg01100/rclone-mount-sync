@@ -488,13 +488,85 @@ func TestGenerator_BuildTimerDirectives(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := g.buildTimerDirectives(&tt.schedule)
+			got, err := g.buildTimerDirectives(&tt.schedule)
+			if err != nil {
+				t.Fatalf("buildTimerDirectives() unexpected error: %v", err)
+			}
 			for _, want := range tt.contains {
 				if !strings.Contains(got, want) {
 					t.Errorf("buildTimerDirectives() missing expected %q in:\n%s", want, got)
 				}
 			}
 		})
+	}
+}
+
+// TestBuildTimerDirectives_UnknownTypeError covers the error path:
+// an explicit but unrecognised schedule.Type must surface as an error,
+// not silently fall through to the daily default.
+func TestBuildTimerDirectives_UnknownTypeError(t *testing.T) {
+	g := &Generator{
+		systemdDir: t.TempDir(),
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     t.TempDir(),
+	}
+
+	tests := []struct {
+		name      string
+		schedule  models.ScheduleConfig
+		wantInMsg string
+	}{
+		{
+			name:      "weekly is not a recognised type",
+			schedule:  models.ScheduleConfig{Type: "weekly"},
+			wantInMsg: "weekly",
+		},
+		{
+			name:      "monthly is not a recognised type",
+			schedule:  models.ScheduleConfig{Type: "monthly"},
+			wantInMsg: "monthly",
+		},
+		{
+			name:      "garbage value is not a recognised type",
+			schedule:  models.ScheduleConfig{Type: "definitely-not-a-schedule"},
+			wantInMsg: "definitely-not-a-schedule",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := g.buildTimerDirectives(&tt.schedule)
+			if err == nil {
+				t.Fatal("buildTimerDirectives() expected error for unknown type, got nil")
+			}
+			if !strings.Contains(err.Error(), "unknown schedule type") {
+				t.Errorf("error %q should mention 'unknown schedule type'", err.Error())
+			}
+			if !strings.Contains(err.Error(), tt.wantInMsg) {
+				t.Errorf("error %q should contain the bad type %q", err.Error(), tt.wantInMsg)
+			}
+		})
+	}
+}
+
+// TestBuildTimerDirectives_EmptyTypeDefaultsToDaily covers the zero-value
+// case: an empty schedule.Type is not an error and still falls through
+// to the OnCalendar=daily default (matches prior behavior).
+func TestBuildTimerDirectives_EmptyTypeDefaultsToDaily(t *testing.T) {
+	g := &Generator{
+		systemdDir: t.TempDir(),
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     t.TempDir(),
+	}
+
+	got, err := g.buildTimerDirectives(&models.ScheduleConfig{})
+	if err != nil {
+		t.Fatalf("buildTimerDirectives() unexpected error: %v", err)
+	}
+	if !strings.Contains(got, "OnCalendar=daily") {
+		t.Errorf("empty schedule should default to daily, got: %s", got)
 	}
 }
 
