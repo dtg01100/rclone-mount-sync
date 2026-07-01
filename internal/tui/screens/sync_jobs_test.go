@@ -2,6 +2,8 @@ package screens
 
 import (
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -2651,5 +2653,120 @@ func TestSyncJobNow_ReturnsTime(t *testing.T) {
 	// Should be within 1 second
 	if diff > time.Second {
 		t.Errorf("syncJobNow() returned time %v, expected close to %v", result, now)
+	}
+}
+
+// TestSyncJobsScreen_LoadSyncJobStatuses_HappyPath covers the
+// live-status poller's per-tick refresh: for every known sync
+// job the screen queries manager.GetDetailedStatus and stores
+// the result in statuses keyed by job.Name.
+func TestSyncJobsScreen_LoadSyncJobStatuses_HappyPath(t *testing.T) {
+	screen := NewSyncJobsScreen()
+	screen.jobs = createTestSyncJobs()
+
+	active := &models.ServiceStatus{ActiveState: "active", SubState: "running"}
+	screen.manager = &systemd.MockManager{
+		GetDetailedStatusResult: active,
+	}
+	screen.generator = &systemd.Generator{}
+
+	msg := screen.loadSyncJobStatuses()
+	if msg != nil {
+		t.Errorf("loadSyncJobStatuses should return nil, got %T", msg)
+	}
+
+	for _, job := range screen.jobs {
+		if got := screen.statuses[job.Name]; got != active {
+			t.Errorf("statuses[%q] = %v, want %v", job.Name, got, active)
+		}
+	}
+
+	// A follow-up call returning a different status must
+	// overwrite the prior entry — no stale state.
+	idle := &models.ServiceStatus{ActiveState: "inactive", SubState: "dead"}
+	screen.manager.(*systemd.MockManager).GetDetailedStatusResult = idle
+	_ = screen.loadSyncJobStatuses()
+	if got := screen.statuses["Daily Backup"]; got != idle {
+		t.Errorf("statuses[Daily Backup] after second tick = %v, want %v", got, idle)
+	}
+}
+
+// TestSyncJobsScreen_LoadSyncJobStatuses_StatusErrorIsSwallowed
+// asserts that a manager.GetDetailedStatus failure for one job
+// does not abort the loop. The remaining jobs' statuses should
+// still be refreshed.
+func TestSyncJobsScreen_LoadSyncJobStatuses_StatusErrorIsSwallowed(t *testing.T) {
+	screen := NewSyncJobsScreen()
+	screen.jobs = createTestSyncJobs()
+	screen.manager = &systemd.MockManager{
+		GetDetailedStatusErr: errTestSyncJobNotFound,
+	}
+	screen.generator = &systemd.Generator{}
+
+	msg := screen.loadSyncJobStatuses()
+	if msg != nil {
+		t.Errorf("loadSyncJobStatuses should return nil even on error, got %T", msg)
+	}
+	for _, job := range screen.jobs {
+		if _, ok := screen.statuses[job.Name]; ok {
+			t.Errorf("statuses[%q] should be unset on GetDetailedStatus() error, got %v", job.Name, screen.statuses[job.Name])
+		}
+	}
+}
+
+// TestSyncJobsScreen_LoadSyncJobStatuses_NilGeneratorOrManager
+// covers the defensive short-circuit.
+func TestSyncJobsScreen_LoadSyncJobStatuses_NilGeneratorOrManager(t *testing.T) {
+	t.Run("nil generator", func(t *testing.T) {
+		screen := NewSyncJobsScreen()
+		screen.jobs = createTestSyncJobs()
+		screen.manager = &systemd.MockManager{GetDetailedStatusResult: &models.ServiceStatus{}}
+		if msg := screen.loadSyncJobStatuses(); msg != nil {
+			t.Errorf("loadSyncJobStatuses = %v, want nil", msg)
+		}
+		if len(screen.statuses) != 0 {
+			t.Errorf("statuses should be empty when generator is nil, got %d entries", len(screen.statuses))
+		}
+	})
+	t.Run("nil manager", func(t *testing.T) {
+		screen := NewSyncJobsScreen()
+		screen.jobs = createTestSyncJobs()
+		screen.generator = &systemd.Generator{}
+		if msg := screen.loadSyncJobStatuses(); msg != nil {
+			t.Errorf("loadSyncJobStatuses = %v, want nil", msg)
+		}
+		if len(screen.statuses) != 0 {
+			t.Errorf("statuses should be empty when manager is nil, got %d entries", len(screen.statuses))
+		}
+	})
+}
+
+// TestSyncJobsScreen_LoadSyncJobs_ReloadError covers the error
+// path when config.Reload() fails.
+func TestSyncJobsScreen_LoadSyncJobs_ReloadError(t *testing.T) {
+	screen := NewSyncJobsScreen()
+	screen.jobs = createTestSyncJobs()
+	screen.statuses = make(map[string]*models.ServiceStatus)
+
+	// Point XDG_CONFIG_HOME at a temp dir with corrupt YAML.
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	appDir := filepath.Join(tmpDir, "rclone-mount-sync")
+	if err := os.MkdirAll(appDir, 0o700); err != nil {
+		t.Fatalf("failed to create app config dir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(appDir, "config.yaml"), []byte("::: not valid yaml :::\n\t- broken: ["), 0o600); err != nil {
+		t.Fatalf("failed to write corrupt config: %v", err)
+	}
+
+	screen.config = &config.Config{}
+
+	msg := screen.loadSyncJobs()
+	errMsg, ok := msg.(SyncJobsErrorMsg)
+	if !ok {
+		t.Fatalf("loadSyncJobs on Reload error returned %T, want SyncJobsErrorMsg", msg)
+	}
+	if !strings.Contains(errMsg.Err.Error(), "failed to reload config") {
+		t.Errorf("error = %q, want to contain 'failed to reload config'", errMsg.Err.Error())
 	}
 }
