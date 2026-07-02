@@ -142,8 +142,12 @@ func runMountCreate(cmd *cobra.Command, args []string) error {
 
 	generator, err := loadGenerator()
 	if err != nil {
-		_ = cfg.RemoveMount(mount.Name)
-		_ = cfg.Save()
+		if remErr := cfg.RemoveMount(mount.Name); remErr != nil {
+			utils.NoteWarning("failed to remove mount from config: %v", remErr)
+		}
+		if saveErr := cfg.Save(); saveErr != nil {
+			utils.NoteWarning("failed to save config: %v", saveErr)
+		}
 		return err
 	}
 
@@ -160,11 +164,15 @@ func runMountCreate(cmd *cobra.Command, args []string) error {
 		if servicePath != "" {
 			serviceName := filepath.Base(servicePath)
 			if remErr := generator.RemoveUnit(serviceName); remErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to remove partial service unit %s: %v\n", serviceName, remErr)
+				utils.NoteWarning("failed to remove partial service unit %s: %v", serviceName, remErr)
 			}
 		}
-		_ = cfg.RemoveMount(mount.Name)
-		_ = cfg.Save()
+		if remErr := cfg.RemoveMount(mount.Name); remErr != nil {
+			utils.NoteWarning("failed to remove mount from config: %v", remErr)
+		}
+		if saveErr := cfg.Save(); saveErr != nil {
+			utils.NoteWarning("failed to save config: %v", saveErr)
+		}
 		return fmt.Errorf("failed to write systemd unit: %w", err)
 	}
 

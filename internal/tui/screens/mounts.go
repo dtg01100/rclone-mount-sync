@@ -866,14 +866,20 @@ func (d *DeleteConfirm) deleteServiceOnly() tea.Cmd {
 		// the caller still wants to clean up. Disable and RemoveUnit
 		// are the real preconditions for a clean delete.
 		if err := d.manager.Stop(serviceName); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to stop mount service %s: %v\n", serviceName, err)
+			utils.NoteWarning("failed to stop mount service %s: %v", serviceName, err)
 		}
 
 		// Disable the service
 		if err := d.manager.Disable(serviceName); err != nil {
 			return MountsErrorMsg{Err: fmt.Errorf("failed to disable mount: %w", err)}
 		}
-		_ = d.manager.ResetFailed(serviceName)
+		// ResetFailed is best-effort: a unit that was never loaded
+		// (e.g. first install) has no failed state to clear, and the
+		// caller still wants to clean up regardless. Surface the
+		// warning for transparency but do not abort.
+		if err := d.manager.ResetFailed(serviceName); err != nil {
+			utils.NoteWarning("failed to reset failed state for %s: %v", serviceName, err)
+		}
 
 		// Remove the unit file
 		if err := d.generator.RemoveUnit(serviceName); err != nil {

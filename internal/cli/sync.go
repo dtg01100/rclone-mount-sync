@@ -146,8 +146,12 @@ func runSyncCreate(cmd *cobra.Command, args []string) error {
 		// that AddSyncJob might apply to the job's Name field. The flag
 		// value is the canonical input that GetSyncJob uses to retrieve
 		// the saved job.
-		_ = cfg.RemoveSyncJob(syncCreateName)
-		_ = cfg.Save()
+		if remErr := cfg.RemoveSyncJob(syncCreateName); remErr != nil {
+			utils.NoteWarning("failed to remove sync job from config: %v", remErr)
+		}
+		if saveErr := cfg.Save(); saveErr != nil {
+			utils.NoteWarning("failed to save config: %v", saveErr)
+		}
 		return err
 	}
 
@@ -165,11 +169,15 @@ func runSyncCreate(cmd *cobra.Command, args []string) error {
 		if servicePath != "" {
 			serviceName := filepath.Base(servicePath)
 			if remErr := generator.RemoveUnit(serviceName); remErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to remove partial service unit %s: %v\n", serviceName, remErr)
+				utils.NoteWarning("failed to remove partial service unit %s: %v", serviceName, remErr)
 			}
 		}
-		_ = cfg.RemoveSyncJob(savedJob.Name)
-		_ = cfg.Save()
+		if remErr := cfg.RemoveSyncJob(savedJob.Name); remErr != nil {
+			utils.NoteWarning("failed to remove sync job from config: %v", remErr)
+		}
+		if saveErr := cfg.Save(); saveErr != nil {
+			utils.NoteWarning("failed to save config: %v", saveErr)
+		}
 		return fmt.Errorf("failed to write systemd units: %w", err)
 	}
 

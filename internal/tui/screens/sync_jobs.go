@@ -1172,7 +1172,13 @@ func (d *SyncJobDeleteConfirm) deleteServiceOnly() tea.Cmd {
 		if err := d.manager.Disable(serviceName); err != nil {
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to disable sync service: %w", err)}
 		}
-		_ = d.manager.ResetFailed(serviceName)
+		// ResetFailed is best-effort: a unit that was never loaded
+		// (e.g. first install) has no failed state to clear, and the
+		// caller still wants to clean up regardless. Surface the
+		// warning for transparency but do not abort.
+		if err := d.manager.ResetFailed(serviceName); err != nil {
+			utils.NoteWarning("failed to reset failed state for %s: %v", serviceName, err)
+		}
 
 		// Remove the unit files
 		if err := d.generator.RemoveUnit(serviceName); err != nil {
