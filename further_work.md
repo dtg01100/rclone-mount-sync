@@ -5,12 +5,11 @@ source code (path:line references are exact).
 
 ---
 
-> **Status (2026-07-01):** Items **6, 7, 9, 10, 12, 18** completed this session
-> (cleanup exit code, parseTimerNextRunOutput error, buildTimerDirectives
-> unknown-type error, parseRemotePath empty-path, sync rollback lookup,
-> lipgloss.Color name). See git log for the six commits. P1 and the easy
-> P2 items are now done; remaining work is P2#8, #11, #14, #16, #17 and
-> all of P3.
+> **Status (2026-07-01):** Items **6, 7, 8, 9, 10, 11, 12, 18** completed this
+> session. Item 11 was already addressed by the 2026-06-04 P1#4 work but
+> was still listed in further_work.md — the doc is now updated to reflect
+> that. P0 and P1 are empty. Remaining work is P2#14, #16, #17 and all
+> of P3.
 
 ## P0 — Must Fix Before Any Release
 
@@ -195,7 +194,22 @@ covering empty value, zero value, missing key, non-numeric value, empty
 input, multi-property, and the original happy path.
 
 
-### 8. `sanitizeExtraArgs` strips alpha-key fields with no user feedback
+### 8. ~~`sanitizeExtraArgs` strips alpha-key fields with no user feedback~~ — DONE 2026-07-01
+
+Fixed in commit `fix(systemd): warn when sanitizeExtraArgs drops an alpha-key field`.
+Now writes a one-line warning per dropped field to a package-level `warnSink`
+(default `io.Discard`, swappable in tests). The warning names the dropped key
+and explains why:
+
+```
+sanitizeExtraArgs: dropping field "CPUQuota" (looks like a systemd directive)
+```
+
+Decision: warn, not error. The user typed the flag; a hard error would block
+legitimate flows. A future hardening could escalate to an error if desired.
+
+Tests: TestSanitizeExtraArgs_WarnsOnDroppedFields (4 subtests) added.
+
 
 **File:** `internal/systemd/generator.go:467–488`
 
@@ -250,7 +264,17 @@ Tests updated:
 - sync_job_form_test.go: 'Remote without path' case now expects '/'
 
 
-### 11. Mount delete "service only" path fails on reconciliation
+### 11. ~~Mount delete "service only" path fails on reconciliation~~ — DONE 2026-06-04
+
+This item was actually addressed by the 2026-06-04 P1#4 commit
+(`fix(tui): downgrade Stop/StopTimer to warnings in delete paths`).
+The current code at `internal/tui/screens/mounts.go:deleteServiceOnly`
+treats `Stop` errors as warnings (writes to stderr, continues).
+The regression test `TestDeleteConfirm_DeleteServiceOnly_StopErrorTreatedAsWarning`
+verifies the new behaviour.
+
+Kept here historically; no action needed.
+
 
 There's a gap between the `deleteServiceOnly` and `deleteServiceAndConfig` paths:
 
@@ -413,19 +437,15 @@ integration tests.
 
 ## Entry Point — Start Here
 
-P0 and P1 are empty. The easy P2 items (6, 7, 9, 10, 12) are done. Remaining work
+P0 and P1 are empty. Items 6, 7, 8, 9, 10, 11, 12, 18 are done. Remaining work
 in priority order:
 
 1. **#14** (`GetRemoteType` O(n²) loading) — biggest user-visible perf win. Requires
    an architecture decision: replace per-remote `rclone config show` with a single
    `rclone listremotes --format t` call (push), or adopt lazy-load (pull).
-2. **#8** (`sanitizeExtraArgs` silently drops alpha-key fields) — UX decision needed:
-   return an error, or log a warning to stderr? Both are reasonable.
-3. **#11** (mount delete "service only" Stop hard-fail) — small bug, similar shape
-   to P1#4 which is already done.
-4. **#16** + **#17** (AutoStart/Enabled duplication, LastRun source confusion) — UI
-   clarity, low impact.
-5. **P3** (#19 retry classification, #20 warning helper) — polish, 1–2 hr refactor.
+2. **#16** + **#17** (AutoStart/Enabled duplication, LastRun source confusion) — UI
+   clarity, low impact; may need a design discussion.
+3. **P3** (#19 retry classification, #20 warning helper) — polish, 1–2 hr refactor.
 
 If time for only ONE change: address **#14**. It is the only remaining
 user-visible performance regression in the codebase.
