@@ -28,31 +28,52 @@ type Generator struct {
 }
 
 // NewGenerator creates a new unit file generator.
+//
+// Returns an error (not a silent fallback) when:
+//   - the user systemd directory cannot be located;
+//   - rclone is not found (no $RCLONE_BINARY_PATH and not on $PATH);
+//   - the log directory cannot be created.
+//
+// The fusermount path is best-effort: a missing fusermount is recorded
+// as an empty string on the returned Generator. This lets sync-only
+// setups construct a Generator successfully; the absence is then
+// surfaced as an error from GenerateMountService the first time the
+// caller tries to generate a mount unit. Mounts need fusermount for
+// ExecStop; sync jobs do not.
 func NewGenerator() (*Generator, error) {
 	systemdDir, err := GetUserSystemdPath()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get systemd path: %w", err)
 	}
 
-	// Find rclone binary - check environment variable first, then PATH
+	// Find rclone binary - check environment variable first, then PATH.
+	// A missing rclone is a hard error: every unit file we generate
+	// references it in ExecStart, and the previous /usr/bin/rclone
+	// fallback would silently embed a non-existent path in unit files
+	// that would then fail to start under systemd with a confusing
+	// "Failed at step EXEC" message.
 	rclonePath := os.Getenv("RCLONE_BINARY_PATH")
 	if rclonePath == "" {
-		rclonePath, err = exec.LookPath("rclone")
-		if err != nil {
-			rclonePath = "/usr/bin/rclone" // Default fallback
+		var lookErr error
+		rclonePath, lookErr = exec.LookPath("rclone")
+		if lookErr != nil {
+			return nil, fmt.Errorf("rclone binary not found in PATH and $RCLONE_BINARY_PATH is not set: %w", lookErr)
 		}
 	}
 
 	// Get rclone config path
 	configPath := getRcloneConfigPath()
 
-	// Get log directory
+	// Get log directory. A failed mkdir here (e.g. permission denied
+	// on $XDG_STATE_HOME and $HOME) is a hard error: falling back to
+	// /tmp loses logs on reboot and shares them across all users.
 	logDir, err := getLogDir()
 	if err != nil {
-		logDir = "/tmp" // Fallback
+		return nil, fmt.Errorf("failed to create log directory: %w", err)
 	}
 
-	// Find fusermount - prefer fusermount3 (newer) over fusermount
+	// Find fusermount - prefer fusermount3 (newer) over fusermount.
+	// Empty result is OK; sync jobs don't need it.
 	fusermountPath := findFusermount()
 
 	return &Generator{
@@ -69,7 +90,10 @@ func (g *Generator) GetSystemdDir() string {
 	return g.systemdDir
 }
 
-// findFusermount locates fusermount3 or fusermount binary, preferring fusermount3.
+// findFusermount locates fusermount3 or fusermount binary, preferring
+// fusermount3. Returns an empty string when neither is on $PATH; the
+// caller is responsible for handling the empty case (GenerateMountService
+// turns it into a user-facing error).
 func findFusermount() string {
 	if path, err := exec.LookPath("fusermount3"); err == nil {
 		return path
@@ -77,11 +101,15 @@ func findFusermount() string {
 	if path, err := exec.LookPath("fusermount"); err == nil {
 		return path
 	}
-	return "/bin/fusermount" // Default fallback
+	return ""
 }
 
 // GenerateMountService generates a systemd service unit for an rclone mount.
 func (g *Generator) GenerateMountService(mount *models.MountConfig) (string, error) {
+	if g.fusermountPath == "" {
+		return "", fmt.Errorf("cannot generate mount service: fusermount (or fusermount3) not found in PATH; install FUSE to enable mounts (sync jobs will still work without FUSE)")
+	}
+
 	mountPoint := expandPath(mount.MountPoint)
 	mountOptions := g.buildMountOptions(&mount.MountOptions)
 

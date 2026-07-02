@@ -3,6 +3,7 @@ package systemd
 import (
 	"bytes"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -486,10 +487,11 @@ func TestBuildTimerDirectives_EmptyTypeDefaultsToDaily(t *testing.T) {
 // TestGenerateMountService tests the GenerateMountService method.
 func TestGenerator_GenerateMountService(t *testing.T) {
 	g := &Generator{
-		systemdDir: t.TempDir(),
-		rclonePath: "/usr/bin/rclone",
-		configPath: "/home/user/.config/rclone/rclone.conf",
-		logDir:     t.TempDir(),
+		systemdDir:     t.TempDir(),
+		rclonePath:     "/usr/bin/rclone",
+		configPath:     "/home/user/.config/rclone/rclone.conf",
+		logDir:         t.TempDir(),
+		fusermountPath: "/bin/fusermount",
 	}
 
 	mount := &models.MountConfig{
@@ -1083,10 +1085,11 @@ func TestGenerator_GetSystemdDir(t *testing.T) {
 // TestGenerateMountServiceWithMountOptions tests mount service generation with various mount options.
 func TestGenerator_GenerateMountServiceWithMountOptions(t *testing.T) {
 	g := &Generator{
-		systemdDir: t.TempDir(),
-		rclonePath: "/usr/bin/rclone",
-		configPath: "/home/user/.config/rclone/rclone.conf",
-		logDir:     t.TempDir(),
+		systemdDir:     t.TempDir(),
+		rclonePath:     "/usr/bin/rclone",
+		configPath:     "/home/user/.config/rclone/rclone.conf",
+		logDir:         t.TempDir(),
+		fusermountPath: "/bin/fusermount",
 	}
 
 	mount := &models.MountConfig{
@@ -1165,7 +1168,17 @@ func TestGenerator_GenerateSyncServiceWithSyncOptions(t *testing.T) {
 }
 
 // TestNewGenerator tests the NewGenerator function.
+//
+// Skipped when rclone is not on $PATH and $RCLONE_BINARY_PATH is not
+// set: NewGenerator now returns an error in that case (instead of
+// silently falling back to /usr/bin/rclone), and that error is the
+// new contract — a successful NewGenerator with a missing rclone is
+// exactly the bug we are guarding against.
 func TestNewGenerator(t *testing.T) {
+	if _, err := exec.LookPath("rclone"); err != nil && os.Getenv("RCLONE_BINARY_PATH") == "" {
+		t.Skip("rclone not found in PATH and $RCLONE_BINARY_PATH is not set")
+	}
+
 	g, err := NewGenerator()
 	if err != nil {
 		t.Fatalf("NewGenerator() error = %v", err)
@@ -1187,14 +1200,67 @@ func TestNewGenerator(t *testing.T) {
 	}
 }
 
+// TestNewGenerator_MissingRclone verifies that NewGenerator returns a
+// descriptive error when rclone is neither on $PATH nor in
+// $RCLONE_BINARY_PATH. This is the new contract (replaces the old
+// silent fallback to /usr/bin/rclone, which produced unit files that
+// failed to start under systemd with a confusing EXEC error).
+func TestNewGenerator_MissingRclone(t *testing.T) {
+	// Force the missing-rclone path regardless of the test environment.
+	t.Setenv("RCLONE_BINARY_PATH", "")
+	// Point PATH at an empty temp dir so LookPath cannot find rclone.
+	t.Setenv("PATH", t.TempDir())
+
+	_, err := NewGenerator()
+	if err == nil {
+		t.Fatal("NewGenerator() should return error when rclone is missing")
+	}
+	if !strings.Contains(err.Error(), "rclone") {
+		t.Errorf("error should mention rclone; got %v", err)
+	}
+	if !strings.Contains(err.Error(), "RCLONE_BINARY_PATH") {
+		t.Errorf("error should mention $RCLONE_BINARY_PATH; got %v", err)
+	}
+}
+
+// TestGenerator_GenerateMountService_MissingFusermount verifies that
+// GenerateMountService errors when the generator has no fusermount path
+// (the new behavior: findFusermount returns "" when neither fusermount3
+// nor fusermount is on $PATH, and the generator surfaces that as a
+// user-facing error on mount create).
+func TestGenerator_GenerateMountService_MissingFusermount(t *testing.T) {
+	g := &Generator{
+		systemdDir: t.TempDir(),
+		rclonePath: "/usr/bin/rclone",
+		configPath: "/home/user/.config/rclone/rclone.conf",
+		logDir:     t.TempDir(),
+		// fusermountPath deliberately left empty
+	}
+
+	_, err := g.GenerateMountService(&models.MountConfig{
+		ID:         "abcdef01",
+		Name:       "test",
+		Remote:     "gdrive:",
+		RemotePath: "/",
+		MountPoint: "/mnt/test",
+	})
+	if err == nil {
+		t.Fatal("GenerateMountService() should return error when fusermount is missing")
+	}
+	if !strings.Contains(err.Error(), "fusermount") {
+		t.Errorf("error should mention fusermount; got %v", err)
+	}
+}
+
 // TestWriteMountService tests the WriteMountService method.
 func TestGenerator_WriteMountService(t *testing.T) {
 	tmpDir := t.TempDir()
 	g := &Generator{
-		systemdDir: tmpDir,
-		rclonePath: "/usr/bin/rclone",
-		configPath: "/home/user/.config/rclone/rclone.conf",
-		logDir:     tmpDir,
+		systemdDir:     tmpDir,
+		rclonePath:     "/usr/bin/rclone",
+		configPath:     "/home/user/.config/rclone/rclone.conf",
+		logDir:         tmpDir,
+		fusermountPath: "/bin/fusermount",
 	}
 
 	mount := &models.MountConfig{
@@ -1451,10 +1517,11 @@ func TestGetLogDir_WithXdgStateHome(t *testing.T) {
 // TestGenerateMountService_EdgeCases tests mount service generation edge cases.
 func TestGenerator_GenerateMountService_EdgeCases(t *testing.T) {
 	g := &Generator{
-		systemdDir: t.TempDir(),
-		rclonePath: "/usr/bin/rclone",
-		configPath: "/home/user/.config/rclone/rclone.conf",
-		logDir:     t.TempDir(),
+		systemdDir:     t.TempDir(),
+		rclonePath:     "/usr/bin/rclone",
+		configPath:     "/home/user/.config/rclone/rclone.conf",
+		logDir:         t.TempDir(),
+		fusermountPath: "/bin/fusermount",
 	}
 
 	tests := []struct {

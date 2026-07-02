@@ -88,23 +88,34 @@ func TestApp_InitError_SystemdGeneratorFailure(t *testing.T) {
 
 // TestApp_InitError_RcloneNotAvailable tests graceful handling when rclone is not in PATH.
 func TestApp_InitError_RcloneNotAvailable(t *testing.T) {
-	// Set PATH to only include a non-existent directory.
+	// Set PATH to only include a non-existent directory so rclone
+	// cannot be located. Also clear RCLONE_BINARY_PATH so NewGenerator
+	// is forced through the LookPath branch.
 	tmpDir := t.TempDir()
 	t.Setenv("PATH", tmpDir)
+	t.Setenv("RCLONE_BINARY_PATH", "")
 
 	app := NewApp("dev")
 	msg := app.initializeServices()
 
-	// Rclone unavailability should NOT crash init. We require either
-	// AppInitDone or ReconciliationMsg (the expected success types).
-	_, isInitDone := msg.(AppInitDone)
-	_, isReconcile := msg.(ReconciliationMsg)
-	if !isInitDone && !isReconcile {
-		t.Errorf("expected AppInitDone or ReconciliationMsg, got %T: %v", msg, msg)
+	// NewGenerator now errors when rclone is missing (the previous
+	// silent fallback to /usr/bin/rclone produced unit files that
+	// failed to start under systemd). The TUI surfaces that as
+	// AppInitError so the user sees a clear message instead of a
+	// TUI that cannot do anything. Accept that as a valid outcome.
+	initErr, isInitErr := msg.(AppInitError)
+	if !isInitErr {
+		t.Fatalf("expected AppInitError when rclone is missing, got %T: %v", msg, msg)
 	}
-	// Rclone client should always be initialized.
+	if !strings.Contains(initErr.Err.Error(), "rclone") {
+		t.Errorf("error should mention rclone; got %v", initErr.Err)
+	}
+
+	// The rclone client is created unconditionally (it does not
+	// require the binary to be present) and is still used to render
+	// rclone-aware screens. Confirm that.
 	if app.rclone == nil {
-		t.Error("rclone client should be set after initialization (even if rclone binary is absent)")
+		t.Error("rclone client should be set even when rclone binary is absent")
 	}
 }
 
