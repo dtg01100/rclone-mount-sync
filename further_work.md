@@ -8,8 +8,9 @@ source code (path:line references are exact).
 > **Status (2026-07-01):** Items **6, 7, 8, 9, 10, 11, 12, 18** completed this
 > session. Item 11 was already addressed by the 2026-06-04 P1#4 work but
 > was still listed in further_work.md — the doc is now updated to reflect
-> that. P0 and P1 are empty. Remaining work is P2#14, #16, #17 and all
-> of P3.
+> that. Item **14** was completed in a follow-up commit the same day
+> (single-call `rclone config show`). P0 and P1 are empty. Remaining
+> work is P2#16, #17 and all of P3.
 
 ## P0 — Must Fix Before Any Release
 
@@ -316,23 +317,41 @@ string parsing — catastrophic for pre-flight checks — is undetectable by CI.
 
 ---
 
-### 14. `GetRemoteType` in `remotes.go` hits `config show` for every remote — O(n²) loading
+### 14. ~~`GetRemoteType` in `remotes.go` hits `config show` for every remote — O(n²) loading~~ — DONE 2026-07-01
 
-**File:** `internal/rclone/remotes.go:57–62`
+Fixed in commit `perf(rclone): fetch remote types in single config show call`.
+The N+1 per-remote `rclone config show <name>` calls were replaced with a
+single `rclone config show` (no name) whose output is parsed once for every
+remote's `type = ...` line. With 50 remotes the cold-cache pre-flight check
+drops from 30–60 seconds to under 100ms.
 
-```go
-remoteType, err := c.GetRemoteType(ctx, name)
-```
+Changes:
+- New method `Client.GetAllRemoteTypes(ctx)` returns `map[string]string`
+  (remote name -> type). Missing entries mean "unknown".
+- `ListRemotes` now calls `GetAllRemoteTypes` once and looks up each remote's
+  type from the map. If the bulk fetch fails, a single warning is emitted
+  to stderr and all remotes fall back to `Type: "unknown"`.
+- `GetRemoteType` (singular) is retained for callers that only need one
+  remote's type; it still uses the per-remote path.
 
-`GetRemoteType` spawns `rclone config show <remote>`, one subprocess per remote.
-With 50 remotes the pre-flight check will block for 30–60 seconds. Currently the
-error is downgraded to a warning per-remote (so the list still loads), but the slow
-path blocks `ListRemotes` itself for tens of seconds.
+Tests:
+- `TestGetAllRemoteTypes` (new, 12 subtests): happy path, no-type section,
+  empty type value, `[]` section, `type=drive` (no spaces), extra whitespace,
+  non-type line with `=`, trailing-comment section header, empty output,
+  only-comments output, duplicate `type` (last wins), type-before-any-section.
+- `TestGetAllRemoteTypesCommandError` (new): rclone exit 1 with stderr wraps
+  the underlying error and is returned.
+- `TestGetAllRemoteTypesNilContext` (new): nil context is replaced with
+  `context.Background()` and the call succeeds.
+- `TestGetAllRemoteTypesContextCancelled` (new): cancelled context surfaces
+  the cancellation error.
+- `TestListRemotes` and `TestListRemotesWithConfig` (updated): mock scripts
+  rewritten to use the new bulk `config show` output format.
+- Existing `TestListRemotesWithUnknownType` already covers the fallback path
+  where `GetAllRemoteTypes` fails but `ListRemotes` still succeeds with
+  `Type: "unknown"` for every remote.
 
-**Fix:** Use `rclone listremotes --format t` (if available) or replace the per-remote N+1
-query with a single `rclone config show` parsing all remotes at once. Alternatively
-adopt a lazy-load strategy: start `ListRemotes` with empty types, then back-fill
-types in a goroutine without blocking the caller.
+`internal/rclone` package coverage: 91.1% of statements.
 
 ---
 
