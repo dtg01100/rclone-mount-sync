@@ -215,7 +215,15 @@ type SyncJobConfig struct {
 	// Metadata
 	CreatedAt  time.Time `json:"created_at" yaml:"created_at" mapstructure:"created_at"`
 	ModifiedAt time.Time `json:"modified_at" yaml:"modified_at" mapstructure:"modified_at"`
-	LastRun    time.Time `json:"last_run,omitempty" yaml:"last_run,omitempty" mapstructure:"last_run,omitempty"`
+	// LastRun is reserved for a future "app-recorded" last-run time.
+	// Currently it is only ever zero-valued because nothing in this
+	// codebase writes to it — sync jobs run as systemd services and
+	// the app has no completion hook. The displayed last-run time in
+	// the TUI comes from models.ServiceStatus.LastRun (populated from
+	// systemd's InactiveEnterTimestamp) instead. The field is kept
+	// so that YAML files written by future versions can round-trip
+	// through older versions without losing data.
+	LastRun time.Time `json:"last_run,omitempty" yaml:"last_run,omitempty" mapstructure:"last_run,omitempty"`
 }
 
 // Validate checks that the sync-job configuration is internally consistent
