@@ -264,7 +264,11 @@ func doRetry(ctx context.Context, config RetryConfig, op Operation) error {
 	}
 
 	if lastErr != nil {
-		return fmt.Errorf("operation failed after %d attempts: %w", config.MaxRetries+1, lastErr)
+		wrapped := fmt.Errorf("operation failed after %d attempts: %w", config.MaxRetries+1, lastErr)
+		if IsRetryableError(lastErr) {
+			return NewRetryableError(wrapped)
+		}
+		return wrapped
 	}
 	return errors.New("operation failed")
 }

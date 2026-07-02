@@ -3,7 +3,6 @@ package systemd
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +10,7 @@ import (
 	"text/template"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 const (
@@ -544,15 +544,13 @@ func (g *Generator) buildTimerDirectives(schedule *models.ScheduleConfig) (strin
 	return strings.Join(directives, "\n"), nil
 }
 
-// warnSink is where sanitizeExtraArgs writes a one-line warning per dropped
-// alpha-key field. Defaults to io.Discard so the function is quiet in
-// production; tests swap in a buffer to assert the warning text. Callers
-// that want the warnings visible (CLI/TUI) can replace this at startup.
-var warnSink io.Writer = io.Discard
-
 // sanitizeExtraArgs removes newlines and escapes percent signs to prevent
 // systemd unit file directive injection. It returns an empty string with
 // a logged warning if the args contain systemd directive patterns.
+//
+// Warnings are written through utils.NoteWarning so they share the
+// project's central stderr sink (utils.WarningSink, default os.Stderr).
+// Tests can swap the sink to capture or silence the output.
 func sanitizeExtraArgs(args string) string {
 	if err := models.ValidateExtraArgs(args); err != nil {
 		// Strip dangerous content rather than silently passing it through
@@ -571,7 +569,7 @@ func sanitizeExtraArgs(args string) string {
 					// a systemd directive but is actually a CLI flag for
 					// rclone itself). The warning surfaces the rejection
 					// without aborting the create.
-					_, _ = fmt.Fprintf(warnSink, "sanitizeExtraArgs: dropping field %q (looks like a systemd directive)\n", key)
+					utils.NoteWarning("sanitizeExtraArgs: dropping field %q (looks like a systemd directive)", key)
 					continue
 				}
 			}

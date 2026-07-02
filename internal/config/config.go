@@ -255,7 +255,7 @@ func RestoreFromBackup() error {
 	}
 	defer func() {
 		if cerr := src.Close(); cerr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to close backup file: %v\n", cerr)
+			utils.NoteWarning("failed to close backup file: %v", cerr)
 		}
 	}()
 
@@ -265,7 +265,7 @@ func RestoreFromBackup() error {
 	}
 	defer func() {
 		if cerr := dst.Close(); cerr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to close config file: %v\n", cerr)
+			utils.NoteWarning("failed to close config file: %v", cerr)
 		}
 	}()
 
@@ -315,7 +315,7 @@ func createBackup(configPath, backupPath string) error {
 	}
 	defer func() {
 		if cerr := srcFile.Close(); cerr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to close config file: %v\n", cerr)
+			utils.NoteWarning("failed to close config file: %v", cerr)
 		}
 	}()
 
@@ -325,7 +325,7 @@ func createBackup(configPath, backupPath string) error {
 	}
 	defer func() {
 		if cerr := dstFile.Close(); cerr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to close backup file: %v\n", cerr)
+			utils.NoteWarning("failed to close backup file: %v", cerr)
 		}
 	}()
 
@@ -679,10 +679,10 @@ func (c *Config) ExportConfig(filePath string) error {
 		// the OS flushing its own buffers. Without this, a crash here
 		// could leave a truncated export file at the final path.
 		if serr := file.Sync(); serr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to sync export file: %v\n", serr)
+			utils.NoteWarning("failed to sync export file: %v", serr)
 		}
 		if cerr := file.Close(); cerr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to close export file: %v\n", cerr)
+			utils.NoteWarning("failed to close export file: %v", cerr)
 		}
 	}()
 
@@ -751,7 +751,7 @@ func (c *Config) ImportConfig(filePath string, mode ImportMode) error {
 	}
 	defer func() {
 		if cerr := file.Close(); cerr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to close import file: %v\n", cerr)
+			utils.NoteWarning("failed to close import file: %v", cerr)
 		}
 	}()
 

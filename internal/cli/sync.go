@@ -7,6 +7,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -177,16 +178,16 @@ func runSyncCreate(cmd *cobra.Command, args []string) error {
 		serviceName := generator.ServiceName(savedJob.ID, "sync") + ".service"
 		timerName := generator.ServiceName(savedJob.ID, "sync") + ".timer"
 		if remErr := generator.RemoveUnit(serviceName); remErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to remove service %s: %v\n", serviceName, remErr)
+			utils.NoteWarning("failed to remove service %s: %v", serviceName, remErr)
 		}
 		if remErr := generator.RemoveUnit(timerName); remErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to remove timer %s: %v\n", timerName, remErr)
+			utils.NoteWarning("failed to remove timer %s: %v", timerName, remErr)
 		}
 		if remErr := cfg.RemoveSyncJob(savedJob.Name); remErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to remove sync job from config: %v\n", remErr)
+			utils.NoteWarning("failed to remove sync job from config: %v", remErr)
 		}
 		if saveErr := cfg.Save(); saveErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to save config: %v\n", saveErr)
+			utils.NoteWarning("failed to save config: %v", saveErr)
 		}
 		return fmt.Errorf("failed to reload systemd daemon: %w", err)
 	}
@@ -194,7 +195,7 @@ func runSyncCreate(cmd *cobra.Command, args []string) error {
 	if syncCreateEnabled && savedJob.Schedule.Type != "manual" {
 		timerName := generator.ServiceName(savedJob.ID, "sync") + ".timer"
 		if err := manager.Enable(timerName); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to enable timer: %v\n", err)
+			utils.NoteWarning("failed to enable timer: %v", err)
 		}
 	}
 
@@ -227,19 +228,19 @@ func runSyncDelete(cmd *cobra.Command, args []string) error {
 
 	// Attempt to stop and disable, but don't fail if service doesn't exist
 	if err := manager.StopTimer(timerName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to stop timer %s: %v\n", timerName, err)
+		utils.NoteWarning("failed to stop timer %s: %v", timerName, err)
 	}
 	if err := manager.DisableTimer(timerName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to disable timer %s: %v\n", timerName, err)
+		utils.NoteWarning("failed to disable timer %s: %v", timerName, err)
 	}
 	if err := manager.Stop(serviceName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to stop %s: %v\n", serviceName, err)
+		utils.NoteWarning("failed to stop %s: %v", serviceName, err)
 	}
 	if err := manager.Disable(serviceName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to disable %s: %v\n", serviceName, err)
+		utils.NoteWarning("failed to disable %s: %v", serviceName, err)
 	}
 	if err := manager.ResetFailed(serviceName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to reset failed state for %s: %v\n", serviceName, err)
+		utils.NoteWarning("failed to reset failed state for %s: %v", serviceName, err)
 	}
 
 	// Remove the config entry first so a subsequent unit-removal failure
@@ -249,14 +250,14 @@ func runSyncDelete(cmd *cobra.Command, args []string) error {
 	removedService := false
 	removedTimer := false
 	if err := generator.RemoveUnit(serviceName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to remove service unit %s: %v\n", serviceName, err)
+		utils.NoteWarning("failed to remove service unit %s: %v", serviceName, err)
 	} else {
 		removedService = true
 	}
 
 	if job.Schedule.Type != "manual" {
 		if err := generator.RemoveUnit(timerName); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to remove timer unit %s: %v\n", timerName, err)
+			utils.NoteWarning("failed to remove timer unit %s: %v", timerName, err)
 		} else {
 			removedTimer = true
 		}

@@ -1,10 +1,12 @@
 package utils
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -453,5 +455,81 @@ func TestGenerateID(t *testing.T) {
 			t.Errorf("GenerateID() returned duplicate %q after %d iterations", id, i)
 		}
 		seen[id] = struct{}{}
+	}
+}
+
+func TestNoteWarning(t *testing.T) {
+	orig := WarningSink
+	defer func() { WarningSink = orig }()
+
+	var buf bytes.Buffer
+	WarningSink = &buf
+
+	NoteWarning("simple message")
+	if got := buf.String(); got != "Warning: simple message\n" {
+		t.Errorf("NoteWarning(simple) = %q, want %q", got, "Warning: simple message\n")
+	}
+
+	buf.Reset()
+	NoteWarning("failed to %s unit %s: %v", "stop", "rclone-mount-x", errors.New("boom"))
+	want := "Warning: failed to stop unit rclone-mount-x: boom\n"
+	if got := buf.String(); got != want {
+		t.Errorf("NoteWarning(formatted) = %q, want %q", got, want)
+	}
+}
+
+func TestNoteWarningAlwaysPrefixed(t *testing.T) {
+	orig := WarningSink
+	defer func() { WarningSink = orig }()
+
+	var buf bytes.Buffer
+	WarningSink = &buf
+
+	NoteWarning("a")
+	NoteWarning("b")
+	out := buf.String()
+	if !strings.HasPrefix(out, "Warning: ") {
+		t.Errorf("NoteWarning output must start with 'Warning: ', got %q", out)
+	}
+	if strings.Count(out, "Warning: ") != 2 {
+		t.Errorf("expected two Warning: prefixes, got %q", out)
+	}
+}
+
+func TestNoteError(t *testing.T) {
+	orig := ErrorSink
+	defer func() { ErrorSink = orig }()
+
+	var buf bytes.Buffer
+	ErrorSink = &buf
+
+	NoteError("simple message")
+	if got := buf.String(); got != "Error: simple message\n" {
+		t.Errorf("NoteError(simple) = %q, want %q", got, "Error: simple message\n")
+	}
+
+	buf.Reset()
+	NoteError("failed to %s unit %s: %v", "stop", "rclone-mount-x", errors.New("boom"))
+	want := "Error: failed to stop unit rclone-mount-x: boom\n"
+	if got := buf.String(); got != want {
+		t.Errorf("NoteError(formatted) = %q, want %q", got, want)
+	}
+}
+
+func TestNoteErrorAlwaysPrefixed(t *testing.T) {
+	orig := ErrorSink
+	defer func() { ErrorSink = orig }()
+
+	var buf bytes.Buffer
+	ErrorSink = &buf
+
+	NoteError("a")
+	NoteError("b")
+	out := buf.String()
+	if !strings.HasPrefix(out, "Error: ") {
+		t.Errorf("NoteError output must start with 'Error: ', got %q", out)
+	}
+	if strings.Count(out, "Error: ") != 2 {
+		t.Errorf("expected two Error: prefixes, got %q", out)
 	}
 }

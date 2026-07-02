@@ -3,9 +3,10 @@ package rclone
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
+
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 // Remote represents an rclone remote configuration.
@@ -75,7 +76,7 @@ func (c *Client) ListRemotes(ctx context.Context) ([]Remote, error) {
 	// remote so the list still loads.
 	types, typeErr := c.GetAllRemoteTypes(ctx)
 	if typeErr != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to get remote types in bulk: %v\n", typeErr)
+		utils.NoteWarning("failed to get remote types in bulk: %v", typeErr)
 		types = nil
 	}
 

@@ -3,7 +3,6 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -13,6 +12,7 @@ import (
 	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
 	"github.com/dtg01100/rclone-mount-sync/internal/tui/components"
 	"github.com/dtg01100/rclone-mount-sync/internal/tui/screens"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 // Version is set at build time via ldflags.
@@ -924,13 +924,13 @@ func (a *App) importSelectedOrphan() (tea.Model, tea.Cmd) {
 				_ = a.config.RemoveSyncJob(imported.SyncJob.Name)
 			}
 			if saveErr := a.config.Save(); saveErr != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to rollback config: %v\n", saveErr)
+				utils.NoteWarning("failed to rollback config: %v", saveErr)
 			}
 			return OrphanActionMsg{Err: fmt.Errorf("failed to write service file: %w", writeErr)}
 		}
 
 		if err := reconciler.RemoveOrphan(orphan); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to remove orphan unit file %s: %v\n", orphan.Name, err)
+			utils.NoteWarning("failed to remove orphan unit file %s: %v", orphan.Name, err)
 		}
 
 		return OrphanActionMsg{

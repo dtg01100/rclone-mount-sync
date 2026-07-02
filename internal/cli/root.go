@@ -12,6 +12,7 @@ import (
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
 	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -162,7 +163,7 @@ func runCleanup(cmd *cobra.Command, args []string) error {
 		if _, err := os.Stat(unitPath); os.IsNotExist(err) {
 			attempted++
 			if err := manager.ResetFailed(unitName); err != nil {
-				fmt.Fprintf(os.Stderr, "Warning: failed to reset %s: %v\n", unitName, err)
+				utils.NoteWarning("failed to reset %s: %v", unitName, err)
 			} else {
 				fmt.Printf("Cleaned up orphaned unit: %s\n", unitName)
 				cleaned++

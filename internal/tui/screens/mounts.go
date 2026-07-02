@@ -4,7 +4,6 @@ package screens
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/dtg01100/rclone-mount-sync/internal/rclone"
 	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
 	"github.com/dtg01100/rclone-mount-sync/internal/tui/components"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 // MountsScreenMode represents the current mode of the mounts screen.
@@ -902,13 +902,13 @@ func (d *DeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 		serviceName := d.generator.ServiceName(d.mount.ID, "mount") + ".service"
 
 		if err := d.manager.Stop(serviceName); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to stop service %s: %v\n", serviceName, err)
+			utils.NoteWarning("failed to stop service %s: %v", serviceName, err)
 		}
 		if err := d.manager.Disable(serviceName); err != nil {
 			return MountsErrorMsg{Err: fmt.Errorf("failed to disable mount: %w", err)}
 		}
 		if err := d.manager.ResetFailed(serviceName); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to reset failed state for %s: %v\n", serviceName, err)
+			utils.NoteWarning("failed to reset failed state for %s: %v", serviceName, err)
 		}
 
 		if err := d.generator.RemoveUnit(serviceName); err != nil {
@@ -1245,8 +1245,8 @@ func (d *MountDetails) renderDetails() string {
 	fmt.Fprintf(&b, "  Remote: %s\n", d.mount.Remote)
 	fmt.Fprintf(&b, "  Remote Path: %s\n", d.mount.RemotePath)
 	fmt.Fprintf(&b, "  Mount Point: %s\n", d.mount.MountPoint)
-	fmt.Fprintf(&b, "  Auto Start: %t\n", d.mount.AutoStart)
-	fmt.Fprintf(&b, "  Enabled: %t\n", d.mount.Enabled)
+	fmt.Fprintf(&b, "  Enabled (systemd): %t\n", d.mount.Enabled)
+	fmt.Fprintf(&b, "  Auto Start at creation: %t\n", d.mount.AutoStart)
 
 	// Status
 	if d.status != nil {

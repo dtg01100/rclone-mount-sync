@@ -2,11 +2,11 @@ package screens
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
 	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 type OperationType int
@@ -163,16 +163,16 @@ func (r *RollbackManager) CleanupMountSystemd(mountID string) {
 	}
 	serviceName := r.generator.ServiceName(mountID, "mount") + ".service"
 	if err := r.manager.Stop(serviceName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to stop service %s: %v\n", serviceName, err)
+		utils.NoteWarning("failed to stop service %s: %v", serviceName, err)
 	}
 	if err := r.manager.Disable(serviceName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to disable service %s: %v\n", serviceName, err)
+		utils.NoteWarning("failed to disable service %s: %v", serviceName, err)
 	}
 	if err := r.generator.RemoveUnit(serviceName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to remove unit %s: %v\n", serviceName, err)
+		utils.NoteWarning("failed to remove unit %s: %v", serviceName, err)
 	}
 	if err := r.manager.DaemonReload(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to reload daemon: %v\n", err)
+		utils.NoteWarning("failed to reload daemon: %v", err)
 	}
 }
 
@@ -183,24 +183,24 @@ func (r *RollbackManager) CleanupSyncJobSystemd(jobID string) {
 	serviceName := r.generator.ServiceName(jobID, "sync") + ".service"
 	timerName := r.generator.ServiceName(jobID, "sync") + ".timer"
 	if err := r.manager.Stop(serviceName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to stop service %s: %v\n", serviceName, err)
+		utils.NoteWarning("failed to stop service %s: %v", serviceName, err)
 	}
 	if err := r.manager.StopTimer(timerName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to stop timer %s: %v\n", timerName, err)
+		utils.NoteWarning("failed to stop timer %s: %v", timerName, err)
 	}
 	if err := r.manager.Disable(serviceName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to disable service %s: %v\n", serviceName, err)
+		utils.NoteWarning("failed to disable service %s: %v", serviceName, err)
 	}
 	if err := r.manager.DisableTimer(timerName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to disable timer %s: %v\n", timerName, err)
+		utils.NoteWarning("failed to disable timer %s: %v", timerName, err)
 	}
 	if err := r.generator.RemoveUnit(serviceName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to remove unit %s: %v\n", serviceName, err)
+		utils.NoteWarning("failed to remove unit %s: %v", serviceName, err)
 	}
 	if err := r.generator.RemoveUnit(timerName); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to remove unit %s: %v\n", timerName, err)
+		utils.NoteWarning("failed to remove unit %s: %v", timerName, err)
 	}
 	if err := r.manager.DaemonReload(); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to reload daemon: %v\n", err)
+		utils.NoteWarning("failed to reload daemon: %v", err)
 	}
 }

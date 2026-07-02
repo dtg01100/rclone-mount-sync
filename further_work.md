@@ -5,12 +5,11 @@ source code (path:line references are exact).
 
 ---
 
-> **Status (2026-07-01):** Items **6, 7, 8, 9, 10, 11, 12, 18** completed this
-> session. Item 11 was already addressed by the 2026-06-04 P1#4 work but
-> was still listed in further_work.md — the doc is now updated to reflect
-> that. Item **14** was completed in a follow-up commit the same day
-> (single-call `rclone config show`). P0 and P1 are empty. Remaining
-> work is P2#16, #17 and all of P3.
+> **Status (2026-07-01, late session):** Items **6, 7, 8, 9, 10, 11, 12, 14,
+> 16, 17, 18, 19, 20** completed. Item 11 was already addressed by the
+> 2026-06-04 P1#4 work but was still listed in further_work.md. Items
+> **1, 2, 3, 4, 5, 13** were also completed earlier and the doc had
+> drifted. **All listed items are now done.**
 
 ## P0 — Must Fix Before Any Release
 
@@ -377,40 +376,24 @@ Remove from backlog. The function is used.
 
 ---
 
-### 16. `MountDetails.renderDetails` shows `AutoStart` / `Enabled` as two separate values
+### 16. ~~`MountDetails.renderDetails` shows `AutoStart` / `Enabled` as two separate values~~ — DONE 2026-07-01
 
-**File:** `internal/tui/screens/mounts.go:1102–1103`
-
-```go
-fmt.Fprintf(&b, "  Auto Start: %t\n", d.mount.AutoStart)
-fmt.Fprintf(&b, "  Enabled: %t\n", d.mount.Enabled)
-```
-
-`AutoStart` is always shown as the raw config field but does not affect runtime
-behaviour — only `Enabled` (propagated to `systemctl enable/disable`) drives the
-running state. `AutoStart` currently starts the mount when systemd-user starts, but
-that is the same as enabling the service. The two fields are redundant and their
-difference is not documented in the form, leading to user confusion ("I checked
-AutoStart but it didn't start!").
+Fixed in commit `fix(tui): rename AutoStart/Enabled labels in MountDetails`.
+The two fields are still both displayed (they are distinct config values)
+but are now labelled `Enabled (systemd)` and `Auto Start at creation` so
+the user understands that `Enabled` is what drives the running state and
+`Auto Start` is a one-shot CLI behaviour at create time.
 
 ---
 
-### 17. `SyncJobDetails.renderDetails` — `LastRun` shown from `d.status` not from `d.job`
+### 17. ~~`SyncJobDetails.renderDetails` — `LastRun` shown from `d.status` not from `d.job`~~ — DONE 2026-07-01
 
-**File:** `internal/tui/screens/sync_jobs.go:964–966`
-
-```go
-if !d.status.LastRun.IsZero() {
-    fmt.Fprintf(&b, "    Last Run: %s\n", d.status.LastRun.Format("2006-01-02 15:04:05"))
-}
-```
-
-`d.status.LastRun` comes from `GetDetailedStatus`, which queries systemd's notion of
-the last run time. The config field `job.LastRun` (which is written by this
-application when a sync job completes) may differ from systemd's view (which cannot
-track oneshot jobs reliably). The two are kept independent, but the UI doesn't
-distinguish between "config-time last run" and "systemd-recorded last run". Consider
-showing both, or prefer the config value if it's more accurate for oneshot services.
+Fixed in commit `fix(tui): distinguish LastRun source in SyncJobDetails`.
+The systemd-sourced last-run is now rendered as `Last Run (systemd):`
+inside the Service Status block. The application-recorded
+`d.job.LastRun` is rendered separately outside the status block as
+`Last Run (recorded by app):` so the user can see both values when
+they differ (e.g. oneshot jobs that systemd no longer tracks).
 
 ---
 
@@ -423,48 +406,43 @@ The literal `"3"` was coincidentally resolving to yellow via the lipgloss
 registry. Now uses the explicit name `"yellow"`.
 
 
-### 19. `retry.go:255` wraps `lastErr` after exhausting retries, losing the original
+### 19. ~~`retry.go:255` wraps `lastErr` after exhausting retries, losing the original~~ — DONE 2026-07-01
+
+Fixed in commit `fix(rclone): preserve retryable classification when doRetry exhausts`.
+The final `fmt.Errorf("operation failed after %d attempts: %w", ...)` is now
+re-wrapped with `NewRetryableError(...)` when `IsRetryableError(lastErr)` is
+true, so callers can still classify the terminal error without unwrapping
+twice. Permanent errors are returned unwrapped so they remain classified as
+non-retryable. Test `TestErrorMessageFormat` asserts the message format
+still contains the attempts count; new `TestErrorMessageFormatPermanentExhausted`
+asserts a permanent error wrapped through the exhausted path stays
+non-retryable.
+
+### 20. ~~Gather all `fmt.Fprintf(os.Stderr, "Warning: ")` calls onto a single helper~~ — DONE 2026-07-01
+
+Fixed in commit `refactor: centralise Warning prints into utils.NoteWarning`.
+52 callsites across 9 files were rewritten from:
 
 ```go
-return fmt.Errorf("operation failed after %d attempts: %w", config.MaxRetries+1, lastErr)
+fmt.Fprintf(os.Stderr, "Warning: <message>\n", args...)
 ```
 
-`lastErr` is the last-attempt error after `doRetryBytes` passes it back. If all retries
-fail, `lastErr` is correctly captured, but it is never *classified* (i.e. the caller
-never knows if it was retryable or permanent without re-inspecting the returned error).
-Consider adding a `Retryable bool` field to `RetryableError` and propagating it into
-the wrapped error, or at least annotating the final message with `[permanent:]` or
-`[retryable:]` so the caller can decide whether to suppress or escalate.
-
----
-
-### 20. Gather all `fmt.Fprintf(os.Stderr, "Warning: ")` calls onto a single helper
-
-There are 43 locations across the codebase that produce the pattern:
+to:
 
 ```go
-fmt.Fprintf(os.Stderr, "Warning: <action> failed: %v\n", err)
+utils.NoteWarning("<message>", args...)
 ```
 
-These are all unstructured, inconsistent (some print to stderr, some swallow errors
-entirely in the TUI screens), and untestable without capturing os.Stderr. Centralising
-on a `noteWarning(message string)` helper that can also be overridden in tests would
-give uniform behaviour and make it possible to assert the right number of warnings in
-integration tests.
+`utils.NoteWarning` writes to a swappable `utils.WarningSink io.Writer`
+(default `os.Stderr`). Tests can redirect the sink with
+`utils.WarningSink = &bytes.Buffer{}` and restore via `defer`. New tests
+`TestNoteWarning` and `TestNoteWarningAlwaysPrefixed` cover formatting
+and prefix invariants.
 
 ---
 
 ## Entry Point — Start Here
 
-P0 and P1 are empty. Items 6, 7, 8, 9, 10, 11, 12, 18 are done. Remaining work
-in priority order:
-
-1. **#14** (`GetRemoteType` O(n²) loading) — biggest user-visible perf win. Requires
-   an architecture decision: replace per-remote `rclone config show` with a single
-   `rclone listremotes --format t` call (push), or adopt lazy-load (pull).
-2. **#16** + **#17** (AutoStart/Enabled duplication, LastRun source confusion) — UI
-   clarity, low impact; may need a design discussion.
-3. **P3** (#19 retry classification, #20 warning helper) — polish, 1–2 hr refactor.
-
-If time for only ONE change: address **#14**. It is the only remaining
-user-visible performance regression in the codebase.
+All listed items are now complete. Future work belongs in a new document —
+either expand this list with newly-discovered items or retire it in favour of
+a roadmap file under `plans/`.

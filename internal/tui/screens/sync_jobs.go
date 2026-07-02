@@ -4,7 +4,6 @@ package screens
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/dtg01100/rclone-mount-sync/internal/rclone"
 	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
 	"github.com/dtg01100/rclone-mount-sync/internal/tui/components"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 // SyncJobsScreenMode represents the current mode of the sync jobs screen.
@@ -1029,9 +1029,15 @@ func (d *SyncJobDetails) renderDetails() string {
 		}
 
 		if !d.status.LastRun.IsZero() {
-			fmt.Fprintf(&b, "    Last Run: %s\n", d.status.LastRun.Format("2006-01-02 15:04:05"))
+			fmt.Fprintf(&b, "    Last Run (systemd): %s\n", d.status.LastRun.Format("2006-01-02 15:04:05"))
 		}
 	}
+
+	// TODO(agui): wire SyncJobConfig.LastRun to a sync-completion
+	// detector (e.g. a periodic poll that watches the unit's
+	// InactiveEnterTimestamp and persists the new value back to
+	// config.yaml). Until that exists, the only Last Run the user
+	// can see is the systemd-sourced one above.
 
 	// Sync options
 	b.WriteString("\n  Sync Options:\n")
@@ -1153,10 +1159,10 @@ func (d *SyncJobDeleteConfirm) deleteServiceOnly() tea.Cmd {
 		// the service may not be loaded yet (e.g. first install) or
 		// already stopped, and the caller still wants to clean up.
 		if err := d.manager.Stop(serviceName); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to stop sync service %s: %v\n", serviceName, err)
+			utils.NoteWarning("failed to stop sync service %s: %v", serviceName, err)
 		}
 		if err := d.manager.StopTimer(timerName); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to stop timer %s: %v\n", timerName, err)
+			utils.NoteWarning("failed to stop timer %s: %v", timerName, err)
 		}
 		if err := d.manager.DisableTimer(timerName); err != nil {
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to disable timer: %w", err)}
@@ -1199,10 +1205,10 @@ func (d *SyncJobDeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 		timerName := d.generator.ServiceName(d.job.ID, "sync") + ".timer"
 
 		if err := d.manager.Stop(serviceName); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to stop service %s: %v\n", serviceName, err)
+			utils.NoteWarning("failed to stop service %s: %v", serviceName, err)
 		}
 		if err := d.manager.StopTimer(timerName); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to stop timer %s: %v\n", timerName, err)
+			utils.NoteWarning("failed to stop timer %s: %v", timerName, err)
 		}
 		if err := d.manager.DisableTimer(timerName); err != nil {
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to disable timer: %w", err)}
@@ -1211,7 +1217,7 @@ func (d *SyncJobDeleteConfirm) deleteServiceAndConfig() tea.Cmd {
 			return SyncJobsErrorMsg{Err: fmt.Errorf("failed to disable sync service: %w", err)}
 		}
 		if err := d.manager.ResetFailed(serviceName); err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to reset failed state for %s: %v\n", serviceName, err)
+			utils.NoteWarning("failed to reset failed state for %s: %v", serviceName, err)
 		}
 
 		if err := d.generator.RemoveUnit(serviceName); err != nil {

@@ -3,6 +3,8 @@ package utils
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/user"
@@ -164,4 +166,29 @@ func ValidateMountPath(path string) error {
 	}
 
 	return nil
+}
+
+// WarningSink is the destination for NoteWarning output. Defaults to
+// os.Stderr; tests may swap it to capture or discard messages.
+var WarningSink io.Writer = os.Stderr
+
+// NoteWarning writes a single warning line to WarningSink in the
+// canonical "Warning: <message>" format used throughout the codebase.
+// Centralising the format here makes warnings easy to grep, easy to
+// suppress in tests, and easy to redirect to a log file in the future.
+func NoteWarning(format string, args ...any) {
+	_, _ = fmt.Fprintf(WarningSink, "Warning: "+format+"\n", args...)
+}
+
+// ErrorSink is the destination for NoteError output. Defaults to
+// os.Stderr; tests may swap it to capture or discard messages.
+var ErrorSink io.Writer = os.Stderr
+
+// NoteError writes a single error line to ErrorSink in the canonical
+// "Error: <message>" format. It is the error-channel counterpart to
+// NoteWarning: the two helpers exist in parallel so a future
+// log-file redirection can route warnings to one file and errors to
+// another without re-plumbing every call site.
+func NoteError(format string, args ...any) {
+	_, _ = fmt.Fprintf(ErrorSink, "Error: "+format+"\n", args...)
 }

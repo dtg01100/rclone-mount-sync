@@ -955,6 +955,31 @@ func TestErrorMessageFormat(t *testing.T) {
 	if !strings.Contains(err.Error(), expected) {
 		t.Errorf("error message should contain %q, got %q", expected, err.Error())
 	}
+
+	if !IsRetryableError(err) {
+		t.Errorf("exhausted-retry error should still be classified as retryable, got %v", err)
+	}
+}
+
+func TestErrorMessageFormatPermanentExhausted(t *testing.T) {
+	config := RetryConfig{
+		MaxRetries:      1,
+		InitialDelay:    10 * time.Millisecond,
+		MaxDelay:        100 * time.Millisecond,
+		RetryMultiplier: 2.0,
+	}
+
+	err := doRetry(context.Background(), config, func() error {
+		return NewPermanentError(errors.New("hard failure"))
+	})
+
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	if IsRetryableError(err) {
+		t.Errorf("permanent error wrapped in doRetry must not be re-classified as retryable, got %v", err)
+	}
 }
 
 func TestZeroRetries(t *testing.T) {
