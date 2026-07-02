@@ -3,6 +3,7 @@ package systemd
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -543,6 +544,12 @@ func (g *Generator) buildTimerDirectives(schedule *models.ScheduleConfig) (strin
 	return strings.Join(directives, "\n"), nil
 }
 
+// warnSink is where sanitizeExtraArgs writes a one-line warning per dropped
+// alpha-key field. Defaults to io.Discard so the function is quiet in
+// production; tests swap in a buffer to assert the warning text. Callers
+// that want the warnings visible (CLI/TUI) can replace this at startup.
+var warnSink io.Writer = io.Discard
+
 // sanitizeExtraArgs removes newlines and escapes percent signs to prevent
 // systemd unit file directive injection. It returns an empty string with
 // a logged warning if the args contain systemd directive patterns.
@@ -558,6 +565,13 @@ func sanitizeExtraArgs(args string) string {
 			if idx > 0 && idx < len(field)-1 {
 				key := field[:idx]
 				if models.IsAlpha(key) {
+					// Warn (not error) - the user typed the flag and
+					// probably meant something by it. A hard error would
+					// block legitimate flows (e.g. a flag that looks like
+					// a systemd directive but is actually a CLI flag for
+					// rclone itself). The warning surfaces the rejection
+					// without aborting the create.
+					_, _ = fmt.Fprintf(warnSink, "sanitizeExtraArgs: dropping field %q (looks like a systemd directive)\n", key)
 					continue
 				}
 			}

@@ -1,6 +1,7 @@
 package systemd
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -2010,6 +2011,76 @@ func TestSanitizeExtraArgs(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestSanitizeExtraArgs_WarnsOnDroppedFields exercises the warning path:
+// when an alpha-key field is dropped, the function must write a one-line
+// warning to warnSink. The default warnSink is io.Discard so production
+// is quiet; tests swap in a bytes.Buffer to assert the message.
+//
+// The warning names the dropped key so the user can see exactly which
+// flag was rejected. Behaviour: warning fires once per dropped field,
+// warnings accumulate across multiple fields, the returned string is
+// unchanged (still strips the field), and the function does not panic
+// on the empty / no-drop cases.
+func TestSanitizeExtraArgs_WarnsOnDroppedFields(t *testing.T) {
+	// Snapshot and restore warnSink around each subtest so they
+	// cannot leak state.
+	oldSink := warnSink
+	t.Cleanup(func() { warnSink = oldSink })
+
+	t.Run("warning fires for each dropped field", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		warnSink = buf
+
+		// CPUQuota is the canonical "looks like systemd directive"
+		// example; MemoryHigh is another.
+		_ = sanitizeExtraArgs("--foo CPUQuota=50% --bar MemoryHigh=1G --baz")
+		warning := buf.String()
+		if !strings.Contains(warning, "CPUQuota") {
+			t.Errorf("warning should name CPUQuota; got %q", warning)
+		}
+		if !strings.Contains(warning, "MemoryHigh") {
+			t.Errorf("warning should name MemoryHigh; got %q", warning)
+		}
+		// The warning should explain WHY the field was dropped.
+		if !strings.Contains(warning, "systemd directive") {
+			t.Errorf("warning should explain the drop reason; got %q", warning)
+		}
+	})
+
+	t.Run("no warning when no field is dropped", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		warnSink = buf
+
+		_ = sanitizeExtraArgs("--foo --bar --baz=value")
+		if buf.Len() != 0 {
+			t.Errorf("no drop = no warning; got %q", buf.String())
+		}
+	})
+
+	t.Run("empty input produces no warning", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		warnSink = buf
+
+		_ = sanitizeExtraArgs("")
+		if buf.Len() != 0 {
+			t.Errorf("empty input = no warning; got %q", buf.String())
+		}
+	})
+
+	t.Run("dropped field is still removed from output", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		warnSink = buf
+
+		got := sanitizeExtraArgs("--keep CPUQuota=50% --also-keep")
+		if strings.Contains(got, "CPUQuota") {
+			t.Errorf("CPUQuota should be stripped from output; got %q", got)
+		}
+		if !strings.Contains(buf.String(), "CPUQuota") {
+			t.Errorf("warning should still mention CPUQuota even though it was stripped; got %q", buf.String())
+		}
+	})
 }
 
 // TestBuildMountOptions_CustomConfig tests that custom config is used when specified.
