@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 // TestSanitizeName tests the sanitizeName function.
@@ -2015,8 +2016,9 @@ func TestSanitizeExtraArgs(t *testing.T) {
 
 // TestSanitizeExtraArgs_WarnsOnDroppedFields exercises the warning path:
 // when an alpha-key field is dropped, the function must write a one-line
-// warning to warnSink. The default warnSink is io.Discard so production
-// is quiet; tests swap in a bytes.Buffer to assert the message.
+// warning through utils.NoteWarning. The default WarningSink is os.Stderr
+// so the user sees the warning in production; tests swap in a bytes.Buffer
+// to assert the message.
 //
 // The warning names the dropped key so the user can see exactly which
 // flag was rejected. Behaviour: warning fires once per dropped field,
@@ -2024,14 +2026,14 @@ func TestSanitizeExtraArgs(t *testing.T) {
 // unchanged (still strips the field), and the function does not panic
 // on the empty / no-drop cases.
 func TestSanitizeExtraArgs_WarnsOnDroppedFields(t *testing.T) {
-	// Snapshot and restore warnSink around each subtest so they
+	// Snapshot and restore WarningSink around each subtest so they
 	// cannot leak state.
-	oldSink := warnSink
-	t.Cleanup(func() { warnSink = oldSink })
+	oldSink := utils.WarningSink
+	t.Cleanup(func() { utils.WarningSink = oldSink })
 
 	t.Run("warning fires for each dropped field", func(t *testing.T) {
 		buf := &bytes.Buffer{}
-		warnSink = buf
+		utils.WarningSink = buf
 
 		// CPUQuota is the canonical "looks like systemd directive"
 		// example; MemoryHigh is another.
@@ -2047,11 +2049,15 @@ func TestSanitizeExtraArgs_WarnsOnDroppedFields(t *testing.T) {
 		if !strings.Contains(warning, "systemd directive") {
 			t.Errorf("warning should explain the drop reason; got %q", warning)
 		}
+		// NoteWarning prefixes every line with "Warning: ".
+		if !strings.HasPrefix(warning, "Warning: ") {
+			t.Errorf("warning should start with the canonical 'Warning: ' prefix; got %q", warning)
+		}
 	})
 
 	t.Run("no warning when no field is dropped", func(t *testing.T) {
 		buf := &bytes.Buffer{}
-		warnSink = buf
+		utils.WarningSink = buf
 
 		_ = sanitizeExtraArgs("--foo --bar --baz=value")
 		if buf.Len() != 0 {
@@ -2061,7 +2067,7 @@ func TestSanitizeExtraArgs_WarnsOnDroppedFields(t *testing.T) {
 
 	t.Run("empty input produces no warning", func(t *testing.T) {
 		buf := &bytes.Buffer{}
-		warnSink = buf
+		utils.WarningSink = buf
 
 		_ = sanitizeExtraArgs("")
 		if buf.Len() != 0 {
@@ -2071,7 +2077,7 @@ func TestSanitizeExtraArgs_WarnsOnDroppedFields(t *testing.T) {
 
 	t.Run("dropped field is still removed from output", func(t *testing.T) {
 		buf := &bytes.Buffer{}
-		warnSink = buf
+		utils.WarningSink = buf
 
 		got := sanitizeExtraArgs("--keep CPUQuota=50% --also-keep")
 		if strings.Contains(got, "CPUQuota") {
