@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 )
 
@@ -18,20 +17,6 @@ func GetUserSystemdPath() (string, error) {
 		return "", fmt.Errorf("failed to get user config directory: %w", err)
 	}
 	return filepath.Join(configDir, "systemd", "user"), nil
-}
-
-// sanitizeName sanitizes a name for use in a systemd unit filename.
-//
-// Deprecated: This function is no longer needed for ID-based unit naming.
-// IDs are already clean 8-character alphanumeric strings (truncated UUIDs).
-// Kept for potential legacy compatibility.
-func sanitizeName(name string) string {
-	name = strings.ToLower(name)
-	reg := regexp.MustCompile(`[^a-z0-9_-]`)
-	name = reg.ReplaceAllString(name, "-")
-	reg2 := regexp.MustCompile(`-+`)
-	name = reg2.ReplaceAllString(name, "-")
-	return strings.Trim(name, "-")
 }
 
 // expandPath expands ~ to the user's home directory.

@@ -150,64 +150,6 @@ func TestGetRcloneConfigPath_EnvOverride(t *testing.T) {
 	}
 }
 
-func TestSanitizeName_AllSpecialChars(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{
-			name:  "only special characters",
-			input: "@#$%^&*()",
-			want:  "",
-		},
-		{
-			name:  "mixed special with valid",
-			input: "a@b#c$d",
-			want:  "a-b-c-d",
-		},
-		{
-			name:  "unicode characters",
-			input: "日本語",
-			want:  "",
-		},
-		{
-			name:  "emoji",
-			input: "test📁file",
-			want:  "test-file",
-		},
-		{
-			name:  "multiple consecutive special",
-			input: "a@@@b",
-			want:  "a-b",
-		},
-		{
-			name:  "tabs and newlines",
-			input: "a\tb\nc",
-			want:  "a-b-c",
-		},
-		{
-			name:  "slash characters",
-			input: "path/to/file",
-			want:  "path-to-file",
-		},
-		{
-			name:  "backslash characters",
-			input: "path\\to\\file",
-			want:  "path-to-file",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := sanitizeName(tt.input)
-			if got != tt.want {
-				t.Errorf("sanitizeName(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestGetLogDir_Success(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_STATE_HOME", tmpDir)
