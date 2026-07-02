@@ -104,13 +104,13 @@ case "$1" in
 		echo "s3:"
 		;;
 	config)
-		if [ "$2" = "show" ]; then
-			case "$3" in
-				gdrive) echo "[gdrive]"; echo "type = drive" ;;
-				dropbox) echo "[dropbox]"; echo "type = dropbox" ;;
-				s3) echo "[s3]"; echo "type = s3" ;;
-			esac
-		fi
+		# Bulk config show returns every remote's section at once.
+		echo "[gdrive]"
+		echo "type = drive"
+		echo "[dropbox]"
+		echo "type = dropbox"
+		echo "[s3]"
+		echo "type = s3"
 		;;
 esac
 `
@@ -180,11 +180,13 @@ func TestListRemotesWithConfig(t *testing.T) {
 if [ "$1" = "--config" ]; then
 	echo "config: $2" >&2
 fi
+# Args are: --config <path> <subcommand> ... so dispatch on $3
 case "$3" in
 	listremotes)
 		echo "remote1:"
 		;;
 	config)
+		# Bulk config show: return every section at once.
 		echo "[remote1]"; echo "type = test"
 		;;
 esac
