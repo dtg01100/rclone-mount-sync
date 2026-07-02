@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/dtg01100/rclone-mount-sync/internal/config"
 	"github.com/dtg01100/rclone-mount-sync/internal/models"
 	"github.com/dtg01100/rclone-mount-sync/internal/systemd"
+	"github.com/dtg01100/rclone-mount-sync/pkg/utils"
 )
 
 // withCLIDeps swaps the package-level loadConfig, loadGenerator,
@@ -869,31 +871,29 @@ func TestRunServicesStatus_ActivatedAt(t *testing.T) {
 // happy path; this one exercises nil + wrapped + non-wrapped
 // errors through the actual printError sink.)
 func TestPrintError_Extra(t *testing.T) {
-	// Redirect stderr to a buffer; restore via t.Cleanup.
-	oldStderr := os.Stderr
-	r, w, _ := os.Pipe()
-	os.Stderr = w
-	t.Cleanup(func() {
-		os.Stderr = oldStderr
-	})
+	// Capture by swapping the central ErrorSink rather than
+	// redirecting os.Stderr (printError now routes through
+	// utils.NoteError). Restore via t.Cleanup.
+	origSink := utils.ErrorSink
+	t.Cleanup(func() { utils.ErrorSink = origSink })
+
+	var buf bytes.Buffer
+	utils.ErrorSink = &buf
 
 	printError(errors.New("boom"))
 	printError(fmt.Errorf("wrapped: %w", errors.New("inner")))
 	printError(nil) // nil: %v prints "<nil>"
 
-	_ = w.Close()
-	buf := make([]byte, 1024)
-	n, _ := r.Read(buf)
-	got := string(buf[:n])
+	got := buf.String()
 
 	if !strings.Contains(got, "Error: boom") {
-		t.Errorf("stderr should contain 'Error: boom', got %q", got)
+		t.Errorf("sink should contain 'Error: boom', got %q", got)
 	}
 	if !strings.Contains(got, "Error: wrapped") {
-		t.Errorf("stderr should contain 'Error: wrapped', got %q", got)
+		t.Errorf("sink should contain 'Error: wrapped', got %q", got)
 	}
 	if !strings.Contains(got, "Error: <nil>") {
-		t.Errorf("stderr should contain 'Error: <nil>' for nil error, got %q", got)
+		t.Errorf("sink should contain 'Error: <nil>' for nil error, got %q", got)
 	}
 }
 

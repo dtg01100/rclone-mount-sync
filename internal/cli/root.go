@@ -83,8 +83,11 @@ func printJSON(v interface{}) error {
 	return encoder.Encode(v)
 }
 
+// printError routes a single error line to the central ErrorSink.
+// Tests swap utils.ErrorSink to capture; production defaults to
+// os.Stderr via the utils package.
 func printError(err error) {
-	fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+	utils.NoteError("%v", err)
 }
 
 // findMountByIDOrName searches for a mount by ID or name in the config.
