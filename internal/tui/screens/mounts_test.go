@@ -284,7 +284,7 @@ func TestMountsScreen_DetailsModeTransition(t *testing.T) {
 	screen := NewMountsScreen()
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	// Ensure cursor is valid
@@ -323,7 +323,7 @@ func TestMountsScreen_LoadMounts(t *testing.T) {
 	screen.config = cfg
 
 	// Create mock generator and manager
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	// Call loadMounts
@@ -737,7 +737,7 @@ func TestMountsScreen_ViewDetailsMode(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.mode = MountsModeDetails
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 	screen.details = NewMountDetails(screen.mounts[0], screen.manager, screen.generator)
 	screen.details.SetSize(80, 24) // Set size on details component
@@ -779,7 +779,7 @@ func TestMountsScreen_SetServices(t *testing.T) {
 	screen := NewMountsScreen()
 	cfg := &config.Config{}
 	rcloneClient := &rclone.Client{}
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 
 	screen.SetServices(cfg, rcloneClient, gen, mgr)
@@ -953,7 +953,7 @@ func TestDeleteConfirm_SetServices(t *testing.T) {
 	dialog := NewDeleteConfirm(mount)
 
 	mgr := &systemd.Manager{}
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	cfg := &config.Config{}
 
 	dialog.SetServices(mgr, gen, cfg)
@@ -984,7 +984,7 @@ func TestDeleteConfirm_SetSize(t *testing.T) {
 
 func TestNewMountDetails(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 
@@ -1008,7 +1008,7 @@ func TestNewMountDetails(t *testing.T) {
 
 func TestMountDetails_TabSwitching(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 
@@ -1032,7 +1032,7 @@ func TestMountDetails_TabSwitching(t *testing.T) {
 
 func TestMountDetails_Escape(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 
@@ -1046,7 +1046,7 @@ func TestMountDetails_Escape(t *testing.T) {
 
 func TestMountDetails_QKey(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 
@@ -1060,7 +1060,7 @@ func TestMountDetails_QKey(t *testing.T) {
 
 func TestMountDetails_IsDone(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 
@@ -1077,7 +1077,7 @@ func TestMountDetails_IsDone(t *testing.T) {
 
 func TestMountDetails_View(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 	details.width = 80
@@ -1115,7 +1115,7 @@ func TestMountDetails_View(t *testing.T) {
 
 func TestMountDetails_ViewLogsTab(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 	details.width = 80
@@ -1132,7 +1132,7 @@ func TestMountDetails_ViewLogsTab(t *testing.T) {
 
 func TestMountDetails_ViewLogsEmpty(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 	details.width = 80
@@ -1149,7 +1149,7 @@ func TestMountDetails_ViewLogsEmpty(t *testing.T) {
 
 func TestMountDetails_SetSize(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 
@@ -1166,7 +1166,7 @@ func TestMountDetails_SetSize(t *testing.T) {
 
 func TestMountDetails_Init(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 
@@ -1232,7 +1232,7 @@ func TestMountsScreen_RefreshKey(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.config = createTestConfigWithMounts()
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	// Press 'r' to refresh
@@ -1436,7 +1436,7 @@ func TestMountsScreen_ToggleMount_NilManager(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = nil
 
 	model, cmd := screen.toggleMount()
@@ -1466,7 +1466,7 @@ func TestMountsScreen_ToggleMount_ActiveStopsAndDisables(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.MockManager{
 		StatusResult: &systemd.UnitStatus{Active: true},
 	}
@@ -1501,7 +1501,7 @@ func TestMountsScreen_ToggleMount_InactiveStartsAndEnables(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 1 // Dropbox — has AutoStart=false
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.MockManager{
 		StatusResult: &systemd.UnitStatus{Active: false},
 	}
@@ -1529,7 +1529,7 @@ func TestMountsScreen_ToggleMount_StatusCheckFails(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.MockManager{
 		StatusErr: errTestMountNotFound,
 	}
@@ -1581,7 +1581,7 @@ func TestMountsScreen_StartMount_WithServices(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	model, cmd := screen.startMount()
@@ -1629,7 +1629,7 @@ func TestMountsScreen_StopMount_WithServices(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	model, cmd := screen.stopMount()
@@ -1728,7 +1728,7 @@ func TestMountsScreen_UpdateDetails_WithDetails(t *testing.T) {
 	screen := NewMountsScreen()
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 	screen.details = NewMountDetails(screen.mounts[0], screen.manager, screen.generator)
 	screen.mode = MountsModeDetails
@@ -1750,7 +1750,7 @@ func TestMountsScreen_UpdateDetails_DetailsDone(t *testing.T) {
 	screen := NewMountsScreen()
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 	screen.details = NewMountDetails(screen.mounts[0], screen.manager, screen.generator)
 	screen.details.done = true
@@ -1771,7 +1771,7 @@ func TestMountsScreen_StartMountKey(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
@@ -1785,7 +1785,7 @@ func TestMountsScreen_StartMountKey_NoMounts(t *testing.T) {
 	screen := NewMountsScreen()
 	screen.SetSize(80, 24)
 	screen.mounts = []models.MountConfig{}
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("s")})
@@ -1800,7 +1800,7 @@ func TestMountsScreen_StopMountKey(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("x")})
@@ -1815,7 +1815,7 @@ func TestMountsScreen_ToggleMountKey(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = nil
 
 	screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
@@ -1829,7 +1829,7 @@ func TestMountsScreen_ToggleMountKey_NoMounts(t *testing.T) {
 	screen := NewMountsScreen()
 	screen.SetSize(80, 24)
 	screen.mounts = []models.MountConfig{}
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
@@ -1876,7 +1876,7 @@ func TestDeleteConfirm_DeleteServiceOnly_NilManager(t *testing.T) {
 	mount := createTestMounts()[0]
 	dialog := NewDeleteConfirm(mount)
 	dialog.manager = nil
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 
 	// Code handles nil manager gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
@@ -1902,7 +1902,7 @@ func TestDeleteConfirm_DeleteServiceOnly_WithServices(t *testing.T) {
 	mount := createTestMounts()[0]
 	dialog := NewDeleteConfirm(mount)
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 
 	// Code handles services gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
@@ -1919,7 +1919,7 @@ func TestDeleteConfirm_DeleteServiceAndConfig_NilManager(t *testing.T) {
 	mount := createTestMounts()[0]
 	dialog := NewDeleteConfirm(mount)
 	dialog.manager = nil
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 	dialog.config = createTestConfigWithMounts()
 
 	// Code handles nil manager gracefully - no panic expected
@@ -1947,7 +1947,7 @@ func TestDeleteConfirm_DeleteServiceAndConfig_NilConfig(t *testing.T) {
 	mount := createTestMounts()[0]
 	dialog := NewDeleteConfirm(mount)
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 	dialog.config = nil
 
 	// Code handles nil config gracefully - no panic expected
@@ -1961,7 +1961,7 @@ func TestDeleteConfirm_DeleteServiceAndConfig_WithServices(t *testing.T) {
 	mount := createTestMounts()[0]
 	dialog := NewDeleteConfirm(mount)
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 	dialog.config = createTestConfigWithMounts()
 
 	// Code handles services gracefully - no panic expected
@@ -1980,7 +1980,7 @@ func TestDeleteConfirm_EnterOnDeleteServiceOnly(t *testing.T) {
 	dialog := NewDeleteConfirm(mount)
 	dialog.cursor = 1
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 
 	// Code handles Enter gracefully - no panic expected
 	_, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -1994,7 +1994,7 @@ func TestDeleteConfirm_EnterOnDeleteServiceAndConfig(t *testing.T) {
 	dialog := NewDeleteConfirm(mount)
 	dialog.cursor = 2
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 	dialog.config = createTestConfigWithMounts()
 
 	// Code handles Enter gracefully - no panic expected
@@ -2133,7 +2133,7 @@ func TestDeleteConfirm_DeleteServiceOnly_ReturnsMountDeletedMsg(t *testing.T) {
 	}
 	dialog := NewDeleteConfirm(mount)
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 
 	// Code handles delete gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
@@ -2153,7 +2153,7 @@ func TestMountsScreen_ToggleMount_ActiveMount(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	// Set up status to indicate mount is active
@@ -2180,7 +2180,7 @@ func TestMountsScreen_ToggleMount_InactiveMount(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	// Set up status to indicate mount is inactive
@@ -2207,7 +2207,7 @@ func TestMountsScreen_ToggleMount_StatusError(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	// No status set - will cause error when getting status
@@ -2298,7 +2298,7 @@ func TestMountDetails_ActionKeys(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.key, func(t *testing.T) {
 			mock := &systemd.MockManager{}
-			gen := &systemd.Generator{}
+			gen := systemd.NewTestGenerator(t.TempDir())
 			details := NewMountDetails(mount, mock, gen)
 			details.width = 80
 
@@ -2358,7 +2358,7 @@ func TestMountDetails_ActionKeys_NilManager(t *testing.T) {
 
 func TestMountDetails_RefreshKey(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 	details.width = 80
@@ -2475,7 +2475,7 @@ func TestMountsScreen_StartMount_CommandReturnsMessage(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	model, cmd := screen.startMount()
@@ -2505,7 +2505,7 @@ func TestMountsScreen_StopMount_CommandReturnsMessage(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	model, cmd := screen.stopMount()
@@ -2540,7 +2540,7 @@ func TestMountsScreen_StartMount_EnableAfterStart(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.MockManager{
 		EnableErr: errors.New("synthetic enable failure"),
 	}
@@ -2570,7 +2570,7 @@ func TestMountsScreen_StopMount_DisableAfterStop(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.MockManager{
 		DisableErr: errors.New("synthetic disable failure"),
 	}
@@ -2597,7 +2597,7 @@ func TestMountsScreen_StatusTickTriggersRefresh(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.MockManager{
 		StatusResult: &systemd.UnitStatus{Active: true},
 	}
@@ -2623,7 +2623,7 @@ func TestMountsScreen_StartMount_BothCallsSucceed(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.mounts = createTestMounts()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.MockManager{}
 	screen.manager = mgr
 
@@ -2695,7 +2695,7 @@ func TestMountDetails_RenderDetails_WithMountOptions(t *testing.T) {
 			ReadOnly:     true,
 		},
 	}
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 	details.width = 80
@@ -2716,7 +2716,7 @@ func TestMountDetails_RenderDetails_WithMountOptions(t *testing.T) {
 
 func TestMountDetails_RenderDetails_WithStatus(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 	details.width = 80
@@ -2741,7 +2741,7 @@ func TestMountDetails_RenderDetails_WithStatus(t *testing.T) {
 
 func TestMountDetails_RenderLogs_Truncation(t *testing.T) {
 	mount := createTestMounts()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewMountDetails(mount, mgr, gen)
 
@@ -2776,7 +2776,7 @@ func TestMountsScreen_LoadStatuses_HappyPath(t *testing.T) {
 	screen.manager = &systemd.MockManager{
 		StatusResult: active,
 	}
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 
 	msg := screen.loadStatuses()
 	if msg != nil {
@@ -2816,7 +2816,7 @@ func TestMountsScreen_LoadStatuses_StatusErrorIsSwallowed(t *testing.T) {
 	screen.manager = &systemd.MockManager{
 		StatusErr: errTestMountNotFound,
 	}
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 
 	msg := screen.loadStatuses()
 	if msg != nil {
@@ -2847,7 +2847,7 @@ func TestMountsScreen_LoadStatuses_NilGeneratorOrManager(t *testing.T) {
 	t.Run("nil manager", func(t *testing.T) {
 		screen := NewMountsScreen()
 		screen.mounts = createTestMounts()
-		screen.generator = &systemd.Generator{}
+		screen.generator = systemd.NewTestGenerator(t.TempDir())
 		if msg := screen.loadStatuses(); msg != nil {
 			t.Errorf("loadStatuses = %v, want nil", msg)
 		}
@@ -2879,7 +2879,7 @@ func TestDeleteConfirm_Init_ReturnsNil(t *testing.T) {
 func TestDeleteConfirm_Init_AfterSetServices(t *testing.T) {
 	mount := createTestMounts()[0]
 	d := NewDeleteConfirm(mount)
-	d.SetServices(&systemd.MockManager{}, &systemd.Generator{}, createTestConfigWithMounts())
+	d.SetServices(&systemd.MockManager{}, systemd.NewTestGenerator(t.TempDir()), createTestConfigWithMounts())
 	if cmd := d.Init(); cmd != nil {
 		t.Errorf("Init() after SetServices = %v, want nil", cmd)
 	}

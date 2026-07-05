@@ -25,6 +25,15 @@ func TestMountCreateAndDeleteFlow(t *testing.T) {
 		loadManager = oldLoadManager
 	}()
 
+	// Pin XDG_CONFIG_HOME to a temp dir so cfg.Save() (called inside
+	// the rollback paths during runMountCreate) writes to a writable
+	// location instead of the user's real config dir. Without this
+	// the test fails on systems where the real XDG_CONFIG_HOME is not
+	// writable, and pollutes the user's actual config on systems
+	// where it is. Mirrors the withCLIDeps helper used elsewhere in
+	// this package.
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+
 	loadConfig = func() (*config.Config, error) { return cfg, nil }
 	loadGenerator = func() (*systemd.Generator, error) { return systemd.NewTestGenerator(tmp), nil }
 	mock := &systemd.MockManager{}

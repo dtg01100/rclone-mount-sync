@@ -5,11 +5,12 @@ source code (path:line references are exact).
 
 ---
 
-> **Status (2026-07-01, late session):** Items **6, 7, 8, 9, 10, 11, 12, 14,
-> 16, 17, 18, 19, 20** completed. Item 11 was already addressed by the
-> 2026-06-04 P1#4 work but was still listed in further_work.md. Items
-> **1, 2, 3, 4, 5, 13** were also completed earlier and the doc had
-> drifted. **All listed items are now done.**
+> **Status (2026-07-02):** Items **1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12,
+> 13, 14, 15, 16, 17, 18, 19, 20** completed. Items 1–5 and 13 were closed
+> in earlier commits but the doc prose had drifted; the doc is now
+> reconciled with the source. Item 15 was self-cancelled by re-reading the
+> code (the feature is connected, not dead). **All listed items are now
+> done.**
 
 ## P0 — Must Fix Before Any Release
 
@@ -21,149 +22,56 @@ verified not to be reachable from any public call-site.
 
 ## P1 — Substantial Quality Improvements
 
-### 1. `parseVersion` uses `Sscanf(matches[0], ...)` instead of the already-parsed groups
+### 1. ~~`parseVersion` uses `Sscanf(matches[0], ...)` instead of the already-parsed groups~~ — DONE 2026-06-02
 
-**File:** `internal/rclone/validation.go:308`
-
-Current code:
-
-```go
-if _, err := fmt.Sscanf(matches[0], "%d.%d.%d", &v.major, &v.minor, &v.patch); err != nil {
-```
-
-`matches[0]` is the full `FindStringSubmatch` result for the first capture group
-(`"(\d+)\.(\d+)\.(\d+)"`). In practice it already is the pure version string
-(e.g. `"1.62.0"`), so `Sscanf` succeeds. However the same information is already
-available as `matches[1]`, `matches[2]`, `matches[3]` — parsing it again with
-`Sscanf` is wasteful and fragile against future regex changes.
-
-**Fix:** Replace both lines 307–310 with:
-
-```go
-v.major, _ = strconv.Atoi(matches[1])
-v.minor, _ = strconv.Atoi(matches[2])
-v.patch, _ = strconv.Atoi(matches[3])
-```
-
-This runs on every `runPreflightChecks` invocation (application start-up and
-`--skip-checks` bypass), so the redundant parse costs a few nanoseconds every
-time, but the readability and defensive-coding benefit is real.
+Fixed in commit `ad14973 fix(rclone): use parsed regex groups in parseVersion`.
+`fmt.Sscanf(matches[0], ...)` was replaced with three direct
+`strconv.Atoi(matches[1..3])` calls. `matches[0]` (the full match) is no
+longer parsed twice; the regex capture groups are consumed directly.
 
 ---
 
-### 2. `TrimSuffix` chain in `ParseUnitID` / `parseUnitFile` has dead first-step
+### 2. ~~`TrimSuffix` chain in `ParseUnitID` / `parseUnitFile` has dead first-step~~ — DONE 2026-06-02
 
-**File:** `internal/systemd/manager.go:535–536`
-
-```go
-name := strings.TrimSuffix(unitName, ".service")
-name = strings.TrimSuffix(name, ".timer")
-```
-
-If `unitName` ends in `.timer` (the common case for timer lookups), the first call
-does nothing and the second correctly strips `.timer`. The result is correct but the
-first call is dead code. Conversely, if `unitName` ended in `.service.timer` (a
-double-suffix that cannot come from systemd output but could come from user input),
-both calls would fire, silently producing a mount-ID that represents nothing real.
-
-**Fix:** Replace with a single explicit check:
-
-```go
-switch {
-case strings.HasSuffix(name, ".timer"):
-    name = strings.TrimSuffix(name, ".timer")
-case strings.HasSuffix(name, ".service"):
-    name = strings.TrimSuffix(name, ".service")
-default:
-    // leave name as-is
-}
-```
+Fixed in commit `a4eabff fix(systemd): reject double-suffix inputs in ParseUnitID`.
+The `TrimSuffix` chain was replaced with a `switch` that recognises exactly
+one of `.service` or `.timer`. Double-suffix inputs (e.g. `x.service.timer`)
+now cause `ParseUnitID` to return `("", "")` instead of silently producing a
+mount-ID that represents nothing real.
 
 ---
 
-### 3. Comments in `services.go:239` Describe The Wrong Behaviour
+### 3. ~~Comments in `services.go:239` Describe The Wrong Behaviour~~ — DONE 2026-06-02
 
-**File:** `internal/tui/screens/services.go:239`
-
-```go
-// Note: Errors from Status and GetTimerNextRun are intentionally ignored.
-timerStatus, _ := s.manager.Status(timerName)
-timerActive := timerStatus != nil && timerActive
-```
-
-Only the `GetTimerNextRun` error is ignored via `_`. `s.manager.Status(timerName)` returns
-a value (`timerStatus`) that IS used immediately on the next line to set `timerActive`.
-The comment therefore overstates how much is being dropped. The correct comment is:
-
-```go
-// Note: Error from GetTimerNextRun is intentionally ignored;
-// nextRun is left as the zero time which signals "unknown next run".
-nextRun, _ := s.manager.GetTimerNextRun(timerName)
-```
-
-Had this misstated comment led to someone removing the `timerActive` line thinking
-it was "also ignored," the timer-active flag would have been silently dropped from the
-display — a real regression risk.
+Fixed in commit `b48e186 fix(tui): correct misstated comment in services.go timer load`.
+The over-broad "Errors from Status and GetTimerNextRun are intentionally
+ignored" comment was replaced with a comment that names only
+`GetTimerNextRun` as ignored; `Status` is consumed on the next line and
+`Status`'s error is surfaced via a synthetic "not-found" state.
 
 ---
 
-### 4. `RunSyncNow` sync-delete path silently ignores StopTimer / DisableTimer failures
+### 4. ~~`RunSyncNow` sync-delete path silently ignores StopTimer / DisableTimer failures~~ — DONE 2026-06-04
 
-**File:** `internal/tui/screens/sync_jobs.go:1086–1102` (DeleteServiceOnly)  
-**File:** `internal/tui/screens/sync_jobs.go:1133–1141` (DeleteServiceAndConfig)
-
-In `deleteServiceOnly`:
-
-```go
-if err := d.manager.Stop(serviceName); err != nil { // hard-fail
-    return SyncJobsErrorMsg{Err: ...}
-}
-if err := d.manager.StopTimer(timerName); err != nil { // hard-fail
-    return SyncJobsErrorMsg{Err: ...}
-}
-```
-
-Stopping the **service** is a hard failure, but stopping the **timer** is also a
-hard failure. If the sync job is not currently running the service stop is expected
-to return an error (the service is not found), which causes the whole "delete service
-only" action to roll back. Users cannot clean up services that have never been started.
-
-The same pattern appears in `deleteServiceAndConfig` at line 1133–1141 with the same
-effect for `StopTimer` / `DisableTimer`.
-
-**Fix:** Treat `Stop`/`StopTimer` errors as warnings (the deleted-from-config path
-succeeds regardless); only `Disable`, `RemoveUnit`, and `DaemonReload` are fatal.
+Fixed in commit `a1609ad fix(tui): downgrade Stop/StopTimer to warnings in delete paths`.
+`Stop`/`StopTimer`/`ResetFailed` failures in both `deleteServiceOnly` and
+`deleteServiceAndConfig` now write to a warning sink instead of aborting
+the delete. Only `Disable`/`RemoveUnit`/`DaemonReload` are still fatal.
+Subsequent commit `b1263b5 refactor(cli,tui): surface cleanup-on-error via
+utils.NoteWarning` migrated the warnings from raw stderr writes to
+`utils.NoteWarning`.
 
 ---
 
-### 5. `rollbackMgr` re-instantiated per error branch — risk of stale references
+### 5. ~~`rollbackMgr` re-instantiated per error branch — risk of stale references~~ — DONE 2026-06-02
 
-**File:** `internal/tui/screens/mounts.go:838–866`
-
-```go
-if err := d.generator.RemoveUnit(serviceName); err != nil {
-    if d.config != nil {
-        rollbackMgr := NewRollbackManager(d.config, d.generator, d.manager)
-        _ = rollbackMgr.RollbackMount(rollbackData, false)
-    }
-    return MountsErrorMsg{Err: ...}
-}
-```
-
-The same `NewRollbackManager(...)` call is repeated at lines 840, 847, 855, 862.
-If `d.generator` or `d.manager` is mutated between error branches (unlikely but
-possible under concurrent TUI updates), a new rollback manager could see stale
-state on its `r.config` field if `r.config != r.manager` diverges.
-
-**Fix:** Capture once before the cascade:
-
-```go
-var rollbackMgr = NewRollbackManager(d.config, d.generator, d.manager)
-// then use rollbackMgr in every failure branch
-```
-
-The same pattern exists in `SyncJobDeleteConfirm.deleteServiceAndConfig`
-(lines 1126–1184).
+Fixed in commit `8ce11f4 Apply code review: security hardening, TUI safety, validation, and atomic I/O`.
+`rollbackMgr` is now created once at the top of `deleteServiceAndConfig`
+(right after `PrepareSyncJobRollback` / `PrepareMountRollback`) and reused
+across every error branch in both `mounts.go:DeleteConfirm.deleteServiceAndConfig`
+and `sync_jobs.go:SyncJobDeleteConfirm.deleteServiceAndConfig`. The
+`d.generator`/`d.manager` capture happens before any state-mutating call
+so the manager sees consistent inputs.
 
 ---
 
@@ -300,21 +208,15 @@ Three rollback paths in runSyncCreate now look up by the canonical saved name:
 Behaviour unchanged today; defensive against future AddSyncJob sanitization.
 
 
-### 13. No coverage for `compareVersions` edge cases (e.g. version `"0.0.0"`)
+### 13. ~~No coverage for `compareVersions` edge cases (e.g. version `"0.0.0"`)~~ — DONE 2026-06-02
 
-**File:** `internal/rclone/validation_test.go`
+Fixed in commit `4502c5d test(rclone): Add comprehensive validation test coverage`.
+`TestParseVersion`, `TestCompareVersions`, `TestParseVersionEdgeCases`, and
+`TestCompareVersionsEdgeCases` now exist with table-driven cases covering
+valid three-component versions, below-minimum versions, the minimum
+boundary (`"1.60.0"`), fuzzy matches with extra text, empty input, and
+malformed strings.
 
-`parseVersion` and `compareVersions` have zero test cases. A regression in version
-string parsing — catastrophic for pre-flight checks — is undetectable by CI.
-
-**Fix:** Add a table-driven test covering at minimum:
-- valid three-component versions (`"v1.62.0"`, `"rclone v1.62.0"`, `"1.62.0"`)
-- versions below minimum
-- the minimum version itself (`"1.60.0"`)
-- versions with extra text (fuzzy match verification)
-- empty and malformed strings
-
----
 
 ### 14. ~~`GetRemoteType` in `remotes.go` hits `config show` for every remote — O(n²) loading~~ — DONE 2026-07-01
 
@@ -354,25 +256,13 @@ Tests:
 
 ---
 
-### 15. `services.go` `filterLogs` is dead code — log filter UI has no connection
+### 15. ~~`services.go` `filterLogs` is dead code — log filter UI has no connection~~ — DONE 2026-07-01
 
-**File:** `internal/tui/screens/services.go:779–810` / `renderLogsView` line 1166
-
-`filterLogs()` exists and is fully implemented, but `renderLogsView` (line 1166) calls
-`s.filterLogs()` and immediately joins the output. If `filterLogs()` returned a
-filtered list, the UI would show filtered results — but `renderLogsView` always
-renders the **full** `s.logs` string without ever calling `filterLogs()`.
-
-Dot-go: `renderLogsView` does call `s.filterLogs()` at line 1166, which means the body
-IS the filtered log content. BUT line 1169 splits the result again to get lines for
-display. If the result of `s.filterLogs()` were empty for a non-`"all"` filter, lines
-1170–1173 would show an empty panel. The cycle through `filterLogs` is actually
-connected.
-
-Re-reading: `logs := s.filterLogs()` at line 1166 — `s.logsFilter` is `"all"` by default
-and is changed by the `f` key handler. This IS connected. Feature is implemented.
-
-Remove from backlog. The function is used.
+Self-cancelled by re-reading the code. `renderLogsView` at
+`internal/tui/screens/services.go` calls `s.filterLogs()` and the result
+becomes the body the panel renders. The `f` key handler flips
+`s.logsFilter` from the default `"all"` to other values, and the panel
+renders the filtered output. The function is connected; not dead code.
 
 ---
 

@@ -159,7 +159,7 @@ func TestSyncJobsScreen_DeleteModeServicesSetBeforeModeChange(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	cfg := createTestConfigWithSyncJobs()
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	screen.SetServices(cfg, nil, gen, mgr)
 	screen.cursor = 0
@@ -189,7 +189,7 @@ func TestSyncJobsScreen_LoadSyncJobs(t *testing.T) {
 	screen.config = cfg
 
 	// Create mock generator and manager
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	// Call loadSyncJobs
@@ -574,7 +574,7 @@ func TestSyncJobsScreen_ViewDetailsMode(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.mode = SyncJobsModeDetails
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	screen.details = NewSyncJobDetails(screen.jobs[0], mgr, gen)
 	screen.details.SetSize(80, 24) // Set size on details component
@@ -616,7 +616,7 @@ func TestSyncJobsScreen_SetServices(t *testing.T) {
 	screen := NewSyncJobsScreen()
 	cfg := &config.Config{}
 	rcloneClient := &rclone.Client{}
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 
 	screen.SetServices(cfg, rcloneClient, gen, mgr)
@@ -901,7 +901,7 @@ func TestSyncJobDeleteConfirm_SetServices(t *testing.T) {
 	dialog := NewSyncJobDeleteConfirm(job)
 
 	mgr := &systemd.Manager{}
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	cfg := &config.Config{}
 
 	dialog.SetServices(mgr, gen, cfg)
@@ -943,7 +943,7 @@ func TestSyncJobDeleteConfirm_Init(t *testing.T) {
 
 func TestNewSyncJobDetails(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 
@@ -967,7 +967,7 @@ func TestNewSyncJobDetails(t *testing.T) {
 
 func TestSyncJobDetails_TabSwitching(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 
@@ -991,7 +991,7 @@ func TestSyncJobDetails_TabSwitching(t *testing.T) {
 
 func TestSyncJobDetails_Escape(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 
@@ -1005,7 +1005,7 @@ func TestSyncJobDetails_Escape(t *testing.T) {
 
 func TestSyncJobDetails_QKey(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 
@@ -1019,7 +1019,7 @@ func TestSyncJobDetails_QKey(t *testing.T) {
 
 func TestSyncJobDetails_IsDone(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 
@@ -1036,7 +1036,7 @@ func TestSyncJobDetails_IsDone(t *testing.T) {
 
 func TestSyncJobDetails_View(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 	details.width = 80
@@ -1074,7 +1074,7 @@ func TestSyncJobDetails_View(t *testing.T) {
 
 func TestSyncJobDetails_ViewLogsTab(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 	details.width = 80
@@ -1091,7 +1091,7 @@ func TestSyncJobDetails_ViewLogsTab(t *testing.T) {
 
 func TestSyncJobDetails_ViewLogsEmpty(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 	details.width = 80
@@ -1108,7 +1108,7 @@ func TestSyncJobDetails_ViewLogsEmpty(t *testing.T) {
 
 func TestSyncJobDetails_SetSize(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 
@@ -1125,7 +1125,7 @@ func TestSyncJobDetails_SetSize(t *testing.T) {
 
 func TestSyncJobDetails_Init(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 
@@ -1191,7 +1191,7 @@ func TestSyncJobsScreen_RefreshKey(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.config = createTestConfigWithSyncJobs()
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	// Press 'R' (uppercase) to refresh
@@ -1356,7 +1356,7 @@ func TestSyncJobsScreen_SyncJobRunNowMsg(t *testing.T) {
 
 func TestSyncJobDetails_ViewWithStatus(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 	details.width = 80
@@ -1385,7 +1385,7 @@ func TestSyncJobDetails_ViewWithStatus(t *testing.T) {
 
 func TestSyncJobDetails_RenderDetails(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 	details.width = 80
@@ -1418,7 +1418,7 @@ func TestSyncJobDetails_RenderDetails(t *testing.T) {
 
 func TestSyncJobDetails_RenderLogs(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 
@@ -1449,7 +1449,7 @@ func TestSyncJobDetails_RenderDetailsWithSyncOptions(t *testing.T) {
 		BandwidthLimit: "10M",
 		Transfers:      4,
 	}
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 	details.width = 80
@@ -1479,7 +1479,7 @@ func TestSyncJobDetails_RenderDetailsWithScheduleDetails(t *testing.T) {
 		Type:       "timer",
 		OnCalendar: "*-*-* 02:00:00",
 	}
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 	details.width = 80
@@ -1611,7 +1611,7 @@ func TestSyncJobsScreen_RunSyncJobNow_NilManager(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = nil
 
 	model, cmd := screen.runSyncJobNow()
@@ -1635,7 +1635,7 @@ func TestSyncJobsScreen_RunSyncJobNow_WithServices(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	model, cmd := screen.runSyncJobNow()
@@ -1707,7 +1707,7 @@ func TestSyncJobsScreen_ToggleTimer_NilManager(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = nil
 
 	model, cmd := screen.toggleTimer()
@@ -1731,7 +1731,7 @@ func TestSyncJobsScreen_ToggleTimer_WithServices(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.MockManager{
 		IsActiveResult: false,
 	}
@@ -1832,7 +1832,7 @@ func TestSyncJobsScreen_UpdateDetails_WithDetails(t *testing.T) {
 	screen := NewSyncJobsScreen()
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 	screen.details = NewSyncJobDetails(screen.jobs[0], screen.manager, screen.generator)
 	screen.mode = SyncJobsModeDetails
@@ -1854,7 +1854,7 @@ func TestSyncJobsScreen_UpdateDetails_DetailsDone(t *testing.T) {
 	screen := NewSyncJobsScreen()
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 	screen.details = NewSyncJobDetails(screen.jobs[0], screen.manager, screen.generator)
 	screen.details.done = true
@@ -1875,7 +1875,7 @@ func TestSyncJobsScreen_RunSyncJobNowKey(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
@@ -1889,7 +1889,7 @@ func TestSyncJobsScreen_RunSyncJobNowKey_NoJobs(t *testing.T) {
 	screen := NewSyncJobsScreen()
 	screen.SetSize(80, 24)
 	screen.jobs = []models.SyncJobConfig{}
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
@@ -1904,7 +1904,7 @@ func TestSyncJobsScreen_ToggleTimerKey(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
@@ -1918,7 +1918,7 @@ func TestSyncJobsScreen_ToggleTimerKey_NoJobs(t *testing.T) {
 	screen := NewSyncJobsScreen()
 	screen.SetSize(80, 24)
 	screen.jobs = []models.SyncJobConfig{}
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	_, cmd := screen.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
@@ -1965,7 +1965,7 @@ func TestSyncJobDeleteConfirm_DeleteServiceOnly_NilManager(t *testing.T) {
 	job := createTestSyncJobs()[0]
 	dialog := NewSyncJobDeleteConfirm(job)
 	dialog.manager = nil
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 
 	// Code handles nil manager gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
@@ -1991,7 +1991,7 @@ func TestSyncJobDeleteConfirm_DeleteServiceOnly_WithServices(t *testing.T) {
 	job := createTestSyncJobs()[0]
 	dialog := NewSyncJobDeleteConfirm(job)
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 
 	// Code handles services gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
@@ -2008,7 +2008,7 @@ func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_NilManager(t *testing.T) {
 	job := createTestSyncJobs()[0]
 	dialog := NewSyncJobDeleteConfirm(job)
 	dialog.manager = nil
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 	dialog.config = createTestConfigWithSyncJobs()
 
 	// Code handles nil manager gracefully - no panic expected
@@ -2036,7 +2036,7 @@ func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_NilConfig(t *testing.T) {
 	job := createTestSyncJobs()[0]
 	dialog := NewSyncJobDeleteConfirm(job)
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 	dialog.config = nil
 
 	// Code handles nil config gracefully - no panic expected
@@ -2050,7 +2050,7 @@ func TestSyncJobDeleteConfirm_DeleteServiceAndConfig_WithServices(t *testing.T) 
 	job := createTestSyncJobs()[0]
 	dialog := NewSyncJobDeleteConfirm(job)
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 	dialog.config = createTestConfigWithSyncJobs()
 
 	// Code handles services gracefully - no panic expected
@@ -2069,7 +2069,7 @@ func TestSyncJobDeleteConfirm_EnterOnDeleteServiceOnly(t *testing.T) {
 	dialog := NewSyncJobDeleteConfirm(job)
 	dialog.cursor = 1
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 
 	// Code handles Enter gracefully - no panic expected
 	_, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -2083,7 +2083,7 @@ func TestSyncJobDeleteConfirm_EnterOnDeleteServiceAndConfig(t *testing.T) {
 	dialog := NewSyncJobDeleteConfirm(job)
 	dialog.cursor = 2
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 	dialog.config = createTestConfigWithSyncJobs()
 
 	// Code handles Enter gracefully - no panic expected
@@ -2102,7 +2102,7 @@ func TestSyncJobDeleteConfirm_DeleteServiceOnly_ReturnsSyncJobDeletedMsg(t *test
 	}
 	dialog := NewSyncJobDeleteConfirm(job)
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 
 	// Code handles delete gracefully - no panic expected
 	cmd := dialog.deleteServiceOnly()
@@ -2128,7 +2128,7 @@ func TestSyncJobDeleteConfirm_DeleteServiceOnly_WithTimer(t *testing.T) {
 	}
 	dialog := NewSyncJobDeleteConfirm(job)
 	dialog.manager = &systemd.Manager{}
-	dialog.generator = &systemd.Generator{}
+	dialog.generator = systemd.NewTestGenerator(t.TempDir())
 
 	cmd := dialog.deleteServiceOnly()
 	if cmd == nil {
@@ -2321,7 +2321,7 @@ func TestSyncJobsScreen_ToggleTimer_ActiveTimer(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.MockManager{
 		IsActiveResult: true,
 	}
@@ -2350,7 +2350,7 @@ func TestSyncJobsScreen_ToggleTimer_InactiveTimer(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.MockManager{
 		IsActiveResult: false,
 	}
@@ -2383,7 +2383,7 @@ func TestSyncJobsScreen_ToggleTimer_StopTimerError(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.MockManager{
 		IsActiveResult: true,
 		StopTimerErr:   errors.New("synthetic stop-timer failure"),
@@ -2413,7 +2413,7 @@ func TestSyncJobsScreen_ToggleTimer_StartTimerError(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.MockManager{
 		IsActiveResult: false,
 		EnableTimerErr: errors.New("synthetic enable-timer failure"),
@@ -2440,7 +2440,7 @@ func TestSyncJobsScreen_RunSyncJobNow_CommandReturnsMessage(t *testing.T) {
 	screen.SetSize(80, 24)
 	screen.jobs = createTestSyncJobs()
 	screen.cursor = 0
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 	screen.manager = &systemd.Manager{}
 
 	model, cmd := screen.runSyncJobNow()
@@ -2490,7 +2490,7 @@ func TestSyncJobDetails_ActionKeys(t *testing.T) {
 				// Some action keys (toggle) consult IsActive.
 				IsActiveResult: false,
 			}
-			gen := &systemd.Generator{}
+			gen := systemd.NewTestGenerator(t.TempDir())
 			details := NewSyncJobDetails(job, mock, gen)
 			details.width = 80
 
@@ -2540,7 +2540,7 @@ func TestSyncJobDetails_ActionKeys_NilManager(t *testing.T) {
 
 func TestSyncJobDetails_RefreshKey(t *testing.T) {
 	job := createTestSyncJobs()[0]
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 	mgr := &systemd.Manager{}
 	details := NewSyncJobDetails(job, mgr, gen)
 	details.width = 80
@@ -2668,7 +2668,7 @@ func TestSyncJobsScreen_LoadSyncJobStatuses_HappyPath(t *testing.T) {
 	screen.manager = &systemd.MockManager{
 		GetDetailedStatusResult: active,
 	}
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 
 	msg := screen.loadSyncJobStatuses()
 	if msg != nil {
@@ -2701,7 +2701,7 @@ func TestSyncJobsScreen_LoadSyncJobStatuses_StatusErrorIsSwallowed(t *testing.T)
 	screen.manager = &systemd.MockManager{
 		GetDetailedStatusErr: errTestSyncJobNotFound,
 	}
-	screen.generator = &systemd.Generator{}
+	screen.generator = systemd.NewTestGenerator(t.TempDir())
 
 	msg := screen.loadSyncJobStatuses()
 	if msg != nil {
@@ -2731,7 +2731,7 @@ func TestSyncJobsScreen_LoadSyncJobStatuses_NilGeneratorOrManager(t *testing.T) 
 	t.Run("nil manager", func(t *testing.T) {
 		screen := NewSyncJobsScreen()
 		screen.jobs = createTestSyncJobs()
-		screen.generator = &systemd.Generator{}
+		screen.generator = systemd.NewTestGenerator(t.TempDir())
 		if msg := screen.loadSyncJobStatuses(); msg != nil {
 			t.Errorf("loadSyncJobStatuses = %v, want nil", msg)
 		}

@@ -1060,7 +1060,7 @@ func TestServicesScreen_SetServices(t *testing.T) {
 	screen := NewServicesScreen()
 	cfg := &config.Config{}
 	mgr := &systemd.Manager{}
-	gen := &systemd.Generator{}
+	gen := systemd.NewTestGenerator(t.TempDir())
 
 	screen.SetServices(cfg, mgr, gen)
 

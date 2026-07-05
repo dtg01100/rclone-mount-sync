@@ -312,6 +312,13 @@ func TestSyncCreateSaveConfigError_RealSaveFailure(t *testing.T) {
 func TestSyncCreateGeneratorError(t *testing.T) {
 	cfg := &config.Config{Defaults: config.DefaultConfig{Sync: config.SyncDefaults{LogLevel: "INFO", Transfers: 4, Checkers: 8}}}
 
+	// Pin XDG_CONFIG_HOME to a temp dir. runSyncCreate calls
+	// cfg.Save() (line 138) and the rollback path at line 152 also
+	// calls cfg.Save(); without this, both writes land in the
+	// user's real ~/.config/rclone-mount-sync/. Mirrors the
+	// withCLIDeps helper used in cli_extra_test.go.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
 	oldLoadConfig := loadConfig
 	oldLoadGenerator := loadGenerator
 	oldSyncCreateName := syncCreateName

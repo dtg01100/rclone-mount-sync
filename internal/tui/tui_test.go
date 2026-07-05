@@ -1639,7 +1639,7 @@ func TestApp_importSelectedOrphan_NilConfig(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 	app.config = nil
 
@@ -1658,7 +1658,7 @@ func TestApp_importSelectedOrphan_MountType(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 	app.config = &config.Config{}
 
@@ -1677,7 +1677,7 @@ func TestApp_importSelectedOrphan_SyncType(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 	app.config = &config.Config{}
 
@@ -1694,7 +1694,7 @@ func TestApp_importSelectedOrphan_EmptyOrphanList(t *testing.T) {
 		OrphanedUnits: []systemd.OrphanedUnit{},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 	app.config = &config.Config{}
 
@@ -1716,7 +1716,7 @@ func TestApp_importSelectedOrphan_IndexOutOfBounds(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 	app.config = &config.Config{}
 
@@ -1739,7 +1739,7 @@ func TestApp_importSelectedOrphan_UpdatesOrphanList(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 	app.config = &config.Config{}
 
@@ -1758,7 +1758,7 @@ func TestApp_importSelectedOrphan_LastOrphan(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 	app.config = &config.Config{}
 
@@ -1797,7 +1797,7 @@ func TestApp_cleanupSelectedOrphan_NilManager(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = nil
 
 	// Should not panic with nil manager, should return error command
@@ -1818,7 +1818,7 @@ func TestApp_cleanupSelectedOrphan_MountType(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 
 	// Should not panic with mount type, should handle gracefully
@@ -1836,7 +1836,7 @@ func TestApp_cleanupSelectedOrphan_SyncType(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 
 	// Should not panic with sync type, should handle gracefully
@@ -1855,7 +1855,7 @@ func TestApp_cleanupSelectedOrphan_UpdatesList(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 
 	// Should not panic when updating orphan list, should handle gracefully
@@ -1873,7 +1873,7 @@ func TestApp_cleanupSelectedOrphan_LastOrphanClosesPrompt(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 
 	// Should not panic with last orphan, should handle gracefully and close prompt
@@ -1889,7 +1889,7 @@ func TestApp_cleanupSelectedOrphan_EmptyOrphanList(t *testing.T) {
 		OrphanedUnits: []systemd.OrphanedUnit{},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 
 	// Should not panic with empty orphan list, should return error command
@@ -1910,7 +1910,7 @@ func TestApp_cleanupSelectedOrphan_IndexOutOfBounds(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 
 	// Should not panic with index out of bounds, should return error command
@@ -1932,7 +1932,7 @@ func TestApp_cleanupSelectedOrphan_ResetsOrphanMode(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 
 	// Should not panic when resetting orphan mode, should handle gracefully
@@ -1951,7 +1951,7 @@ func TestApp_cleanupSelectedOrphan_AdjustsSelectedIndex(t *testing.T) {
 		},
 	}
 	app.showOrphanPrompt = true
-	app.generator = &systemd.Generator{}
+	app.generator = systemd.NewTestGenerator(t.TempDir())
 	app.manager = &systemd.Manager{}
 
 	// Should not panic when adjusting selected index, should handle gracefully
