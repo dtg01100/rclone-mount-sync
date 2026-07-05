@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -121,6 +122,10 @@ func TestApp_InitError_RcloneNotAvailable(t *testing.T) {
 
 // TestApp_InitError_ConfigEmpty tests handling of empty/minimal config.
 func TestApp_InitError_ConfigEmpty(t *testing.T) {
+	if _, err := exec.LookPath("rclone"); err != nil && os.Getenv("RCLONE_BINARY_PATH") == "" {
+		t.Skip("rclone not found in PATH and $RCLONE_BINARY_PATH is not set")
+	}
+
 	// Use a temporary config directory
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "rclone-mount-sync")
@@ -409,6 +414,10 @@ func TestApp_OrphanPrompt_Display(t *testing.T) {
 
 // TestApp_Services_SetServices tests that SetServices properly distributes to screens.
 func TestApp_Services_SetServices(t *testing.T) {
+	if _, err := exec.LookPath("rclone"); err != nil && os.Getenv("RCLONE_BINARY_PATH") == "" {
+		t.Skip("rclone not found in PATH and $RCLONE_BINARY_PATH is not set")
+	}
+
 	// Use a temporary config directory
 	tmpDir := t.TempDir()
 	configDir := filepath.Join(tmpDir, "rclone-mount-sync")
